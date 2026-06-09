@@ -1,25 +1,36 @@
-import logo from './logo.svg';
-import './App.css';
+import './styles/global.css';
+import { useState } from 'react';
+import Navigation from './components/Navigation';
+import Responsibilities from './pages/Responsibilities';
 
-function App() {
+const userRole = 'admin';
+
+export default function App() {
+  const [currentPage, setCurrentPage] = useState('responsibilities');
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-secondary)' }}>
+      <Navigation
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        userRole={userRole}
+      />
+      <main style={{
+        marginLeft: '240px',
+        flex: 1,
+        padding: '32px',
+        maxWidth: 'calc(100vw - 240px)'
+      }}>
+        {currentPage === 'responsibilities' && <Responsibilities userRole={userRole} />}
+        {currentPage !== 'responsibilities' && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            height: '60vh', color: 'var(--text-muted)', fontSize: '15px'
+          }}>
+            This system is coming soon.
+          </div>
+        )}
+      </main>
     </div>
   );
 }
-
-export default App;
