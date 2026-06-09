@@ -1,13 +1,13 @@
-import { 
-  ClipboardList, Calendar, FlaskConical, 
-  Users, ShieldCheck, Palmtree, 
-  LayoutDashboard, LogOut, ChevronRight
+import {
+  ClipboardList, Calendar, FlaskConical,
+  Users, ShieldCheck, Palmtree,
+  LayoutDashboard, LogOut, ListTodo
 } from 'lucide-react';
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'responsibilities', label: 'Lab Responsibilities', icon: ClipboardList },
-  { id: 'sporadic', label: 'Sporadic Tasks', icon: ChevronRight },
+  { id: 'sporadic', label: 'Sporadic Tasks', icon: ListTodo },
   { id: 'vacation', label: 'Vacation Logs', icon: Palmtree },
   { id: 'meetings', label: 'Lab Meetings', icon: Calendar },
   { id: 'finance', label: 'Finance', icon: FlaskConical },
@@ -16,7 +16,14 @@ const navItems = [
   { id: 'contacts', label: 'Lab Contacts', icon: Users },
 ];
 
-export default function Navigation({ currentPage, setCurrentPage, userRole }) {
+const ROLE_LABELS = {
+  admin: 'Supervisor',
+  pm: 'Program Manager',
+  member: 'Lab Member',
+  intern: 'Intern'
+};
+
+export default function Navigation({ currentPage, setCurrentPage, userRole, profile, onLogout }) {
   return (
     <nav style={{
       width: '240px',
@@ -26,12 +33,11 @@ export default function Navigation({ currentPage, setCurrentPage, userRole }) {
       display: 'flex',
       flexDirection: 'column',
       position: 'fixed',
-      left: 0,
-      top: 0,
-      bottom: 0,
+      left: 0, top: 0, bottom: 0,
       zIndex: 100,
       boxShadow: 'var(--shadow-md)'
     }}>
+      {/* Logo */}
       <div style={{
         padding: '24px 20px',
         borderBottom: '1px solid var(--border)',
@@ -40,13 +46,10 @@ export default function Navigation({ currentPage, setCurrentPage, userRole }) {
         gap: '12px'
       }}>
         <div style={{
-          width: '36px',
-          height: '36px',
+          width: '36px', height: '36px',
           background: 'var(--purple-primary)',
           borderRadius: '8px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
         }}>
           <FlaskConical size={20} color="white" />
         </div>
@@ -55,6 +58,8 @@ export default function Navigation({ currentPage, setCurrentPage, userRole }) {
           <div style={{ fontWeight: 400, fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.1em' }}>LAB</div>
         </div>
       </div>
+
+      {/* Nav items */}
       <div style={{ flex: 1, padding: '12px 0', overflowY: 'auto' }}>
         {navItems.map(item => {
           const Icon = item.icon;
@@ -65,18 +70,27 @@ export default function Navigation({ currentPage, setCurrentPage, userRole }) {
               onClick={() => setCurrentPage(item.id)}
               style={{
                 width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
+                display: 'flex', alignItems: 'center', gap: '10px',
                 padding: '10px 20px',
                 background: active ? 'var(--purple-faint)' : 'transparent',
                 border: 'none',
                 borderLeft: active ? '3px solid var(--purple-primary)' : '3px solid transparent',
                 color: active ? 'var(--purple-primary)' : 'var(--text-secondary)',
                 fontWeight: active ? 600 : 400,
-                fontSize: '13px',
-                textAlign: 'left',
+                fontSize: '13px', textAlign: 'left',
                 transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={e => {
+                if (!active) {
+                  e.currentTarget.style.background = 'var(--purple-faint)';
+                  e.currentTarget.style.color = 'var(--purple-primary)';
+                }
+              }}
+              onMouseLeave={e => {
+                if (!active) {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = 'var(--text-secondary)';
+                }
               }}
             >
               <Icon size={16} />
@@ -85,28 +99,35 @@ export default function Navigation({ currentPage, setCurrentPage, userRole }) {
           );
         })}
       </div>
+
+      {/* User info */}
       <div style={{
         padding: '16px 20px',
         borderTop: '1px solid var(--border)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between'
+        display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', gap: '8px'
       }}>
-        <div>
-          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
-            {userRole === 'admin' ? 'Supervisor' : userRole === 'pm' ? 'Program Manager' : 'Lab Member'}
+        <div style={{ overflow: 'hidden' }}>
+          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {profile?.full_name || profile?.email || 'Lab Member'}
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Petljak Lab</div>
+          <div style={{ fontSize: '11px', color: 'var(--purple-primary)', fontWeight: 500 }}>
+            {ROLE_LABELS[userRole] || 'Lab Member'}
+          </div>
         </div>
-        <button style={{
-          background: 'none',
-          border: 'none',
-          color: 'var(--text-muted)',
-          padding: '4px',
-          borderRadius: '4px',
-          display: 'flex',
-          alignItems: 'center'
-        }}>
+        <button
+          onClick={onLogout}
+          title="Sign out"
+          style={{
+            background: 'none', border: 'none',
+            color: 'var(--text-muted)', padding: '6px',
+            borderRadius: 'var(--radius-sm)',
+            display: 'flex', alignItems: 'center',
+            flexShrink: 0, cursor: 'pointer'
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+        >
           <LogOut size={16} />
         </button>
       </div>
