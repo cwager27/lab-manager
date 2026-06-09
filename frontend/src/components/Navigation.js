@@ -1,20 +1,9 @@
 import {
   ClipboardList, Calendar, FlaskConical,
   Users, ShieldCheck, Palmtree,
-  LayoutDashboard, LogOut, ListTodo
+  LayoutDashboard, LogOut, ListTodo,
+  UserCheck
 } from 'lucide-react';
-
-const navItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'responsibilities', label: 'Lab Responsibilities', icon: ClipboardList },
-  { id: 'sporadic', label: 'Sporadic Tasks', icon: ListTodo },
-  { id: 'vacation', label: 'Vacation Logs', icon: Palmtree },
-  { id: 'meetings', label: 'Lab Meetings', icon: Calendar },
-  { id: 'finance', label: 'Finance', icon: FlaskConical },
-  { id: 'inventory', label: 'Sample Inventory', icon: FlaskConical },
-  { id: 'compliance', label: 'Compliance', icon: ShieldCheck },
-  { id: 'contacts', label: 'Lab Contacts', icon: Users },
-];
 
 const ROLE_LABELS = {
   admin: 'Supervisor',
@@ -23,33 +12,36 @@ const ROLE_LABELS = {
   intern: 'Intern'
 };
 
-export default function Navigation({ currentPage, setCurrentPage, userRole, profile, onLogout }) {
+export default function Navigation({ currentPage, setCurrentPage, userRole, profile, onLogout, canManage }) {
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, always: true },
+    { id: 'responsibilities', label: 'Lab Responsibilities', icon: ClipboardList, always: true },
+    { id: 'assign', label: 'Assign Tasks', icon: UserCheck, managerOnly: true },
+    { id: 'sporadic', label: 'Sporadic Tasks', icon: ListTodo, always: true },
+    { id: 'vacation', label: 'Vacation Logs', icon: Palmtree, always: true },
+    { id: 'meetings', label: 'Lab Meetings', icon: Calendar, always: true },
+    { id: 'finance', label: 'Finance', icon: FlaskConical, always: true },
+    { id: 'inventory', label: 'Sample Inventory', icon: FlaskConical, always: true },
+    { id: 'compliance', label: 'Compliance', icon: ShieldCheck, always: true },
+    { id: 'contacts', label: 'Lab Contacts', icon: Users, always: true },
+  ].filter(item => item.always || (item.managerOnly && canManage));
+
   return (
     <nav style={{
-      width: '240px',
-      minHeight: '100vh',
+      width: '240px', minHeight: '100vh',
       background: 'var(--bg-primary)',
       borderRight: '1px solid var(--border)',
-      display: 'flex',
-      flexDirection: 'column',
-      position: 'fixed',
-      left: 0, top: 0, bottom: 0,
-      zIndex: 100,
-      boxShadow: 'var(--shadow-md)'
+      display: 'flex', flexDirection: 'column',
+      position: 'fixed', left: 0, top: 0, bottom: 0,
+      zIndex: 100, boxShadow: 'var(--shadow-md)'
     }}>
-      {/* Logo */}
       <div style={{
-        padding: '24px 20px',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px'
+        padding: '24px 20px', borderBottom: '1px solid var(--border)',
+        display: 'flex', alignItems: 'center', gap: '12px'
       }}>
         <div style={{
-          width: '36px', height: '36px',
-          background: 'var(--purple-primary)',
-          borderRadius: '8px',
-          display: 'flex', alignItems: 'center', justifyContent: 'center'
+          width: '36px', height: '36px', background: 'var(--purple-primary)',
+          borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center'
         }}>
           <FlaskConical size={20} color="white" />
         </div>
@@ -59,39 +51,33 @@ export default function Navigation({ currentPage, setCurrentPage, userRole, prof
         </div>
       </div>
 
-      {/* Nav items */}
       <div style={{ flex: 1, padding: '12px 0', overflowY: 'auto' }}>
         {navItems.map(item => {
           const Icon = item.icon;
           const active = currentPage === item.id;
           return (
-            <button
-              key={item.id}
-              onClick={() => setCurrentPage(item.id)}
-              style={{
-                width: '100%',
-                display: 'flex', alignItems: 'center', gap: '10px',
-                padding: '10px 20px',
-                background: active ? 'var(--purple-faint)' : 'transparent',
-                border: 'none',
-                borderLeft: active ? '3px solid var(--purple-primary)' : '3px solid transparent',
-                color: active ? 'var(--purple-primary)' : 'var(--text-secondary)',
-                fontWeight: active ? 600 : 400,
-                fontSize: '13px', textAlign: 'left',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={e => {
-                if (!active) {
-                  e.currentTarget.style.background = 'var(--purple-faint)';
-                  e.currentTarget.style.color = 'var(--purple-primary)';
-                }
-              }}
-              onMouseLeave={e => {
-                if (!active) {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = 'var(--text-secondary)';
-                }
-              }}
+            <button key={item.id} onClick={() => setCurrentPage(item.id)} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
+              padding: '10px 20px',
+              background: active ? 'var(--purple-faint)' : 'transparent',
+              border: 'none',
+              borderLeft: active ? '3px solid var(--purple-primary)' : '3px solid transparent',
+              color: active ? 'var(--purple-primary)' : 'var(--text-secondary)',
+              fontWeight: active ? 600 : 400, fontSize: '13px', textAlign: 'left',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={e => {
+              if (!active) {
+                e.currentTarget.style.background = 'var(--purple-faint)';
+                e.currentTarget.style.color = 'var(--purple-primary)';
+              }
+            }}
+            onMouseLeave={e => {
+              if (!active) {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = 'var(--text-secondary)';
+              }
+            }}
             >
               <Icon size={16} />
               {item.label}
@@ -100,12 +86,9 @@ export default function Navigation({ currentPage, setCurrentPage, userRole, prof
         })}
       </div>
 
-      {/* User info */}
       <div style={{
-        padding: '16px 20px',
-        borderTop: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', gap: '8px'
+        padding: '16px 20px', borderTop: '1px solid var(--border)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px'
       }}>
         <div style={{ overflow: 'hidden' }}>
           <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -115,18 +98,13 @@ export default function Navigation({ currentPage, setCurrentPage, userRole, prof
             {ROLE_LABELS[userRole] || 'Lab Member'}
           </div>
         </div>
-        <button
-          onClick={onLogout}
-          title="Sign out"
-          style={{
-            background: 'none', border: 'none',
-            color: 'var(--text-muted)', padding: '6px',
-            borderRadius: 'var(--radius-sm)',
-            display: 'flex', alignItems: 'center',
-            flexShrink: 0, cursor: 'pointer'
-          }}
-          onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+        <button onClick={onLogout} title="Sign out" style={{
+          background: 'none', border: 'none', color: 'var(--text-muted)',
+          padding: '6px', borderRadius: 'var(--radius-sm)',
+          display: 'flex', alignItems: 'center', flexShrink: 0, cursor: 'pointer'
+        }}
+        onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
+        onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
         >
           <LogOut size={16} />
         </button>

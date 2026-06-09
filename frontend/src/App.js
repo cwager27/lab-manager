@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import Navigation from './components/Navigation';
 import Responsibilities from './pages/Responsibilities';
+import AssignTasks from './pages/AssignTasks';
 import Login from './pages/Login';
 
 export default function App() {
@@ -12,29 +13,21 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for existing session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
         setUser(session.user);
         const { data: prof } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
+          .from('profiles').select('*').eq('id', session.user.id).single();
         setProfile(prof);
       }
       setLoading(false);
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session) {
         setUser(session.user);
         const { data: prof } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
+          .from('profiles').select('*').eq('id', session.user.id).single();
         setProfile(prof);
       } else {
         setUser(null);
@@ -63,27 +56,15 @@ export default function App() {
         alignItems: 'center', justifyContent: 'center',
         background: 'var(--bg-secondary)'
       }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: '48px', height: '48px',
-            background: 'var(--purple-primary)',
-            borderRadius: '12px',
-            margin: '0 auto 16px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}>
-            <span style={{ color: 'white', fontSize: '20px' }}>🧬</span>
-          </div>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Loading...</p>
-        </div>
+        <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
       </div>
     );
   }
 
-  if (!user) {
-    return <Login onLogin={handleLogin} />;
-  }
+  if (!user) return <Login onLogin={handleLogin} />;
 
   const userRole = profile?.role || 'member';
+  const canManage = userRole === 'admin' || userRole === 'pm';
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-secondary)' }}>
@@ -93,17 +74,15 @@ export default function App() {
         userRole={userRole}
         profile={profile}
         onLogout={handleLogout}
+        canManage={canManage}
       />
       <main style={{
-        marginLeft: '240px',
-        flex: 1,
-        padding: '32px',
-        maxWidth: 'calc(100vw - 240px)'
+        marginLeft: '240px', flex: 1,
+        padding: '32px', maxWidth: 'calc(100vw - 240px)'
       }}>
-        {currentPage === 'responsibilities' && (
-          <Responsibilities userRole={userRole} userId={user.id} />
-        )}
-        {currentPage !== 'responsibilities' && (
+        {currentPage === 'responsibilities' && <Responsibilities userRole={userRole} userId={user.id} />}
+        {currentPage === 'assign' && canManage && <AssignTasks userId={user.id} />}
+        {currentPage !== 'responsibilities' && currentPage !== 'assign' && (
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             height: '60vh', color: 'var(--text-muted)', fontSize: '15px'
