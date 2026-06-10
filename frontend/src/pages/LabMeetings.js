@@ -26,6 +26,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
   const [saving, setSaving] = useState(false);
 
   const canManage = userRole === 'admin' || userRole === 'pm';
+  const canEditPresenter = userRole === 'admin';
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -268,7 +269,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
                   </div>
 
                   {/* Actions */}
-                  {canManage && !isPast && meeting.status !== 'cancelled' && (
+                  {canEditPresenter && !isPast && meeting.status !== 'cancelled' && (
                     <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                       <button onClick={() => {
                         setEditingId(meeting.id);
