@@ -4,6 +4,7 @@ import { supabase } from './lib/supabase';
 import Navigation from './components/Navigation';
 import Responsibilities from './pages/Responsibilities';
 import AssignTasks from './pages/AssignTasks';
+import SporadicTasks from './pages/SporadicTasks';
 import Login from './pages/Login';
 
 export default function App() {
@@ -76,8 +77,13 @@ export default function App() {
         {currentPage === 'responsibilities' && (
           <Responsibilities userRole={userRole} userId={user.id} profile={profile} />
         )}
-        {currentPage === 'assign' && canManage && <AssignTasks userId={user.id} />}
-        {currentPage !== 'responsibilities' && currentPage !== 'assign' && (
+        {currentPage === 'assign' && canManage && (
+          <AssignTasks userId={user.id} />
+        )}
+        {currentPage === 'sporadic' && (
+          <SporadicTasks userRole={userRole} userId={user.id} profile={profile} />
+        )}
+        {!['responsibilities', 'assign', 'sporadic'].includes(currentPage) && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--text-muted)', fontSize: '15px' }}>
             This system is coming soon.
           </div>
