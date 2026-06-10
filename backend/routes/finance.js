@@ -86,6 +86,79 @@ router.post('/import-orders', async (req, res) => {
   }
 });
 
+// Preview new reagents from uploaded file
+router.post('/preview-reagents', upload.single('file'), async (req, res) => {
+  try {
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheet = workbook.Sheets['Misc.'] || workbook.Sheets[workbook.SheetNames[0]];
+    
+    // Get all rows as arrays, skip row 1 (person names), use row 2 as headers
+    const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+    const headers = allRows[1]; // Row 2 = index 1
+    const dataRows = allRows.slice(2); // Row 3+ = data
+
+    console.log('Headers:', headers.slice(0, 6));
+    console.log('First data row:', dataRows[0]?.slice(0, 6));
+
+    const { data: existing } = await supabase
+      .from('reagents').select('catalog_number');
+    const existingCats = new Set((existing || []).map(e => String(e.catalog_number)));
+
+    const newReagents = [];
+    for (const row of dataRows) {
+      const name = row[1]; // Item (name) is column B
+      const cat = row[3];  // Cat number is column D
+      const category = row[0]; // Category is column A
+      const units = row[4]; // Units is column E
+      const vendor = row[2]; // Vendor is column C
+
+      if (!name || existingCats.has(String(cat))) continue;
+
+      newReagents.push({
+        name: String(name),
+        vendor: vendor ? String(vendor) : null,
+        catalog_number: cat ? String(cat) : null,
+        category: category ? String(category) : null,
+        unit_description: units ? String(units) : null,
+        quantity_in_lab: null,
+        fy24_purchases: null,
+        fy25_purchases: null,
+        fy26_purchases: null,
+        notes: null
+      });
+    }
+
+    console.log('New reagents found:', newReagents.length);
+    res.json({ newReagents, count: newReagents.length });
+  } catch (error) {
+    console.error('Reagent preview error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Import confirmed reagents
+router.post('/import-reagents', async (req, res) => {
+  const { reagents } = req.body;
+  try {
+    let imported = 0;
+    for (const reagent of reagents) {
+      const { error } = await supabase
+        .from('reagents')
+        .insert(reagent);
+      if (error) {
+        console.error('Reagent insert error:', error.message, reagent.name);
+      } else {
+        imported++;
+      }
+    }
+    console.log('Imported:', imported, 'of', reagents.length);
+    res.json({ success: true, imported });
+  } catch (error) {
+    console.error('Reagent import error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Daily grant alert check (called from cron)
 async function checkGrantAlerts() {
   const { data: grants } = await supabase.from('grants').select('*');

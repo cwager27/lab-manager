@@ -2,11 +2,9 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   DollarSign, AlertTriangle, Upload,
-  Plus, TrendingDown, FileText,
-  ChevronDown, ChevronUp, Search,
-  CheckCircle, Clock, XCircle
+  Plus, Search, CheckCircle
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
 
 const CATEGORY_COLORS = [
   '#7B3FA0', '#2980B9', '#27AE60', '#F39C12', '#E74C3C',
@@ -24,7 +22,6 @@ function GrantCard({ grant }) {
     ? (grant.remaining_balance / grant.total_amount) * 100 : null;
   const isLow = pct !== null && pct < 25;
   const isCritical = pct !== null && pct < 10;
-  const today = new Date().toISOString().split('T')[0];
   const daysLeft = grant.end_date
     ? Math.ceil((new Date(grant.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null;
   const isExpiringSoon = daysLeft !== null && daysLeft <= 90;
@@ -34,15 +31,12 @@ function GrantCard({ grant }) {
     <div style={{
       background: 'var(--bg-card)',
       border: `1px solid ${isCritical ? '#FADBD8' : isLow ? '#FAD7A0' : 'var(--border)'}`,
-      borderRadius: 'var(--radius-md)', padding: '16px',
-      boxShadow: 'var(--shadow-sm)'
+      borderRadius: 'var(--radius-md)', padding: '16px', boxShadow: 'var(--shadow-sm)'
     }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
         <div style={{ flex: 1 }}>
           <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>{grant.name}</h3>
-          {grant.chartstring && (
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, fontFamily: 'monospace' }}>{grant.chartstring}</p>
-          )}
+          {grant.chartstring && <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, fontFamily: 'monospace' }}>{grant.chartstring}</p>}
         </div>
         <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
           {isCritical && <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#FDEDEC', color: '#E74C3C' }}>Critical</span>}
@@ -51,20 +45,19 @@ function GrantCard({ grant }) {
           {isExpiringSoon && !isExpiringUrgent && <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#FEF9E7', color: '#F39C12' }}>Expires in {daysLeft}d</span>}
         </div>
       </div>
-
       <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', flexWrap: 'wrap' }}>
-        {grant.total_amount !== null ? (
+        {grant.total_amount !== null && (
           <div>
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 2px' }}>Total</p>
             <p style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>${grant.total_amount?.toLocaleString()}</p>
           </div>
-        ) : null}
-        {grant.remaining_balance !== null ? (
+        )}
+        {grant.remaining_balance !== null && (
           <div>
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 2px' }}>Remaining</p>
             <p style={{ fontSize: '16px', fontWeight: 700, color: isCritical ? '#E74C3C' : isLow ? '#F39C12' : '#27AE60', margin: 0 }}>${grant.remaining_balance?.toLocaleString()}</p>
           </div>
-        ) : null}
+        )}
         {grant.end_date && (
           <div>
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 2px' }}>End Date</p>
@@ -72,7 +65,6 @@ function GrantCard({ grant }) {
           </div>
         )}
       </div>
-
       {pct !== null && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
@@ -80,18 +72,11 @@ function GrantCard({ grant }) {
             <span style={{ fontSize: '11px', fontWeight: 600, color: isCritical ? '#E74C3C' : isLow ? '#F39C12' : '#27AE60' }}>{pct.toFixed(1)}%</span>
           </div>
           <div style={{ height: '6px', background: 'var(--border)', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{
-              height: '100%', width: `${Math.min(pct, 100)}%`,
-              background: isCritical ? '#E74C3C' : isLow ? '#F39C12' : '#27AE60',
-              borderRadius: '3px', transition: 'width 0.3s ease'
-            }} />
+            <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: isCritical ? '#E74C3C' : isLow ? '#F39C12' : '#27AE60', borderRadius: '3px', transition: 'width 0.3s ease' }} />
           </div>
         </div>
       )}
-
-      {grant.notes && (
-        <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '10px 0 0', fontStyle: 'italic' }}>{grant.notes}</p>
-      )}
+      {grant.notes && <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '10px 0 0', fontStyle: 'italic' }}>{grant.notes}</p>}
     </div>
   );
 }
@@ -106,6 +91,7 @@ export default function Finance({ userRole }) {
   const [showAddOrder, setShowAddOrder] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [previewData, setPreviewData] = useState(null);
+  const [previewReagents, setPreviewReagents] = useState(null);
   const [newOrder, setNewOrder] = useState({
     item: '', vendor: '', catalog_number: '', category: '',
     grant_name: '', requisition_id: '', unit_description: '',
@@ -149,17 +135,18 @@ export default function Finance({ userRole }) {
     const file = e.target.files[0];
     if (!file) return;
     setUploadingFile(true);
-
     const formData = new FormData();
     formData.append('file', file);
-
     try {
-      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/preview-orders`, {
+      const endpoint = activeTab === 'reagents' ? 'preview-reagents' : 'preview-orders';
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/${endpoint}`, {
         method: 'POST',
         body: formData
       });
       const data = await res.json();
-      if (data.newOrders) {
+      if (activeTab === 'reagents' && data.newReagents) {
+        setPreviewReagents(data.newReagents);
+      } else if (data.newOrders) {
         setPreviewData(data.newOrders);
       }
     } catch (err) {
@@ -182,7 +169,20 @@ export default function Finance({ userRole }) {
     }
   }
 
-  // Chart data
+  async function handleConfirmReagentImport() {
+    if (!previewReagents) return;
+    const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/import-reagents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reagents: previewReagents })
+    });
+    const data = await res.json();
+    if (data.success) {
+      setPreviewReagents(null);
+      fetchData();
+    }
+  }
+  
   const categorySpend = orders.reduce((acc, o) => {
     if (!o.category || !o.total_price) return acc;
     acc[o.category] = (acc[o.category] || 0) + o.total_price;
@@ -190,8 +190,47 @@ export default function Finance({ userRole }) {
   }, {});
   const categoryChartData = Object.entries(categorySpend)
     .map(([name, value]) => ({ name: name.length > 20 ? name.substring(0, 20) + '...' : name, value: Math.round(value) }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 8);
+    .sort((a, b) => b.value - a.value).slice(0, 8);
+
+  const statusByCategoryData = Object.entries(
+    orders.reduce((acc, o) => {
+      if (!o.category) return acc;
+      if (!acc[o.category]) acc[o.category] = { name: o.category, complete: 0, processing: 0 };
+      if (o.status === 'complete') acc[o.category].complete += o.total_price || 0;
+      else acc[o.category].processing += o.total_price || 0;
+      return acc;
+    }, {})
+  ).map(([_, v]) => ({ ...v, complete: Math.round(v.complete), processing: Math.round(v.processing) }))
+    .sort((a, b) => (b.complete + b.processing) - (a.complete + a.processing));
+
+  const monthlySpend = orders.reduce((acc, o) => {
+    if (!o.order_date || !o.total_price) return acc;
+    const month = o.order_date.substring(0, 7);
+    acc[month] = (acc[month] || 0) + o.total_price;
+    return acc;
+  }, {});
+  const monthlyChartData = Object.entries(monthlySpend)
+    .map(([month, value]) => ({ month, value: Math.round(value) }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+
+  const allCategories = [...new Set(orders.map(o => o.category).filter(Boolean))].sort();
+  const monthlyCategoryData = orders.reduce((acc, o) => {
+    if (!o.order_date || !o.total_price || !o.category) return acc;
+    const month = o.order_date.substring(0, 7);
+    if (!acc[o.category]) acc[o.category] = {};
+    acc[o.category][month] = (acc[o.category][month] || 0) + o.total_price;
+    return acc;
+  }, {});
+
+  const grantMonthlyData = orders.reduce((acc, o) => {
+    if (!o.order_date || !o.total_price || !o.grant_name) return acc;
+    const month = o.order_date.substring(0, 7);
+    if (!acc[month]) acc[month] = { month };
+    acc[month][o.grant_name] = (acc[month][o.grant_name] || 0) + o.total_price;
+    return acc;
+  }, {});
+  const grantMonthlyChartData = Object.values(grantMonthlyData).sort((a, b) => a.month.localeCompare(b.month));
+  const allGrants = [...new Set(orders.map(o => o.grant_name).filter(Boolean))];
 
   const grantSpend = orders.reduce((acc, o) => {
     if (!o.grant_name || !o.total_price) return acc;
@@ -210,6 +249,7 @@ export default function Finance({ userRole }) {
   );
 
   const totalSpend = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
+  
   const alertGrants = grants.filter(g => {
     const pct = g.total_amount && g.remaining_balance ? (g.remaining_balance / g.total_amount) * 100 : null;
     const daysLeft = g.end_date ? Math.ceil((new Date(g.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null;
@@ -224,7 +264,7 @@ export default function Finance({ userRole }) {
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>Grants, orders, and reagent tracking</p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
-          {canManage && activeTab === 'orders' && (
+          {canManage && (activeTab === 'orders' || activeTab === 'reagents') && (
             <>
               <label style={{
                 display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
@@ -232,19 +272,47 @@ export default function Finance({ userRole }) {
                 borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer'
               }}>
                 <Upload size={16} /> {uploadingFile ? 'Processing...' : 'Import File'}
-                <input type="file" accept=".xlsx,.csv" style={{ display: 'none' }} onChange={handleFileUpload} />
+                {activeTab === 'orders' && (
+  <input type="file" accept=".xlsx,.csv" style={{ display: 'none' }} 
+    onChange={async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      setUploadingFile(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/preview-orders`, { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.newOrders) setPreviewData(data.newOrders);
+      setUploadingFile(false);
+    }} />
+)}
+{activeTab === 'reagents' && (
+  <input type="file" accept=".xlsx,.csv" style={{ display: 'none' }}
+    onChange={async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      setUploadingFile(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/preview-reagents`, { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.newReagents) setPreviewReagents(data.newReagents);
+      setUploadingFile(false);
+    }} />
+)}
               </label>
-              <button onClick={() => setShowAddOrder(true)} style={{
-                display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
-                background: 'var(--purple-primary)', color: 'white', border: 'none',
-                borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px'
-              }}><Plus size={16} /> Add Order</button>
+              {activeTab === 'orders' && (
+                <button onClick={() => setShowAddOrder(true)} style={{
+                  display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
+                  background: 'var(--purple-primary)', color: 'white', border: 'none',
+                  borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px'
+                }}><Plus size={16} /> Add Order</button>
+              )}
             </>
           )}
         </div>
       </div>
 
-      {/* Alerts */}
       {alertGrants.length > 0 && (
         <div style={{ background: '#FEF9E7', border: '1px solid #FAD7A0', borderRadius: 'var(--radius-md)', padding: '14px 16px', marginBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
@@ -265,7 +333,6 @@ export default function Finance({ userRole }) {
         </div>
       )}
 
-      {/* Stats */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
         {[
           { label: 'Active Grants', value: grants.length, color: 'var(--purple-primary)', bg: 'var(--purple-faint)' },
@@ -280,20 +347,17 @@ export default function Finance({ userRole }) {
         ))}
       </div>
 
-      {/* Tabs */}
       <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: '20px', width: 'fit-content' }}>
         {['grants', 'orders', 'reagents', 'charts'].map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{
             padding: '10px 20px',
             background: activeTab === tab ? 'var(--purple-primary)' : 'transparent',
             color: activeTab === tab ? 'white' : 'var(--text-secondary)',
-            border: 'none', fontWeight: activeTab === tab ? 600 : 400, fontSize: '13px',
-            textTransform: 'capitalize'
+            border: 'none', fontWeight: activeTab === tab ? 600 : 400, fontSize: '13px', textTransform: 'capitalize'
           }}>{tab}</button>
         ))}
       </div>
 
-      {/* File preview */}
       {previewData && (
         <div style={{ background: '#EAF7F0', border: '1px solid #A9DFBF', borderRadius: 'var(--radius-md)', padding: '16px', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
@@ -308,11 +372,30 @@ export default function Finance({ userRole }) {
           </div>
           <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
             {previewData.slice(0, 5).map((o, i) => (
-              <p key={i} style={{ fontSize: '12px', color: '#27AE60', margin: '4px 0' }}>
-                + {o.item} — {o.vendor} — ${o.total_price}
-              </p>
+              <p key={i} style={{ fontSize: '12px', color: '#27AE60', margin: '4px 0' }}>+ {o.item} — {o.vendor} — ${o.total_price}</p>
             ))}
             {previewData.length > 5 && <p style={{ fontSize: '12px', color: '#27AE60', margin: '4px 0' }}>...and {previewData.length - 5} more</p>}
+          </div>
+        </div>
+      )}
+
+      {previewReagents && (
+        <div style={{ background: '#EAF7F0', border: '1px solid #A9DFBF', borderRadius: 'var(--radius-md)', padding: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <CheckCircle size={16} color="#27AE60" />
+              <span style={{ fontSize: '13px', fontWeight: 600, color: '#27AE60' }}>{previewReagents.length} new reagents found</span>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => setPreviewReagents(null)} style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '12px' }}>Cancel</button>
+              <button onClick={handleConfirmReagentImport} style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', border: 'none', background: '#27AE60', color: 'white', fontSize: '12px', fontWeight: 600 }}>Confirm Import</button>
+            </div>
+          </div>
+          <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+            {previewReagents.slice(0, 5).map((r, i) => (
+              <p key={i} style={{ fontSize: '12px', color: '#27AE60', margin: '4px 0' }}>+ {r.name} — {r.vendor} — {r.catalog_number}</p>
+            ))}
+            {previewReagents.length > 5 && <p style={{ fontSize: '12px', color: '#27AE60', margin: '4px 0' }}>...and {previewReagents.length - 5} more</p>}
           </div>
         </div>
       )}
@@ -321,26 +404,23 @@ export default function Finance({ userRole }) {
         <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading...</div>
       ) : (
         <>
-          {/* Grants Tab */}
           {activeTab === 'grants' && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
               {grants.map(grant => <GrantCard key={grant.id} grant={grant} />)}
             </div>
           )}
 
-          {/* Orders Tab */}
           {activeTab === 'orders' && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
                   <Search size={14} color="var(--text-muted)" />
-                  <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="Search orders..."
+                  <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search orders..."
                     style={{ border: 'none', outline: 'none', flex: 1, fontSize: '13px', background: 'transparent' }} />
                 </div>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{filteredOrders.length} orders</span>
               </div>
-              <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+              <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: 'var(--bg-secondary)' }}>
@@ -363,9 +443,7 @@ export default function Finance({ userRole }) {
                           <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{order.order_date}</td>
                           <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{order.requestor}</td>
                           <td style={{ padding: '10px 12px' }}>
-                            <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text, whiteSpace: 'nowrap' }}>
-                              {statusStyle.label}
-                            </span>
+                            <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text, whiteSpace: 'nowrap' }}>{statusStyle.label}</span>
                           </td>
                         </tr>
                       );
@@ -381,12 +459,11 @@ export default function Finance({ userRole }) {
             </>
           )}
 
-          {/* Reagents Tab */}
           {activeTab === 'reagents' && (
             <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
               {reagents.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                  No reagents loaded yet. Import your reagents spreadsheet to get started.
+                  No reagents loaded yet. Click Import File to upload your reagents spreadsheet.
                 </div>
               ) : (
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -416,39 +493,101 @@ export default function Finance({ userRole }) {
             </div>
           )}
 
-          {/* Charts Tab */}
           {activeTab === 'charts' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '20px' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '20px' }}>Spending by Category</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={categoryChartData} margin={{ top: 0, right: 20, left: 20, bottom: 60 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} angle={-35} textAnchor="end" />
-                    <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={v => `$${v.toLocaleString()}`} />
-                    <Tooltip formatter={v => [`$${v.toLocaleString()}`, 'Spend']} />
-                    <Bar dataKey="value" fill="var(--purple-primary)" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
-              <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '20px' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '20px' }}>Spending by Grant</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie data={grantChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                      {grantChartData.map((_, i) => <Cell key={i} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip formatter={v => [`$${v.toLocaleString()}`, 'Spend']} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
+    {/* Complete vs Processing by Category */}
+    <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '20px' }}>
+      <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '20px' }}>Complete and Processing by Category</h3>
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={statusByCategoryData} margin={{ top: 0, right: 20, left: 20, bottom: 80 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+          <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} angle={-35} textAnchor="end" />
+          <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={v => `$${v.toLocaleString()}`} />
+          <Tooltip formatter={v => [`$${v.toLocaleString()}`]} />
+          <Legend />
+          <Bar dataKey="complete" name="Complete" fill="#27AE60" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="processing" name="Processing" fill="#2980B9" radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+
+    {/* Monthly Spend Over Time */}
+    <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '20px' }}>
+      <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '20px' }}>Total Spending by Month</h3>
+      <ResponsiveContainer width="100%" height={250}>
+        <BarChart data={monthlyChartData} margin={{ top: 0, right: 20, left: 20, bottom: 40 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+          <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} angle={-35} textAnchor="end" />
+          <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={v => `$${v.toLocaleString()}`} />
+          <Tooltip formatter={v => [`$${v.toLocaleString()}`, 'Spend']} />
+          <Bar dataKey="value" fill="var(--purple-primary)" radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+
+    {/* Spending by Grant Over Time */}
+    <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '20px' }}>
+      <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '20px' }}>Spending by Grant Over Time</h3>
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={grantMonthlyChartData} margin={{ top: 0, right: 20, left: 20, bottom: 40 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+          <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} angle={-35} textAnchor="end" />
+          <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={v => `$${v.toLocaleString()}`} />
+          <Tooltip formatter={v => [`$${v.toLocaleString()}`]} />
+          <Legend />
+          {allGrants.map((grant, i) => (
+            <Bar key={grant} dataKey={grant} stackId="a" fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+
+    {/* Per Category Monthly Charts */}
+    <div>
+      <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '16px' }}>Monthly Breakdown by Category</h3>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '16px' }}>
+        {allCategories.map(category => {
+          const catData = monthlyCategoryData[category] || {};
+          const chartData = Object.entries(catData)
+            .map(([month, value]) => ({ month, value: Math.round(value) }))
+            .sort((a, b) => a.month.localeCompare(b.month));
+          return (
+            <div key={category} style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '16px' }}>
+              <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '12px' }}>{category}</h4>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={chartData} margin={{ top: 0, right: 10, left: 10, bottom: 40 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="month" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} angle={-35} textAnchor="end" />
+                  <YAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickFormatter={v => `$${v.toLocaleString()}`} />
+                  <Tooltip formatter={v => [`$${v.toLocaleString()}`, 'Spend']} />
+                  <Bar dataKey="value" fill="#2980B9" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-          )}
+          );
+        })}
+      </div>
+    </div>
+
+    {/* Spending by Grant Pie */}
+    <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '20px' }}>
+      <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '20px' }}>Spending by Grant</h3>
+      <ResponsiveContainer width="100%" height={300}>
+        <PieChart>
+          <Pie data={grantChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+            {grantChartData.map((_, i) => <Cell key={i} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />)}
+          </Pie>
+          <Tooltip formatter={v => [`$${v.toLocaleString()}`, 'Spend']} />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+
+  </div>
+)}
         </>
       )}
 
-      {/* Add Order Modal */}
       {showAddOrder && canManage && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '580px', maxHeight: '80vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
