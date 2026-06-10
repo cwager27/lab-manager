@@ -2,25 +2,29 @@ const express = require('express');
 const cors = require('cors');
 const cron = require('node-cron');
 const { createClient } = require('@supabase/supabase-js');
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD
+  }
+});
 
 // Routes
 const assignmentRoutes = require('./routes/assignments');
+const checklistRoutes = require('./routes/checklists');
 app.use('/api', assignmentRoutes);
+app.use('/api', checklistRoutes);
 
-// Test route
 app.get('/', (req, res) => {
   res.json({ message: 'Lab Manager API is running' });
 });
@@ -28,7 +32,6 @@ app.get('/', (req, res) => {
 // Daily reminder check at 8am
 cron.schedule('0 8 * * *', async () => {
   console.log('Running daily reminder check...');
-
   const today = new Date().toISOString().split('T')[0];
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
@@ -40,14 +43,13 @@ cron.schedule('0 8 * * *', async () => {
   for (const assignment of (assignments || [])) {
     const due = assignment.cycle_end;
     let status = null;
-
     if (due === today) status = 'due today';
     else if (due === tomorrow) status = 'due tomorrow';
     else if (due < today) status = 'overdue';
 
     if (status) {
-      await resend.emails.send({
-        from: 'onboarding@resend.dev',
+      await transporter.sendMail({
+        from: `"Petljak Lab" <${process.env.GMAIL_USER}>`,
         to: assignment.profiles.email,
         subject: `Petljak Lab — Task Reminder: ${status}`,
         html: `

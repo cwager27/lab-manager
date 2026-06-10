@@ -51,11 +51,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div style={{
-        minHeight: '100vh', display: 'flex',
-        alignItems: 'center', justifyContent: 'center',
-        background: 'var(--bg-secondary)'
-      }}>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-secondary)' }}>
         <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
       </div>
     );
@@ -76,17 +72,13 @@ export default function App() {
         onLogout={handleLogout}
         canManage={canManage}
       />
-      <main style={{
-        marginLeft: '240px', flex: 1,
-        padding: '32px', maxWidth: 'calc(100vw - 240px)'
-      }}>
-        {currentPage === 'responsibilities' && <Responsibilities userRole={userRole} userId={user.id} />}
+      <main style={{ marginLeft: '240px', flex: 1, padding: '32px', maxWidth: 'calc(100vw - 240px)' }}>
+        {currentPage === 'responsibilities' && (
+          <Responsibilities userRole={userRole} userId={user.id} profile={profile} />
+        )}
         {currentPage === 'assign' && canManage && <AssignTasks userId={user.id} />}
         {currentPage !== 'responsibilities' && currentPage !== 'assign' && (
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            height: '60vh', color: 'var(--text-muted)', fontSize: '15px'
-          }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--text-muted)', fontSize: '15px' }}>
             This system is coming soon.
           </div>
         )}

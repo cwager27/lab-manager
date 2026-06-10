@@ -14,100 +14,80 @@ const FREQUENCY_COLORS = {
   yearly: { bg: '#FDEDEC', text: '#E74C3C', border: '#F1948A' },
 };
 
-function TaskItem({ task, response, onResponse, onPhotoUpload, canEdit }) {
+function TaskItem({ task, response, onResponse, onPhotoUpload, canEdit, profile }) {
   const [expanded, setExpanded] = useState(false);
   const isNo = response?.response === 'no';
 
+  async function handleSopPhoto(file) {
+    if (!file) return;
+    const path = `sop-photos/${task.id}/${Date.now()}-${file.name}`;
+    const { data } = await supabase.storage.from('lab-files').upload(path, file);
+    if (data) {
+      const { data: urlData } = supabase.storage.from('lab-files').getPublicUrl(path);
+      onPhotoUpload(task.id, urlData.publicUrl, true);
+
+      // Send SOP alert email
+      await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/sop-alert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskTitle: task.title,
+          photoUrl: urlData.publicUrl,
+          submittedByName: profile?.full_name || 'Lab Member',
+          submittedByEmail: profile?.email || ''
+        })
+      });
+    }
+  }
+
   return (
     <div style={{
-      background: 'var(--bg-card)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-md)',
-      marginBottom: '8px',
-      overflow: 'hidden',
-      boxShadow: 'var(--shadow-sm)'
+      background: 'var(--bg-card)', border: '1px solid var(--border)',
+      borderRadius: 'var(--radius-md)', marginBottom: '8px',
+      overflow: 'hidden', boxShadow: 'var(--shadow-sm)'
     }}>
-      <div style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: '12px',
-        padding: '14px 16px',
-      }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 16px' }}>
         {canEdit && (
           <div style={{ display: 'flex', gap: '6px', flexShrink: 0, marginTop: '2px' }}>
             {(task.response_type === 'yes_no' || task.response_type === 'yes_no_na') ? (
               <>
-                <button
-                  onClick={() => onResponse(task.id, 'yes')}
-                  title="Yes"
-                  style={{
-                    width: '28px', height: '28px',
-                    borderRadius: '50%',
-                    border: '2px solid',
-                    borderColor: response?.response === 'yes' ? 'var(--success)' : 'var(--border)',
-                    background: response?.response === 'yes' ? 'var(--success)' : 'transparent',
-                    color: response?.response === 'yes' ? 'white' : 'var(--text-muted)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}
-                >
-                  <CheckCircle size={14} />
-                </button>
-                <button
-                  onClick={() => { onResponse(task.id, 'no'); setExpanded(true); }}
-                  title="No"
-                  style={{
-                    width: '28px', height: '28px',
-                    borderRadius: '50%',
-                    border: '2px solid',
-                    borderColor: response?.response === 'no' ? 'var(--danger)' : 'var(--border)',
-                    background: response?.response === 'no' ? 'var(--danger)' : 'transparent',
-                    color: response?.response === 'no' ? 'white' : 'var(--text-muted)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}
-                >
-                  <XCircle size={14} />
-                </button>
+                <button onClick={() => onResponse(task.id, 'yes')} title="Yes" style={{
+                  width: '28px', height: '28px', borderRadius: '50%', border: '2px solid',
+                  borderColor: response?.response === 'yes' ? 'var(--success)' : 'var(--border)',
+                  background: response?.response === 'yes' ? 'var(--success)' : 'transparent',
+                  color: response?.response === 'yes' ? 'white' : 'var(--text-muted)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}><CheckCircle size={14} /></button>
+                <button onClick={() => { onResponse(task.id, 'no'); setExpanded(true); }} title="No" style={{
+                  width: '28px', height: '28px', borderRadius: '50%', border: '2px solid',
+                  borderColor: response?.response === 'no' ? 'var(--danger)' : 'var(--border)',
+                  background: response?.response === 'no' ? 'var(--danger)' : 'transparent',
+                  color: response?.response === 'no' ? 'white' : 'var(--text-muted)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}><XCircle size={14} /></button>
                 {task.response_type === 'yes_no_na' && (
-                  <button
-                    onClick={() => onResponse(task.id, 'na')}
-                    title="N/A"
-                    style={{
-                      padding: '0 8px', height: '28px',
-                      borderRadius: '14px',
-                      border: '2px solid',
-                      borderColor: response?.response === 'na' ? 'var(--text-muted)' : 'var(--border)',
-                      background: response?.response === 'na' ? 'var(--text-muted)' : 'transparent',
-                      color: response?.response === 'na' ? 'white' : 'var(--text-muted)',
-                      fontSize: '10px', fontWeight: 600
-                    }}
-                  >
-                    N/A
-                  </button>
+                  <button onClick={() => onResponse(task.id, 'na')} title="N/A" style={{
+                    padding: '0 8px', height: '28px', borderRadius: '14px', border: '2px solid',
+                    borderColor: response?.response === 'na' ? 'var(--text-muted)' : 'var(--border)',
+                    background: response?.response === 'na' ? 'var(--text-muted)' : 'transparent',
+                    color: response?.response === 'na' ? 'white' : 'var(--text-muted)',
+                    fontSize: '10px', fontWeight: 600
+                  }}>N/A</button>
                 )}
               </>
             ) : task.response_type === 'checkbox' ? (
-              <button
-                onClick={() => onResponse(task.id, response?.response === 'checked' ? '' : 'checked')}
-                title="Check off"
-                style={{
-                  width: '28px', height: '28px',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '2px solid',
-                  borderColor: response?.response === 'checked' ? 'var(--purple-primary)' : 'var(--border)',
-                  background: response?.response === 'checked' ? 'var(--purple-primary)' : 'transparent',
-                  color: response?.response === 'checked' ? 'white' : 'var(--text-muted)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}
-              >
-                <CheckCircle size={14} />
-              </button>
+              <button onClick={() => onResponse(task.id, response?.response === 'checked' ? '' : 'checked')} title="Check off" style={{
+                width: '28px', height: '28px', borderRadius: 'var(--radius-sm)', border: '2px solid',
+                borderColor: response?.response === 'checked' ? 'var(--purple-primary)' : 'var(--border)',
+                background: response?.response === 'checked' ? 'var(--purple-primary)' : 'transparent',
+                color: response?.response === 'checked' ? 'white' : 'var(--text-muted)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}><CheckCircle size={14} /></button>
             ) : (
               <label title="Upload photo" style={{
-                width: '28px', height: '28px',
-                borderRadius: 'var(--radius-sm)',
-                border: '2px solid var(--border)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'var(--text-muted)', cursor: 'pointer'
+                width: '28px', height: '28px', borderRadius: 'var(--radius-sm)',
+                border: '2px solid var(--border)', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', color: 'var(--text-muted)', cursor: 'pointer'
               }}>
                 <Upload size={14} />
                 <input type="file" accept="image/*" style={{ display: 'none' }}
@@ -119,63 +99,45 @@ function TaskItem({ task, response, onResponse, onPhotoUpload, canEdit }) {
         <div style={{ flex: 1 }}>
           <p style={{
             fontSize: '13px',
-            color: response?.response === 'yes' || response?.response === 'checked'
-              ? 'var(--text-muted)' : 'var(--text-primary)',
-            textDecoration: response?.response === 'yes' || response?.response === 'checked'
-              ? 'line-through' : 'none',
+            color: response?.response === 'yes' || response?.response === 'checked' ? 'var(--text-muted)' : 'var(--text-primary)',
+            textDecoration: response?.response === 'yes' || response?.response === 'checked' ? 'line-through' : 'none',
             lineHeight: 1.5
-          }}>
-            {task.title}
-          </p>
+          }}>{task.title}</p>
           {task.sop_trigger && (
             <span style={{
               display: 'inline-flex', alignItems: 'center', gap: '4px',
-              marginTop: '4px', padding: '2px 8px',
-              background: '#FEF0F0', color: 'var(--danger)',
-              borderRadius: '12px', fontSize: '10px', fontWeight: 600
-            }}>
-              <AlertTriangle size={10} /> SOP Trigger
-            </span>
+              marginTop: '4px', padding: '2px 8px', background: '#FEF0F0',
+              color: 'var(--danger)', borderRadius: '12px', fontSize: '10px', fontWeight: 600
+            }}><AlertTriangle size={10} /> SOP Trigger</span>
           )}
         </div>
         {isNo && task.conditional_text && (
-          <button
-            onClick={() => setExpanded(!expanded)}
-            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', flexShrink: 0 }}
-          >
+          <button onClick={() => setExpanded(!expanded)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', flexShrink: 0 }}>
             {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
         )}
       </div>
       {isNo && expanded && task.conditional_text && (
-        <div style={{
-          padding: '12px 16px',
-          background: '#FEF0F0',
-          borderTop: '1px solid #FADBD8',
-        }}>
+        <div style={{ padding: '12px 16px', background: '#FEF0F0', borderTop: '1px solid #FADBD8' }}>
           <p style={{ fontSize: '12px', color: 'var(--danger)', fontWeight: 500, marginBottom: '10px' }}>
             <AlertTriangle size={12} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
             {task.conditional_text}
           </p>
           {canEdit && (
             <div>
-              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 500 }}>
-                Upload correction photo:
-              </p>
+              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 500 }}>Upload correction photo:</p>
               <label style={{
                 display: 'inline-flex', alignItems: 'center', gap: '6px',
-                padding: '6px 12px',
-                background: 'white', border: '1px solid var(--danger)',
-                borderRadius: 'var(--radius-sm)', color: 'var(--danger)',
-                fontSize: '12px', cursor: 'pointer'
+                padding: '6px 12px', background: 'white', border: '1px solid var(--danger)',
+                borderRadius: 'var(--radius-sm)', color: 'var(--danger)', fontSize: '12px', cursor: 'pointer'
               }}>
                 <Upload size={12} /> Choose Photo
                 <input type="file" accept="image/*" style={{ display: 'none' }}
-                  onChange={e => onPhotoUpload(task.id, e.target.files[0], true)} />
+                  onChange={e => handleSopPhoto(e.target.files[0])} />
               </label>
               {response?.sop_photo_url && (
                 <span style={{ marginLeft: '8px', fontSize: '11px', color: 'var(--success)' }}>
-                  Photo uploaded successfully
+                  Photo uploaded and sent to PM
                 </span>
               )}
             </div>
@@ -186,14 +148,17 @@ function TaskItem({ task, response, onResponse, onPhotoUpload, canEdit }) {
   );
 }
 
-export default function Responsibilities({ userRole }) {
+export default function Responsibilities({ userRole, userId, profile }) {
   const [tasks, setTasks] = useState([]);
+  const [myAssignments, setMyAssignments] = useState([]);
   const [responses, setResponses] = useState({});
   const [activeFrequency, setActiveFrequency] = useState('daily');
   const [activeCategory, setActiveCategory] = useState('MISC');
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [newTask, setNewTask] = useState({
     title: '', category: 'MISC', frequency: 'daily',
     response_type: 'yes_no', sop_trigger: false, conditional_text: ''
@@ -201,62 +166,89 @@ export default function Responsibilities({ userRole }) {
 
   const canManage = userRole === 'admin' || userRole === 'pm';
 
-  useEffect(() => { fetchTasks(); }, []);
+  useEffect(() => { fetchData(); }, [userId]);
 
-  async function fetchTasks() {
+  async function fetchData() {
     setLoading(true);
-    const { data } = await supabase
-      .from('tasks_definitions')
-      .select('*')
-      .eq('status', 'published')
-      .order('category')
-      .order('frequency');
-    setTasks(data || []);
+    const { data: taskData } = await supabase
+      .from('tasks_definitions').select('*').eq('status', 'published')
+      .order('category').order('frequency');
+
+    const { data: assignmentData } = await supabase
+      .from('task_assignments').select('*')
+      .eq('assigned_to', userId).eq('status', 'pending');
+
+    setTasks(taskData || []);
+    setMyAssignments(assignmentData || []);
     setLoading(false);
   }
 
-  async function handleResponse(taskId, value) {
-    setResponses(prev => ({
-      ...prev,
-      [taskId]: { ...prev[taskId], response: value }
-    }));
+  function handleResponse(taskId, value) {
+    setResponses(prev => ({ ...prev, [taskId]: { ...prev[taskId], response: value } }));
   }
 
-  async function handlePhotoUpload(taskId, file, isSop = false) {
-    if (!file) return;
-    const path = `task-photos/${taskId}/${Date.now()}-${file.name}`;
-    const { data } = await supabase.storage.from('lab-files').upload(path, file);
-    if (data) {
-      const { data: urlData } = supabase.storage.from('lab-files').getPublicUrl(path);
+  function handlePhotoUpload(taskId, urlOrFile, isSop = false) {
+    if (typeof urlOrFile === 'string') {
       setResponses(prev => ({
         ...prev,
-        [taskId]: {
-          ...prev[taskId],
-          [isSop ? 'sop_photo_url' : 'photo_url']: urlData.publicUrl
-        }
+        [taskId]: { ...prev[taskId], [isSop ? 'sop_photo_url' : 'photo_url']: urlOrFile }
       }));
     }
   }
 
   async function handleSubmitChecklist() {
-    alert('Checklist submitted! The PM has been notified.');
+    const assignment = myAssignments.find(a =>
+      tasks.filter(t => t.frequency === activeFrequency && t.category === activeCategory)
+        .some(t => t.id === a.task_definition_id)
+    );
+
+    const responseArray = filteredTasks.map(task => ({
+      taskId: task.id,
+      taskTitle: task.title,
+      response: responses[task.id]?.response || '',
+      conditionalResponse: responses[task.id]?.conditional_response || '',
+      photoUrl: responses[task.id]?.photo_url || '',
+      sopPhotoUrl: responses[task.id]?.sop_photo_url || '',
+    }));
+
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/submit-checklist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assignmentId: assignment?.id || null,
+          responses: responseArray,
+          submittedBy: userId,
+          submittedByName: profile?.full_name || 'Lab Member',
+          cycleStart: new Date().toISOString().split('T')[0]
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSubmitted(true);
+        setResponses({});
+        setTimeout(() => setSubmitted(false), 4000);
+      }
+    } catch (err) {
+      console.error('Submit error:', err);
+    }
+    setSubmitting(false);
   }
 
   async function handleAddTask(e) {
     e.preventDefault();
     const { error } = await supabase
-      .from('tasks_definitions')
-      .insert([{ ...newTask, status: 'pending_review' }]);
+      .from('tasks_definitions').insert([{ ...newTask, status: 'pending_review' }]);
     if (!error) {
       setShowNewTaskForm(false);
       setNewTask({ title: '', category: 'MISC', frequency: 'daily', response_type: 'yes_no', sop_trigger: false, conditional_text: '' });
-      fetchTasks();
+      fetchData();
     }
   }
 
   const filteredTasks = tasks.filter(t =>
-    t.frequency === activeFrequency &&
-    t.category === activeCategory &&
+    t.frequency === activeFrequency && t.category === activeCategory &&
     (searchQuery === '' || t.title.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
@@ -273,15 +265,22 @@ export default function Responsibilities({ userRole }) {
         </div>
         {canManage && (
           <button onClick={() => setShowNewTaskForm(true)} style={{
-            display: 'flex', alignItems: 'center', gap: '6px',
-            padding: '10px 16px', background: 'var(--purple-primary)',
-            color: 'white', border: 'none', borderRadius: 'var(--radius-md)',
-            fontWeight: 600, fontSize: '13px', boxShadow: 'var(--shadow-sm)'
-          }}>
-            <Plus size={16} /> Add Task
-          </button>
+            display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
+            background: 'var(--purple-primary)', color: 'white', border: 'none',
+            borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', boxShadow: 'var(--shadow-sm)'
+          }}><Plus size={16} /> Add Task</button>
         )}
       </div>
+
+      {submitted && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px',
+          background: '#EAF7F0', border: '1px solid #A9DFBF', borderRadius: 'var(--radius-md)',
+          color: 'var(--success)', fontSize: '13px', marginBottom: '16px'
+        }}>
+          <CheckCircle size={14} /> Checklist submitted! The PM has been notified.
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
@@ -345,8 +344,7 @@ export default function Responsibilities({ userRole }) {
       {filteredTasks.length > 0 && (
         <div style={{ height: '4px', background: 'var(--border)', borderRadius: '2px', marginBottom: '16px', overflow: 'hidden' }}>
           <div style={{
-            height: '100%',
-            width: `${(completedCount / filteredTasks.length) * 100}%`,
+            height: '100%', width: `${(completedCount / filteredTasks.length) * 100}%`,
             background: 'var(--purple-primary)', borderRadius: '2px', transition: 'width 0.3s ease'
           }} />
         </div>
@@ -362,17 +360,18 @@ export default function Responsibilities({ userRole }) {
         <>
           {filteredTasks.map(task => (
             <TaskItem key={task.id} task={task} response={responses[task.id]}
-              onResponse={handleResponse} onPhotoUpload={handlePhotoUpload} canEdit={true} />
+              onResponse={handleResponse} onPhotoUpload={handlePhotoUpload}
+              canEdit={true} profile={profile} />
           ))}
           <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end' }}>
-            <button onClick={handleSubmitChecklist} style={{
-              display: 'flex', alignItems: 'center', gap: '8px',
-              padding: '12px 24px',
-              background: completedCount === filteredTasks.length ? 'var(--success)' : 'var(--purple-primary)',
+            <button onClick={handleSubmitChecklist} disabled={submitting} style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 24px',
+              background: submitted ? 'var(--success)' : 'var(--purple-primary)',
               color: 'white', border: 'none', borderRadius: 'var(--radius-md)',
               fontWeight: 600, fontSize: '14px', boxShadow: 'var(--shadow-md)'
             }}>
-              <Send size={16} /> Submit Checklist
+              {submitted ? <CheckCircle size={16} /> : <Send size={16} />}
+              {submitting ? 'Submitting...' : submitted ? 'Submitted!' : 'Submit Checklist'}
             </button>
           </div>
         </>
