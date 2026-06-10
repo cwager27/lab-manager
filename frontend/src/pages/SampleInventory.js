@@ -1,0 +1,552 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import {
+  Plus, Search, CheckCircle, XCircle,
+  AlertTriangle, Edit2, Trash2, Clock,
+  Upload, ChevronDown, History, FlaskConical
+} from 'lucide-react';
+
+const STATUS_STYLES = {
+  present: { bg: '#EAF7F0', text: '#27AE60', label: 'Present' },
+  absent: { bg: '#FDEDEC', text: '#E74C3C', label: 'Absent' },
+  depleted: { bg: '#F2F3F4', text: '#9A9AB0', label: 'Depleted' },
+};
+
+const EMPTY_CELL_LINE = {
+  name: '', cell_type: '', passage_number: '', storage_location: '',
+  freezer: '', shelf: '', box: '', status: 'present', notes: ''
+};
+
+const EMPTY_MOUSE = {
+  sample_id: '', mouse_id: '', tissue_type: '', collection_date: '',
+  storage_location: '', freezer: '', shelf: '', box: '',
+  study: '', irb_protocol: '', status: 'present', notes: ''
+};
+
+const EMPTY_HUMAN = {
+  sample_id: '', patient_id: '', tissue_type: '', collection_date: '',
+  storage_location: '', freezer: '', shelf: '', box: '',
+  study: '', irb_protocol: '', status: 'present', notes: ''
+};
+
+function ConfirmModal({ message, onConfirm, onCancel }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300 }}>
+      <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '28px', width: '400px', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+          <AlertTriangle size={20} color="#F39C12" />
+          <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>Confirm Action</h3>
+        </div>
+        <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '24px' }}>{message}</p>
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+          <button onClick={onCancel} style={{ padding: '8px 18px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500 }}>Cancel</button>
+          <button onClick={onConfirm} style={{ padding: '8px 18px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600 }}>Confirm</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SampleForm({ title, fields, form, setForm, onSubmit, onCancel }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+      <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '560px', maxHeight: '85vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
+        <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>{title}</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+          {fields.map(field => (
+            <div key={field.key} style={{ gridColumn: field.full ? '1 / -1' : 'auto' }}>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {field.label}{field.required ? '' : ' (optional)'}
+              </label>
+              {field.type === 'select' ? (
+                <select value={form[field.key] || ''} onChange={e => setForm(p => ({ ...p, [field.key]: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none' }}>
+                  {field.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              ) : (
+                <input type={field.type || 'text'} value={form[field.key] || ''}
+                  onChange={e => setForm(p => ({ ...p, [field.key]: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              )}
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+          <button onClick={onCancel} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500 }}>Cancel</button>
+          <button onClick={onSubmit} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600 }}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function SampleInventory({ userRole, userId, profile }) {
+  const [activeTab, setActiveTab] = useState('cell_lines');
+  const [cellLines, setCellLines] = useState([]);
+  const [mouseSamples, setMouseSamples] = useState([]);
+  const [humanSamples, setHumanSamples] = useState([]);
+  const [auditLog, setAuditLog] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [showForm, setShowForm] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const [form, setForm] = useState({});
+  const [confirmModal, setConfirmModal] = useState(null);
+  const [takingCellLine, setTakingCellLine] = useState(null);
+  const [vialsTaken, setVialsTaken] = useState(1);
+
+  useEffect(() => { fetchData(); }, []);
+
+  async function fetchData() {
+    setLoading(true);
+    const [{ data: cl }, { data: ms }, { data: hs }, { data: al }] = await Promise.all([
+      supabase.from('cell_lines').select('*, taken_by_profile:profiles!cell_lines_taken_by_fkey(full_name)').order('name'),
+      supabase.from('mouse_samples').select('*').order('created_at', { ascending: false }),
+      supabase.from('human_samples').select('*').order('created_at', { ascending: false }),
+      supabase.from('sample_audit_log').select('*').order('created_at', { ascending: false }).limit(50)
+    ]);
+    setCellLines(cl || []);
+    setMouseSamples(ms || []);
+    setHumanSamples(hs || []);
+    setAuditLog(al || []);
+    setLoading(false);
+  }
+
+  async function logAction(sampleType, sampleId, sampleName, action, changes) {
+    await supabase.from('sample_audit_log').insert([{
+      sample_type: sampleType,
+      sample_id: sampleId,
+      sample_name: sampleName,
+      action,
+      changed_by: userId,
+      changed_by_name: profile?.full_name || 'Unknown',
+      changes
+    }]);
+  }
+
+  async function handleAddSample() {
+    const table = activeTab === 'cell_lines' ? 'cell_lines' : activeTab === 'mouse' ? 'mouse_samples' : 'human_samples';
+    const { data, error } = await supabase.from(table).insert([{ ...form, created_by: userId }]).select().single();
+    if (!error) {
+      await logAction(activeTab, data.id, data.name || data.sample_id, 'added', form);
+      setShowForm(false);
+      setForm({});
+      fetchData();
+    }
+  }
+
+  async function handleEditSample() {
+    const table = activeTab === 'cell_lines' ? 'cell_lines' : activeTab === 'mouse' ? 'mouse_samples' : 'human_samples';
+    const { error } = await supabase.from(table).update({ ...form, updated_at: new Date().toISOString() }).eq('id', editingItem.id);
+    if (!error) {
+      await logAction(activeTab, editingItem.id, editingItem.name || editingItem.sample_id, 'edited', form);
+      setEditingItem(null);
+      setForm({});
+      fetchData();
+    }
+  }
+
+  async function handleDeleteSample(item) {
+    setConfirmModal({
+      message: `Are you sure you want to remove "${item.name || item.sample_id}" from the inventory? This will be logged.`,
+      onConfirm: async () => {
+        const table = activeTab === 'cell_lines' ? 'cell_lines' : activeTab === 'mouse' ? 'mouse_samples' : 'human_samples';
+        await logAction(activeTab, item.id, item.name || item.sample_id, 'deleted', item);
+        await supabase.from(table).delete().eq('id', item.id);
+        setConfirmModal(null);
+        fetchData();
+      },
+      onCancel: () => setConfirmModal(null)
+    });
+  }
+
+  async function handleTakeCellLine(cellLine) {
+    setConfirmModal({
+      message: `Confirm: Mark "${cellLine.name}" as absent? Log ${vialsTaken} vial(s) taken by ${profile?.full_name}.`,
+      onConfirm: async () => {
+        await supabase.from('cell_lines').update({
+          status: 'absent',
+          taken_by: userId,
+          taken_at: new Date().toISOString(),
+          vials_taken: vialsTaken,
+          updated_at: new Date().toISOString()
+        }).eq('id', cellLine.id);
+        await logAction('cell_lines', cellLine.id, cellLine.name, 'taken', { vials_taken: vialsTaken, taken_by: profile?.full_name });
+        setConfirmModal(null);
+        setTakingCellLine(null);
+        fetchData();
+      },
+      onCancel: () => { setConfirmModal(null); setTakingCellLine(null); }
+    });
+  }
+
+  async function handleReturnCellLine(cellLine) {
+    setConfirmModal({
+      message: `Mark "${cellLine.name}" as present again?`,
+      onConfirm: async () => {
+        await supabase.from('cell_lines').update({
+          status: 'present', taken_by: null, taken_at: null, vials_taken: null,
+          updated_at: new Date().toISOString()
+        }).eq('id', cellLine.id);
+        await logAction('cell_lines', cellLine.id, cellLine.name, 'returned', { returned_by: profile?.full_name });
+        setConfirmModal(null);
+        fetchData();
+      },
+      onCancel: () => setConfirmModal(null)
+    });
+  }
+
+  const cellLineFields = [
+    { key: 'name', label: 'Cell Line Name', required: true, full: true },
+    { key: 'cell_type', label: 'Cell Type' },
+    { key: 'passage_number', label: 'Passage Number' },
+    { key: 'freezer', label: 'Freezer' },
+    { key: 'shelf', label: 'Shelf' },
+    { key: 'box', label: 'Box' },
+    { key: 'storage_location', label: 'Storage Location', full: true },
+    { key: 'status', label: 'Status', type: 'select', options: [
+      { value: 'present', label: 'Present' },
+      { value: 'absent', label: 'Absent' },
+      { value: 'depleted', label: 'Depleted' }
+    ]},
+    { key: 'notes', label: 'Notes', full: true },
+  ];
+
+  const mouseSampleFields = [
+    { key: 'sample_id', label: 'Sample ID', required: true },
+    { key: 'mouse_id', label: 'Mouse ID' },
+    { key: 'tissue_type', label: 'Tissue Type' },
+    { key: 'collection_date', label: 'Collection Date', type: 'date' },
+    { key: 'freezer', label: 'Freezer' },
+    { key: 'shelf', label: 'Shelf' },
+    { key: 'box', label: 'Box' },
+    { key: 'storage_location', label: 'Storage Location', full: true },
+    { key: 'study', label: 'Study' },
+    { key: 'irb_protocol', label: 'IRB Protocol' },
+    { key: 'status', label: 'Status', type: 'select', options: [
+      { value: 'present', label: 'Present' },
+      { value: 'absent', label: 'Absent' },
+      { value: 'depleted', label: 'Depleted' }
+    ]},
+    { key: 'notes', label: 'Notes', full: true },
+  ];
+
+  const humanSampleFields = [
+    { key: 'sample_id', label: 'Sample ID', required: true },
+    { key: 'patient_id', label: 'Patient ID' },
+    { key: 'tissue_type', label: 'Tissue Type' },
+    { key: 'collection_date', label: 'Collection Date', type: 'date' },
+    { key: 'freezer', label: 'Freezer' },
+    { key: 'shelf', label: 'Shelf' },
+    { key: 'box', label: 'Box' },
+    { key: 'storage_location', label: 'Storage Location', full: true },
+    { key: 'study', label: 'Study' },
+    { key: 'irb_protocol', label: 'IRB Protocol' },
+    { key: 'status', label: 'Status', type: 'select', options: [
+      { value: 'present', label: 'Present' },
+      { value: 'absent', label: 'Absent' },
+      { value: 'depleted', label: 'Depleted' }
+    ]},
+    { key: 'notes', label: 'Notes', full: true },
+  ];
+
+  const currentFields = activeTab === 'cell_lines' ? cellLineFields : activeTab === 'mouse' ? mouseSampleFields : humanSampleFields;
+  const currentEmpty = activeTab === 'cell_lines' ? EMPTY_CELL_LINE : activeTab === 'mouse' ? EMPTY_MOUSE : EMPTY_HUMAN;
+
+  const getCurrentData = () => {
+    const data = activeTab === 'cell_lines' ? cellLines : activeTab === 'mouse' ? mouseSamples : humanSamples;
+    return data.filter(item => {
+      const matchesSearch = searchQuery === '' ||
+        Object.values(item).some(v => v && String(v).toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  };
+
+  const stats = {
+    cell_lines: { present: cellLines.filter(c => c.status === 'present').length, absent: cellLines.filter(c => c.status === 'absent').length, total: cellLines.length },
+    mouse: { present: mouseSamples.filter(c => c.status === 'present').length, absent: mouseSamples.filter(c => c.status === 'absent').length, total: mouseSamples.length },
+    human: { present: humanSamples.filter(c => c.status === 'present').length, absent: humanSamples.filter(c => c.status === 'absent').length, total: humanSamples.length },
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+        <div>
+          <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Sample Inventory</h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>Cell lines, mouse and human sample tracking</p>
+        </div>
+        <button onClick={() => { setForm(currentEmpty); setShowForm(true); }} style={{
+          display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
+          background: 'var(--purple-primary)', color: 'white', border: 'none',
+          borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px'
+        }}><Plus size={16} /> Add Sample</button>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
+        {[
+          { label: 'Cell Lines', present: stats.cell_lines.present, absent: stats.cell_lines.absent, total: stats.cell_lines.total },
+          { label: 'Mouse Samples', present: stats.mouse.present, absent: stats.mouse.absent, total: stats.mouse.total },
+          { label: 'Human Samples', present: stats.human.present, absent: stats.human.absent, total: stats.human.total },
+        ].map(stat => (
+          <div key={stat.label} style={{ flex: 1, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '16px' }}>
+            <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{stat.label}</p>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '20px', fontWeight: 700, color: '#27AE60' }}>{stat.present}</div>
+                <div style={{ fontSize: '10px', color: '#27AE60' }}>Present</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '20px', fontWeight: 700, color: '#E74C3C' }}>{stat.absent}</div>
+                <div style={{ fontSize: '10px', color: '#E74C3C' }}>Absent</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--purple-primary)' }}>{stat.total}</div>
+                <div style={{ fontSize: '10px', color: 'var(--purple-primary)' }}>Total</div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: '16px', width: 'fit-content' }}>
+        {[
+          { id: 'cell_lines', label: 'Cell Lines' },
+          { id: 'mouse', label: 'Mouse Samples' },
+          { id: 'human', label: 'Human Samples' },
+          { id: 'audit', label: 'Audit Log' },
+        ].map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+            padding: '10px 20px',
+            background: activeTab === tab.id ? 'var(--purple-primary)' : 'transparent',
+            color: activeTab === tab.id ? 'white' : 'var(--text-secondary)',
+            border: 'none', fontWeight: activeTab === tab.id ? 600 : 400, fontSize: '13px'
+          }}>{tab.label}</button>
+        ))}
+      </div>
+
+      {activeTab !== 'audit' && (
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
+            <Search size={14} color="var(--text-muted)" />
+            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search samples..."
+              style={{ border: 'none', outline: 'none', flex: 1, fontSize: '13px', background: 'transparent' }} />
+          </div>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {['all', 'present', 'absent', 'depleted'].map(s => (
+              <button key={s} onClick={() => setStatusFilter(s)} style={{
+                padding: '7px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)',
+                background: statusFilter === s ? 'var(--purple-primary)' : 'var(--bg-primary)',
+                color: statusFilter === s ? 'white' : 'var(--text-secondary)',
+                fontWeight: statusFilter === s ? 600 : 400, fontSize: '12px', textTransform: 'capitalize'
+              }}>{s}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading...</div>
+      ) : (
+        <>
+          {activeTab === 'cell_lines' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {getCurrentData().length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
+                  No cell lines found. Add your first one!
+                </div>
+              ) : getCurrentData().map(item => {
+                const statusStyle = STATUS_STYLES[item.status] || STATUS_STYLES.present;
+                return (
+                  <div key={item.id} style={{
+                    background: 'var(--bg-card)', border: `1px solid ${item.status === 'absent' ? '#FADBD8' : 'var(--border)'}`,
+                    borderRadius: 'var(--radius-md)', padding: '16px', boxShadow: 'var(--shadow-sm)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>{item.name}</span>
+                          <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text }}>{statusStyle.label}</span>
+                          {item.cell_type && <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', background: 'var(--purple-faint)', color: 'var(--purple-primary)' }}>{item.cell_type}</span>}
+                        </div>
+                        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                          {item.passage_number && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Passage: {item.passage_number}</span>}
+                          {item.freezer && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Freezer: {item.freezer}</span>}
+                          {item.shelf && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Shelf: {item.shelf}</span>}
+                          {item.box && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Box: {item.box}</span>}
+                          {item.storage_location && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{item.storage_location}</span>}
+                        </div>
+                        {item.status === 'absent' && item.taken_at && (
+                          <div style={{ marginTop: '8px', padding: '8px 12px', background: '#FEF0F0', borderRadius: 'var(--radius-sm)' }}>
+                            <span style={{ fontSize: '12px', color: '#E74C3C' }}>
+                              Taken by {item.taken_by_profile?.full_name || 'Unknown'} on {new Date(item.taken_at).toLocaleDateString()}
+                              {item.vials_taken ? ` — ${item.vials_taken} vial(s)` : ''}
+                            </span>
+                          </div>
+                        )}
+                        {item.notes && <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '6px 0 0', fontStyle: 'italic' }}>{item.notes}</p>}
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                        {item.status === 'present' && (
+                          <button onClick={() => { setTakingCellLine(item); setVialsTaken(1); }} style={{
+                            padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid #FADBD8',
+                            background: '#FEF0F0', color: '#E74C3C', fontSize: '12px', fontWeight: 500
+                          }}>Take</button>
+                        )}
+                        {item.status === 'absent' && (
+                          <button onClick={() => handleReturnCellLine(item)} style={{
+                            padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid #A9DFBF',
+                            background: '#EAF7F0', color: '#27AE60', fontSize: '12px', fontWeight: 500
+                          }}>Return</button>
+                        )}
+                        <button onClick={() => {
+                          setConfirmModal({
+                            message: `Edit "${item.name}"? Changes will be logged.`,
+                            onConfirm: () => { setEditingItem(item); setForm(item); setConfirmModal(null); },
+                            onCancel: () => setConfirmModal(null)
+                          });
+                        }} style={{ padding: '6px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>
+                          <Edit2 size={14} />
+                        </button>
+                        <button onClick={() => handleDeleteSample(item)} style={{ padding: '6px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)' }}>
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Take vials input */}
+                    {takingCellLine?.id === item.id && (
+                      <div style={{ marginTop: '12px', padding: '12px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <label style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Vials taken:</label>
+                        <input type="number" min="1" value={vialsTaken} onChange={e => setVialsTaken(parseInt(e.target.value) || 1)}
+                          style={{ width: '80px', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none' }} />
+                        <button onClick={() => handleTakeCellLine(item)} style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--danger)', color: 'white', fontSize: '12px', fontWeight: 600 }}>Confirm Take</button>
+                        <button onClick={() => setTakingCellLine(null)} style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: '12px' }}>Cancel</button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {(activeTab === 'mouse' || activeTab === 'human') && (
+            <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg-secondary)' }}>
+                    {(activeTab === 'mouse'
+                      ? ['Sample ID', 'Mouse ID', 'Tissue', 'Collection Date', 'Freezer', 'Shelf', 'Study', 'IRB', 'Status', 'Actions']
+                      : ['Sample ID', 'Patient ID', 'Tissue', 'Collection Date', 'Freezer', 'Shelf', 'Study', 'IRB', 'Status', 'Actions']
+                    ).map(h => (
+                      <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {getCurrentData().length === 0 ? (
+                    <tr><td colSpan={10} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>No samples found.</td></tr>
+                  ) : getCurrentData().map(item => {
+                    const statusStyle = STATUS_STYLES[item.status] || STATUS_STYLES.present;
+                    return (
+                      <tr key={item.id} style={{ borderTop: '1px solid var(--border)' }}>
+                        <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{item.sample_id}</td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{activeTab === 'mouse' ? item.mouse_id : item.patient_id}</td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{item.tissue_type}</td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{item.collection_date}</td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{item.freezer}</td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{item.shelf}</td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{item.study}</td>
+                        <td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{item.irb_protocol}</td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text }}>{statusStyle.label}</span>
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button onClick={() => {
+                              setConfirmModal({
+                                message: `Edit sample "${item.sample_id}"? Changes will be logged.`,
+                                onConfirm: () => { setEditingItem(item); setForm(item); setConfirmModal(null); },
+                                onCancel: () => setConfirmModal(null)
+                              });
+                            }} style={{ padding: '4px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>
+                              <Edit2 size={13} />
+                            </button>
+                            <button onClick={() => handleDeleteSample(item)} style={{ padding: '4px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)' }}>
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {activeTab === 'audit' && (
+            <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+              {auditLog.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>No audit log entries yet.</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg-secondary)' }}>
+                      {['Time', 'Action', 'Sample', 'Type', 'By'].map(h => (
+                        <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditLog.map(log => {
+                      const actionColors = {
+                        added: '#27AE60', edited: '#2980B9', deleted: '#E74C3C',
+                        taken: '#F39C12', returned: '#27AE60'
+                      };
+                      return (
+                        <tr key={log.id} style={{ borderTop: '1px solid var(--border)' }}>
+                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{new Date(log.created_at).toLocaleString()}</td>
+                          <td style={{ padding: '10px 12px' }}>
+                            <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: `${actionColors[log.action]}20`, color: actionColors[log.action] || 'var(--text-muted)', textTransform: 'capitalize' }}>{log.action}</span>
+                          </td>
+                          <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{log.sample_name}</td>
+                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{log.sample_type?.replace('_', ' ')}</td>
+                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{log.changed_by_name}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Add/Edit Form */}
+      {(showForm || editingItem) && (
+        <SampleForm
+          title={editingItem ? `Edit ${activeTab === 'cell_lines' ? 'Cell Line' : 'Sample'}` : `Add ${activeTab === 'cell_lines' ? 'Cell Line' : activeTab === 'mouse' ? 'Mouse Sample' : 'Human Sample'}`}
+          fields={currentFields}
+          form={form}
+          setForm={setForm}
+          onSubmit={editingItem ? handleEditSample : handleAddSample}
+          onCancel={() => { setShowForm(false); setEditingItem(null); setForm({}); }}
+        />
+      )}
+
+      {/* Confirm Modal */}
+      {confirmModal && (
+        <ConfirmModal
+          message={confirmModal.message}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={confirmModal.onCancel}
+        />
+      )}
+    </div>
+  );
+}
