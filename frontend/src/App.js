@@ -9,6 +9,7 @@ import VacationLogs from './pages/VacationLogs';
 import LabMeetings from './pages/LabMeetings';
 import Finance from './pages/Finance';
 import SampleInventory from './pages/SampleInventory';
+import LabContacts from './pages/LabContacts';
 import Login from './pages/Login';
 
 export default function App() {
@@ -66,6 +67,15 @@ export default function App() {
 
   const userRole = profile?.role || 'member';
   const canManage = userRole === 'admin' || userRole === 'pm';
+  const permissions = {
+    can_assign_tasks: profile?.can_assign_tasks,
+    can_approve_sporadic: profile?.can_approve_sporadic,
+    can_edit_meetings: profile?.can_edit_meetings,
+    can_view_finance: profile?.can_view_finance,
+    can_edit_samples: profile?.can_edit_samples,
+    can_view_contacts: profile?.can_view_contacts,
+    can_add_members: profile?.can_add_members,
+  };
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-secondary)' }}>
@@ -76,16 +86,18 @@ export default function App() {
         profile={profile}
         onLogout={handleLogout}
         canManage={canManage}
+        permissions={permissions}
       />
       <main style={{ marginLeft: '240px', flex: 1, padding: '32px', maxWidth: 'calc(100vw - 240px)' }}>
         {currentPage === 'responsibilities' && <Responsibilities userRole={userRole} userId={user.id} profile={profile} />}
         {currentPage === 'assign' && canManage && <AssignTasks userId={user.id} />}
-        {currentPage === 'sporadic' && <SporadicTasks userRole={userRole} userId={user.id} profile={profile} />}
+        {currentPage === 'sporadic' && <SporadicTasks userRole={userRole} userId={user.id} profile={profile} permissions={permissions} />}
         {currentPage === 'vacation' && <VacationLogs userRole={userRole} userId={user.id} profile={profile} />}
-        {currentPage === 'meetings' && <LabMeetings userRole={userRole} userId={user.id} profile={profile} />}
-        {currentPage === 'finance' && <Finance userRole={userRole} />}
+        {currentPage === 'meetings' && <LabMeetings userRole={userRole} userId={user.id} profile={profile} permissions={permissions} />}
+        {currentPage === 'finance' && permissions.can_view_finance && <Finance userRole={userRole} />}
         {currentPage === 'inventory' && <SampleInventory userRole={userRole} userId={user.id} profile={profile} />}
-        {!['responsibilities', 'assign', 'sporadic', 'vacation', 'meetings', 'finance', 'inventory'].includes(currentPage) && (
+        {currentPage === 'contacts' && permissions.can_view_contacts && <LabContacts userRole={userRole} userId={user.id} profile={profile} permissions={permissions} />}
+        {!['responsibilities', 'assign', 'sporadic', 'vacation', 'meetings', 'finance', 'inventory', 'contacts'].includes(currentPage) && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--text-muted)', fontSize: '15px' }}>
             This system is coming soon.
           </div>
