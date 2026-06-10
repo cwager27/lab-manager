@@ -20,8 +20,10 @@ function TaskItem({ task, response, onResponse, onPhotoUpload, canEdit, profile 
 
   async function handleSopPhoto(file) {
     if (!file) return;
-    const path = `sop-photos/${task.id}/${Date.now()}-${file.name}`;
-    const { data } = await supabase.storage.from('lab-files').upload(path, file);
+    const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '-');
+    const path = `sop-photos/${task.id}/${Date.now()}-${safeName}`;
+    const { data, error } = await supabase.storage.from('lab-files').upload(path, file);
+    if (error) { console.error('Upload error:', error); return; }
     if (data) {
       const { data: urlData } = supabase.storage.from('lab-files').getPublicUrl(path);
       onPhotoUpload(task.id, urlData.publicUrl, true);
