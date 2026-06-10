@@ -5,6 +5,7 @@ import Navigation from './components/Navigation';
 import Responsibilities from './pages/Responsibilities';
 import AssignTasks from './pages/AssignTasks';
 import SporadicTasks from './pages/SporadicTasks';
+import VacationLogs from './pages/VacationLogs';
 import Login from './pages/Login';
 
 export default function App() {
@@ -74,16 +75,11 @@ export default function App() {
         canManage={canManage}
       />
       <main style={{ marginLeft: '240px', flex: 1, padding: '32px', maxWidth: 'calc(100vw - 240px)' }}>
-        {currentPage === 'responsibilities' && (
-          <Responsibilities userRole={userRole} userId={user.id} profile={profile} />
-        )}
-        {currentPage === 'assign' && canManage && (
-          <AssignTasks userId={user.id} />
-        )}
-        {currentPage === 'sporadic' && (
-          <SporadicTasks userRole={userRole} userId={user.id} profile={profile} />
-        )}
-        {!['responsibilities', 'assign', 'sporadic'].includes(currentPage) && (
+        {currentPage === 'responsibilities' && <Responsibilities userRole={userRole} userId={user.id} profile={profile} />}
+        {currentPage === 'assign' && canManage && <AssignTasks userId={user.id} />}
+        {currentPage === 'sporadic' && <SporadicTasks userRole={userRole} userId={user.id} profile={profile} />}
+        {currentPage === 'vacation' && <VacationLogs userRole={userRole} userId={user.id} profile={profile} />}
+        {!['responsibilities', 'assign', 'sporadic', 'vacation'].includes(currentPage) && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--text-muted)', fontSize: '15px' }}>
             This system is coming soon.
           </div>

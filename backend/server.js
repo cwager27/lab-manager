@@ -23,9 +23,11 @@ const transporter = nodemailer.createTransport({
 const assignmentRoutes = require('./routes/assignments');
 const checklistRoutes = require('./routes/checklists');
 const sporadicRoutes = require('./routes/sporadic');
+const vacationRoutes = require('./routes/vacation');
 app.use('/api', assignmentRoutes);
 app.use('/api', checklistRoutes);
 app.use('/api', sporadicRoutes);
+app.use('/api', vacationRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Lab Manager API is running' });
