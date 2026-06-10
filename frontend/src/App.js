@@ -10,6 +10,7 @@ import LabMeetings from './pages/LabMeetings';
 import Finance from './pages/Finance';
 import SampleInventory from './pages/SampleInventory';
 import LabContacts from './pages/LabContacts';
+import Compliance from './pages/Compliance';
 import Login from './pages/Login';
 
 export default function App() {
@@ -96,8 +97,9 @@ export default function App() {
         {currentPage === 'meetings' && <LabMeetings userRole={userRole} userId={user.id} profile={profile} permissions={permissions} />}
         {currentPage === 'finance' && permissions.can_view_finance && <Finance userRole={userRole} />}
         {currentPage === 'inventory' && <SampleInventory userRole={userRole} userId={user.id} profile={profile} />}
+        {currentPage === 'compliance' && <Compliance userRole={userRole} userId={user.id} profile={profile} />}
         {currentPage === 'contacts' && permissions.can_view_contacts && <LabContacts userRole={userRole} userId={user.id} profile={profile} permissions={permissions} />}
-        {!['responsibilities', 'assign', 'sporadic', 'vacation', 'meetings', 'finance', 'inventory', 'contacts'].includes(currentPage) && (
+        {!['responsibilities', 'assign', 'sporadic', 'vacation', 'meetings', 'finance', 'inventory', 'compliance', 'contacts'].includes(currentPage) && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--text-muted)', fontSize: '15px' }}>
             This system is coming soon.
           </div>
