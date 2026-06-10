@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Send, User, Calendar, Clock, ChevronDown, CheckCircle } from 'lucide-react';
+import { Send, User, Calendar, Clock, ChevronDown, CheckCircle, AlertTriangle } from 'lucide-react';
 
 const FREQUENCY_COLORS = {
   daily: { bg: '#EBF5FB', text: '#2980B9', border: '#AED6F1' },
@@ -20,16 +20,15 @@ export default function AssignTasks({ userId }) {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   async function fetchData() {
     setLoading(true);
     const [{ data: taskData }, { data: memberData }] = await Promise.all([
       supabase.from('tasks_definitions').select('*').eq('status', 'published').order('frequency').order('category'),
-      supabase.from('profiles').select('*').in('role', ['member', 'intern']).order('full_name')
+      supabase.from('profiles').select('*').order('full_name')
     ]);
     setTasks(taskData || []);
     setMembers(memberData || []);
@@ -60,31 +59,64 @@ export default function AssignTasks({ userId }) {
   async function handleSendAssignments() {
     const filtered = tasks.filter(t => t.frequency === activeFrequency && t.category === activeCategory);
     const toAssign = filtered.filter(t => assignments[t.id]);
+
     if (toAssign.length === 0) {
-      alert('Please assign at least one task before sending.');
+      setError('Please assign at least one task before sending.');
       return;
     }
+
     setSending(true);
+    setError('');
     const cycleEnd = getCycleEnd(cycleStart, activeFrequency);
-    for (const task of toAssign) {
-      await supabase.from('task_assignments').insert([{
-        task_definition_id: task.id,
-        assigned_to: assignments[task.id],
-        assigned_by: userId,
-        cycle_start: cycleStart,
-        cycle_end: cycleEnd,
-        status: 'pending'
-      }]);
+
+    try {
+      // Save assignments to Supabase
+      for (const task of toAssign) {
+        await supabase.from('task_assignments').insert([{
+          task_definition_id: task.id,
+          assigned_to: assignments[task.id],
+          assigned_by: userId,
+          cycle_start: cycleStart,
+          cycle_end: cycleEnd,
+          status: 'pending'
+        }]);
+      }
+
+      // Build email payload
+      const emailAssignments = toAssign.map(task => {
+        const member = members.find(m => m.id === assignments[task.id]);
+        return {
+          memberId: member.id,
+          memberEmail: member.email,
+          memberName: member.full_name,
+          taskTitle: task.title
+        };
+      });
+
+      // Send emails via backend
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/send-assignments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignments: emailAssignments, cycleStart, cycleEnd, assignedBy: userId })
+      });
+
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error);
+
+      setSent(true);
+      setAssignments({});
+      setTimeout(() => setSent(false), 4000);
+    } catch (err) {
+      setError('Failed to send assignments. Please try again.');
+      console.error(err);
     }
+
     setSending(false);
-    setSent(true);
-    setTimeout(() => setSent(false), 3000);
   }
 
   const filteredTasks = tasks.filter(t =>
     t.frequency === activeFrequency && t.category === activeCategory
   );
-
   const assignedCount = filteredTasks.filter(t => assignments[t.id]).length;
 
   return (
@@ -97,40 +129,50 @@ export default function AssignTasks({ userId }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Calendar size={14} color="var(--text-muted)" />
-            <input
-              type="date"
-              value={cycleStart}
-              onChange={e => setCycleStart(e.target.value)}
-              style={{
-                padding: '8px 12px', border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none'
-              }}
-            />
+            <input type="date" value={cycleStart} onChange={e => setCycleStart(e.target.value)}
+              style={{ padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none' }} />
           </div>
-          <button
-            onClick={handleSendAssignments}
-            disabled={sending || assignedCount === 0}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              padding: '10px 16px',
-              background: sent ? 'var(--success)' : assignedCount === 0 ? 'var(--border)' : 'var(--purple-primary)',
-              color: assignedCount === 0 ? 'var(--text-muted)' : 'white',
-              border: 'none', borderRadius: 'var(--radius-md)',
-              fontWeight: 600, fontSize: '13px'
-            }}
-          >
+          <button onClick={handleSendAssignments} disabled={sending || assignedCount === 0} style={{
+            display: 'flex', alignItems: 'center', gap: '6px',
+            padding: '10px 16px',
+            background: sent ? 'var(--success)' : assignedCount === 0 ? 'var(--border)' : 'var(--purple-primary)',
+            color: assignedCount === 0 ? 'var(--text-muted)' : 'white',
+            border: 'none', borderRadius: 'var(--radius-md)',
+            fontWeight: 600, fontSize: '13px'
+          }}>
             {sent ? <CheckCircle size={16} /> : <Send size={16} />}
             {sent ? 'Sent!' : sending ? 'Sending...' : `Send ${assignedCount > 0 ? `(${assignedCount})` : ''}`}
           </button>
         </div>
       </div>
 
-      {/* Quick assign all */}
+      {error && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '8px',
+          padding: '12px 16px', background: '#FEF0F0',
+          border: '1px solid #FADBD8', borderRadius: 'var(--radius-md)',
+          color: 'var(--danger)', fontSize: '13px', marginBottom: '16px'
+        }}>
+          <AlertTriangle size={14} /> {error}
+        </div>
+      )}
+
+      {sent && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '8px',
+          padding: '12px 16px', background: '#EAF7F0',
+          border: '1px solid #A9DFBF', borderRadius: 'var(--radius-md)',
+          color: 'var(--success)', fontSize: '13px', marginBottom: '16px'
+        }}>
+          <CheckCircle size={14} /> Assignments saved and emails sent successfully!
+        </div>
+      )}
+
       {members.length > 0 && (
         <div style={{
           background: 'var(--bg-primary)', border: '1px solid var(--border)',
           borderRadius: 'var(--radius-md)', padding: '14px 16px',
-          marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px'
+          marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap'
         }}>
           <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500 }}>Assign all to:</span>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -147,7 +189,6 @@ export default function AssignTasks({ userId }) {
         </div>
       )}
 
-      {/* Filters */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
           {['MISC', 'PM'].map(cat => (
@@ -185,26 +226,21 @@ export default function AssignTasks({ userId }) {
         </div>
       </div>
 
-      {/* Progress */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: '12px'
-      }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
         <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
           {assignedCount} of {filteredTasks.length} tasks assigned
         </span>
       </div>
+
       {filteredTasks.length > 0 && (
         <div style={{ height: '4px', background: 'var(--border)', borderRadius: '2px', marginBottom: '16px', overflow: 'hidden' }}>
           <div style={{
-            height: '100%',
-            width: `${(assignedCount / filteredTasks.length) * 100}%`,
+            height: '100%', width: `${(assignedCount / filteredTasks.length) * 100}%`,
             background: 'var(--purple-primary)', borderRadius: '2px', transition: 'width 0.3s ease'
           }} />
         </div>
       )}
 
-      {/* Task list with assignee dropdowns */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading...</div>
       ) : filteredTasks.length === 0 ? (
@@ -212,56 +248,43 @@ export default function AssignTasks({ userId }) {
           No tasks found for this selection.
         </div>
       ) : (
-        filteredTasks.map(task => {
-          const assignedMember = members.find(m => m.id === assignments[task.id]);
-          return (
-            <div key={task.id} style={{
-              background: 'var(--bg-card)', border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-md)', padding: '14px 16px',
-              marginBottom: '8px', display: 'flex', alignItems: 'center',
-              gap: '12px', boxShadow: 'var(--shadow-sm)'
-            }}>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: 1.5 }}>{task.title}</p>
-                {task.sop_trigger && (
-                  <span style={{
-                    display: 'inline-block', marginTop: '4px', padding: '2px 8px',
-                    background: '#FEF0F0', color: 'var(--danger)',
-                    borderRadius: '12px', fontSize: '10px', fontWeight: 600
-                  }}>SOP Trigger</span>
-                )}
-              </div>
-              <div style={{ position: 'relative', flexShrink: 0 }}>
-                <User size={14} style={{
-                  position: 'absolute', left: '10px', top: '50%',
-                  transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none'
-                }} />
-                <ChevronDown size={14} style={{
-                  position: 'absolute', right: '10px', top: '50%',
-                  transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none'
-                }} />
-                <select
-                  value={assignments[task.id] || ''}
-                  onChange={e => handleAssign(task.id, e.target.value)}
-                  style={{
-                    padding: '8px 32px 8px 30px',
-                    border: `1px solid ${assignments[task.id] ? 'var(--purple-primary)' : 'var(--border)'}`,
-                    borderRadius: 'var(--radius-md)',
-                    background: assignments[task.id] ? 'var(--purple-faint)' : 'var(--bg-primary)',
-                    color: assignments[task.id] ? 'var(--purple-primary)' : 'var(--text-muted)',
-                    fontSize: '13px', fontWeight: assignments[task.id] ? 500 : 400,
-                    outline: 'none', appearance: 'none', minWidth: '160px', cursor: 'pointer'
-                  }}
-                >
-                  <option value="">Assign to...</option>
-                  {members.map(m => (
-                    <option key={m.id} value={m.id}>{m.full_name}</option>
-                  ))}
-                </select>
-              </div>
+        filteredTasks.map(task => (
+          <div key={task.id} style={{
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-md)', padding: '14px 16px',
+            marginBottom: '8px', display: 'flex', alignItems: 'center',
+            gap: '12px', boxShadow: 'var(--shadow-sm)'
+          }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: 1.5 }}>{task.title}</p>
+              {task.sop_trigger && (
+                <span style={{
+                  display: 'inline-block', marginTop: '4px', padding: '2px 8px',
+                  background: '#FEF0F0', color: 'var(--danger)',
+                  borderRadius: '12px', fontSize: '10px', fontWeight: 600
+                }}>SOP Trigger</span>
+              )}
             </div>
-          );
-        })
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <User size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+              <ChevronDown size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+              <select value={assignments[task.id] || ''} onChange={e => handleAssign(task.id, e.target.value)} style={{
+                padding: '8px 32px 8px 30px',
+                border: `1px solid ${assignments[task.id] ? 'var(--purple-primary)' : 'var(--border)'}`,
+                borderRadius: 'var(--radius-md)',
+                background: assignments[task.id] ? 'var(--purple-faint)' : 'var(--bg-primary)',
+                color: assignments[task.id] ? 'var(--purple-primary)' : 'var(--text-muted)',
+                fontSize: '13px', fontWeight: assignments[task.id] ? 500 : 400,
+                outline: 'none', appearance: 'none', minWidth: '160px', cursor: 'pointer'
+              }}>
+                <option value="">Assign to...</option>
+                {members.map(m => (
+                  <option key={m.id} value={m.id}>{m.full_name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        ))
       )}
     </div>
   );
