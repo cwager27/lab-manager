@@ -7,6 +7,7 @@ import AssignTasks from './pages/AssignTasks';
 import SporadicTasks from './pages/SporadicTasks';
 import VacationLogs from './pages/VacationLogs';
 import LabMeetings from './pages/LabMeetings';
+import Finance from './pages/Finance';
 import Login from './pages/Login';
 
 export default function App() {
@@ -81,7 +82,8 @@ export default function App() {
         {currentPage === 'sporadic' && <SporadicTasks userRole={userRole} userId={user.id} profile={profile} />}
         {currentPage === 'vacation' && <VacationLogs userRole={userRole} userId={user.id} profile={profile} />}
         {currentPage === 'meetings' && <LabMeetings userRole={userRole} userId={user.id} profile={profile} />}
-        {!['responsibilities', 'assign', 'sporadic', 'vacation', 'meetings'].includes(currentPage) && (
+        {currentPage === 'finance' && <Finance userRole={userRole} />}
+        {!['responsibilities', 'assign', 'sporadic', 'vacation', 'meetings', 'finance'].includes(currentPage) && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--text-muted)', fontSize: '15px' }}>
             This system is coming soon.
           </div>
