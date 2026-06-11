@@ -39,10 +39,16 @@ export default function VacationLogs({ userRole, userId, profile }) {
 
   async function fetchRequests() {
     setLoading(true);
-    const { data } = await supabase
+    let query = supabase
       .from('vacation_requests')
       .select('*, requester:profiles!vacation_requests_requested_by_fkey(full_name, email)')
       .order('created_at', { ascending: false });
+    
+    if (!isAdmin) {
+      query = query.eq('requested_by', userId);
+    }
+    
+    const { data } = await query;
     setRequests(data || []);
     setLoading(false);
   }

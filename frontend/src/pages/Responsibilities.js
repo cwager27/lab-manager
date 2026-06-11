@@ -172,9 +172,11 @@ export default function Responsibilities({ userRole, userId, profile }) {
 
   async function fetchData() {
     setLoading(true);
-    const { data: taskData } = await supabase
+    let taskQuery = supabase
       .from('tasks_definitions').select('*').eq('status', 'published')
       .order('category').order('frequency');
+
+    const { data: taskData } = await taskQuery;
 
     const { data: assignmentData } = await supabase
       .from('task_assignments').select('*')
@@ -249,9 +251,12 @@ export default function Responsibilities({ userRole, userId, profile }) {
     }
   }
 
+  const assignedTaskIds = new Set(myAssignments.map(a => a.task_definition_id));
+
   const filteredTasks = tasks.filter(t =>
     t.frequency === activeFrequency && t.category === activeCategory &&
-    (searchQuery === '' || t.title.toLowerCase().includes(searchQuery.toLowerCase()))
+    (searchQuery === '' || t.title.toLowerCase().includes(searchQuery.toLowerCase())) &&
+    (canManage || assignedTaskIds.has(t.id))
   );
 
   const completedCount = filteredTasks.filter(t =>
@@ -356,7 +361,9 @@ export default function Responsibilities({ userRole, userId, profile }) {
         <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading tasks...</div>
       ) : filteredTasks.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
-          No tasks found for this selection.
+          {assignedTaskIds.size === 0 && !canManage
+            ? 'You have not been assigned any tasks in this section yet.'
+            : 'No tasks found for this selection.'}
         </div>
       ) : (
         <>
