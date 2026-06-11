@@ -1,9 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import {
-  Plus, CheckCircle, XCircle, Clock,
-  Calendar, User, AlertTriangle, Upload, Send
-} from 'lucide-react';
+import { Plus, CheckCircle, XCircle, Clock, Calendar, User, Upload, Send } from 'lucide-react';
 
 const CATEGORY_COLORS = {
   'Daily AM': { bg: '#EBF5FB', text: '#2980B9', border: '#AED6F1' },
@@ -43,13 +40,11 @@ export default function SporadicTasks({ userRole, userId, profile }) {
     setLoading(true);
     let query = supabase
       .from('sporadic_tasks')
-      .select(`*, assignee:profiles!sporadic_tasks_assigned_to_fkey(full_name, email), assigner:profiles!sporadic_tasks_assigned_by_fkey(full_name)`)
+      .select('*, assignee:profiles!sporadic_tasks_assigned_to_fkey(full_name, email), assigner:profiles!sporadic_tasks_assigned_by_fkey(full_name)')
       .order('due_date');
-
     if (!canManage) {
       query = query.or(`assigned_to.eq.${userId},assigned_by.eq.${userId}`);
     }
-
     const { data: taskData } = await query;
     const { data: memberData } = await supabase.from('profiles').select('*').order('full_name');
     setTasks(taskData || []);
@@ -67,21 +62,17 @@ export default function SporadicTasks({ userRole, userId, profile }) {
     const { data, error } = await supabase
       .from('sporadic_tasks')
       .insert([{ ...newTask, assigned_by: userId, status }])
-      .select(`*, assignee:profiles!sporadic_tasks_assigned_to_fkey(full_name, email)`)
+      .select('*, assignee:profiles!sporadic_tasks_assigned_to_fkey(full_name, email)')
       .single();
-
     if (!error && data) {
       if (canManage && data.assignee) {
         await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/send-sporadic-assignment`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            taskTitle: data.title,
-            taskDescription: data.description,
-            category: data.category,
-            dueDate: data.due_date,
-            memberEmail: data.assignee.email,
-            memberName: data.assignee.full_name,
+            taskTitle: data.title, taskDescription: data.description,
+            category: data.category, dueDate: data.due_date,
+            memberEmail: data.assignee.email, memberName: data.assignee.full_name,
             assignedByName: profile?.full_name || 'Lab Manager'
           })
         });
@@ -100,12 +91,9 @@ export default function SporadicTasks({ userRole, userId, profile }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          taskTitle: task.title,
-          taskDescription: task.description,
-          category: task.category,
-          dueDate: task.due_date,
-          memberEmail: member.email,
-          memberName: member.full_name,
+          taskTitle: task.title, taskDescription: task.description,
+          category: task.category, dueDate: task.due_date,
+          memberEmail: member.email, memberName: member.full_name,
           assignedByName: profile?.full_name || 'Lab Manager'
         })
       });
@@ -125,24 +113,17 @@ export default function SporadicTasks({ userRole, userId, profile }) {
 
   async function handleSubmitTask(task) {
     const response = responses[task.id];
-    if (!response?.response) {
-      alert('Please provide a response before submitting.');
-      return;
-    }
+    if (!response?.response) { alert('Please provide a response before submitting.'); return; }
     await supabase.from('sporadic_tasks').update({
       status: 'submitted', response: response.response,
-      photo_url: response.photo_url || null,
-      submitted_at: new Date().toISOString()
+      photo_url: response.photo_url || null, submitted_at: new Date().toISOString()
     }).eq('id', task.id);
-
     await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/sporadic-submitted`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        taskTitle: task.title,
-        memberName: profile?.full_name || 'Lab Member',
-        response: response.response,
-        assignedByName: task.assigner?.full_name || 'Lab Manager'
+        taskTitle: task.title, memberName: profile?.full_name || 'Lab Member',
+        response: response.response, assignedByName: task.assigner?.full_name || 'Lab Manager'
       })
     });
     fetchData();
@@ -222,149 +203,118 @@ export default function SporadicTasks({ userRole, userId, profile }) {
         <div style={{ textAlign: 'center', padding: '40px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
           No tasks found.
         </div>
-      ) : (
-        filteredTasks.map(task => {
-          const overdue = isOverdue(task.due_date, task.status);
-          const status = overdue ? 'overdue' : task.status;
-          const statusStyle = STATUS_STYLES[status] || STATUS_STYLES.pending;
-          const catColors = CATEGORY_COLORS[task.category] || CATEGORY_COLORS['MISC'];
-          const response = responses[task.id];
-          const isAssignedToMe = task.assigned_to === userId;
+      ) : filteredTasks.map(task => {
+        const overdue = isOverdue(task.due_date, task.status);
+        const status = overdue ? 'overdue' : task.status;
+        const statusStyle = STATUS_STYLES[status] || STATUS_STYLES.pending;
+        const catColors = CATEGORY_COLORS[task.category] || CATEGORY_COLORS['MISC'];
+        const response = responses[task.id];
+        const isAssignedToMe = task.assigned_to === userId;
 
-          return (
-            <div key={task.id} style={{
-              background: 'var(--bg-card)', border: `1px solid ${overdue ? '#FADBD8' : 'var(--border)'}`,
-              borderRadius: 'var(--radius-md)', padding: '16px', marginBottom: '12px', boxShadow: 'var(--shadow-sm)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '12px' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
-                    <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{task.title}</h3>
-                    <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: catColors.bg, color: catColors.text, border: `1px solid ${catColors.border}` }}>{task.category}</span>
-                    <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text }}>{statusStyle.label}</span>
-                  </div>
-                  {task.description && <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 8px' }}>{task.description}</p>}
-                  <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: overdue ? 'var(--danger)' : 'var(--text-muted)' }}>
-                      <Calendar size={12} /> Due: {task.due_date}
-                    </span>
-                    {task.assignee && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--text-muted)' }}><User size={12} /> {task.assignee.full_name}</span>}
-                    {task.assigner && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--text-muted)' }}><Clock size={12} /> Assigned by {task.assigner.full_name}</span>}
-                  </div>
+        return (
+          <div key={task.id} style={{
+            background: 'var(--bg-card)', border: `1px solid ${overdue ? '#FADBD8' : 'var(--border)'}`,
+            borderRadius: 'var(--radius-md)', padding: '16px', marginBottom: '12px', boxShadow: 'var(--shadow-sm)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '12px' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                  <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{task.title}</h3>
+                  <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: catColors.bg, color: catColors.text, border: `1px solid ${catColors.border}` }}>{task.category}</span>
+                  <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text }}>{statusStyle.label}</span>
+                </div>
+                {task.description && <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 8px' }}>{task.description}</p>}
+                <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: overdue ? 'var(--danger)' : 'var(--text-muted)' }}><Calendar size={12} /> Due: {task.due_date}</span>
+                  {task.assignee && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--text-muted)' }}><User size={12} /> {task.assignee.full_name}</span>}
+                  {task.assigner && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--text-muted)' }}><Clock size={12} /> By {task.assigner.full_name}</span>}
                 </div>
               </div>
-
-              {isAssignedToMe && task.status !== 'submitted' && task.status !== 'requested' && task.status !== 'denied' && (
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                  {(task.response_type === 'yes_no' || task.response_type === 'yes_no_na') ? (
-                    <>
-                      <button onClick={() => handleResponse(task.id, 'yes')} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: 'var(--radius-md)', border: '2px solid', borderColor: response?.response === 'yes' ? 'var(--success)' : 'var(--border)', background: response?.response === 'yes' ? 'var(--success)' : 'transparent', color: response?.response === 'yes' ? 'white' : 'var(--text-muted)', fontSize: '13px', fontWeight: 500 }}><CheckCircle size={14} /> Yes</button>
-                      <button onClick={() => handleResponse(task.id, 'no')} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: 'var(--radius-md)', border: '2px solid', borderColor: response?.response === 'no' ? 'var(--danger)' : 'var(--border)', background: response?.response === 'no' ? 'var(--danger)' : 'transparent', color: response?.response === 'no' ? 'white' : 'var(--text-muted)', fontSize: '13px', fontWeight: 500 }}><XCircle size={14} /> No</button>
-                      {task.response_type === 'yes_no_na' && (
-                        <button onClick={() => handleResponse(task.id, 'na')} style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', border: '2px solid', borderColor: response?.response === 'na' ? 'var(--text-muted)' : 'var(--border)', background: response?.response === 'na' ? 'var(--text-muted)' : 'transparent', color: response?.response === 'na' ? 'white' : 'var(--text-muted)', fontSize: '13px', fontWeight: 500 }}>N/A</button>
-                      )}
-                    </>
-                  ) : task.response_type === 'checkbox' ? (
-                    <button onClick={() => handleResponse(task.id, response?.response === 'checked' ? '' : 'checked')} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: 'var(--radius-md)', border: '2px solid', borderColor: response?.response === 'checked' ? 'var(--purple-primary)' : 'var(--border)', background: response?.response === 'checked' ? 'var(--purple-primary)' : 'transparent', color: response?.response === 'checked' ? 'white' : 'var(--text-muted)', fontSize: '13px', fontWeight: 500 }}><CheckCircle size={14} /> Mark Complete</button>
-                  ) : (
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>
-                      <Upload size={14} /> Upload Photo
-                      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handlePhotoUpload(task.id, e.target.files[0])} />
-                    </label>
-                  )}
-                  {response?.photo_url && <span style={{ fontSize: '11px', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '4px' }}><CheckCircle size={11} /> Photo uploaded</span>}
-                  {response?.response && (
-                    <button onClick={() => handleSubmitTask(task)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, marginLeft: 'auto' }}><Send size={14} /> Submit</button>
-                  )}
-                </div>
-              )}
-
-              {canManage && task.status === 'requested' && (
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', flex: 1 }}>
-                    Requested by {task.assigner?.full_name} · Suggested: {members.find(m => m.id === task.assigned_to)?.full_name || 'No suggestion'}
-                  </span>
-                  <button onClick={() => handleApproveRequest(task)} style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', border: 'none', background: '#EAF7F0', color: '#27AE60', fontSize: '12px', fontWeight: 600 }}>Approve</button>
-                  <button onClick={() => handleDenyRequest(task.id)} style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', border: 'none', background: '#FDEDEC', color: '#E74C3C', fontSize: '12px', fontWeight: 600 }}>Deny</button>
-                </div>
-              )}
-
-              {task.status === 'submitted' && (
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <CheckCircle size={14} color="var(--success)" />
-                  <span style={{ fontSize: '12px', color: 'var(--success)', fontWeight: 500 }}>Completed — Response: {task.response}</span>
-                </div>
-              )}
             </div>
-          );
-        })
-      )}
+
+            {isAssignedToMe && task.status !== 'submitted' && task.status !== 'requested' && task.status !== 'denied' && (
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                {(task.response_type === 'yes_no' || task.response_type === 'yes_no_na') ? (
+                  <>
+                    <button onClick={() => handleResponse(task.id, 'yes')} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: 'var(--radius-md)', border: '2px solid', borderColor: response?.response === 'yes' ? 'var(--success)' : 'var(--border)', background: response?.response === 'yes' ? 'var(--success)' : 'transparent', color: response?.response === 'yes' ? 'white' : 'var(--text-muted)', fontSize: '13px', fontWeight: 500 }}><CheckCircle size={14} /> Yes</button>
+                    <button onClick={() => handleResponse(task.id, 'no')} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: 'var(--radius-md)', border: '2px solid', borderColor: response?.response === 'no' ? 'var(--danger)' : 'var(--border)', background: response?.response === 'no' ? 'var(--danger)' : 'transparent', color: response?.response === 'no' ? 'white' : 'var(--text-muted)', fontSize: '13px', fontWeight: 500 }}><XCircle size={14} /> No</button>
+                    {task.response_type === 'yes_no_na' && <button onClick={() => handleResponse(task.id, 'na')} style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', border: '2px solid', borderColor: response?.response === 'na' ? 'var(--text-muted)' : 'var(--border)', background: response?.response === 'na' ? 'var(--text-muted)' : 'transparent', color: response?.response === 'na' ? 'white' : 'var(--text-muted)', fontSize: '13px', fontWeight: 500 }}>N/A</button>}
+                  </>
+                ) : task.response_type === 'checkbox' ? (
+                  <button onClick={() => handleResponse(task.id, response?.response === 'checked' ? '' : 'checked')} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: 'var(--radius-md)', border: '2px solid', borderColor: response?.response === 'checked' ? 'var(--purple-primary)' : 'var(--border)', background: response?.response === 'checked' ? 'var(--purple-primary)' : 'transparent', color: response?.response === 'checked' ? 'white' : 'var(--text-muted)', fontSize: '13px', fontWeight: 500 }}><CheckCircle size={14} /> Mark Complete</button>
+                ) : (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>
+                    <Upload size={14} /> Upload Photo
+                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handlePhotoUpload(task.id, e.target.files[0])} />
+                  </label>
+                )}
+                {response?.photo_url && <span style={{ fontSize: '11px', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '4px' }}><CheckCircle size={11} /> Photo uploaded</span>}
+                {response?.response && <button onClick={() => handleSubmitTask(task)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, marginLeft: 'auto' }}><Send size={14} /> Submit</button>}
+              </div>
+            )}
+
+            {canManage && task.status === 'requested' && (
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', flex: 1 }}>
+                  Requested by {task.assigner?.full_name} · Suggested: {members.find(m => m.id === task.assigned_to)?.full_name || 'No suggestion'}
+                </span>
+                <button onClick={() => handleApproveRequest(task)} style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', border: 'none', background: '#EAF7F0', color: '#27AE60', fontSize: '12px', fontWeight: 600 }}>Approve</button>
+                <button onClick={() => handleDenyRequest(task.id)} style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', border: 'none', background: '#FDEDEC', color: '#E74C3C', fontSize: '12px', fontWeight: 600 }}>Deny</button>
+              </div>
+            )}
+
+            {task.status === 'submitted' && (
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <CheckCircle size={14} color="var(--success)" />
+                <span style={{ fontSize: '12px', color: 'var(--success)', fontWeight: 500 }}>Completed — Response: {task.response}</span>
+              </div>
+            )}
+          </div>
+        );
+      })}
 
       {showNewTaskForm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '520px', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
             <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>{canManage ? 'Create Sporadic Task' : 'Request a Task'}</h2>
-
             <div style={{ marginBottom: '16px' }}>
               <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Task Title</label>
-              <input value={newTask.title} onChange={e => setNewTask(p => ({ ...p, title: e.target.value }))}
-                style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              <input value={newTask.title} onChange={e => setNewTask(p => ({ ...p, title: e.target.value }))} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
-
             <div style={{ marginBottom: '16px' }}>
               <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Description (optional)</label>
-              <textarea value={newTask.description} onChange={e => setNewTask(p => ({ ...p, description: e.target.value }))}
-                rows={2} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
+              <textarea value={newTask.description} onChange={e => setNewTask(p => ({ ...p, description: e.target.value }))} rows={2} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
             </div>
-
             <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
               <div style={{ flex: 1 }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Category</label>
-                <select value={newTask.category} onChange={e => setNewTask(p => ({ ...p, category: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none' }}>
-                  <option>Daily AM</option><option>Daily PM</option><option>Weekly</option>
-                  <option>Biweekly</option><option>Monthly</option><option>MISC</option>
+                <select value={newTask.category} onChange={e => setNewTask(p => ({ ...p, category: e.target.value }))} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none' }}>
+                  <option>Daily AM</option><option>Daily PM</option><option>Weekly</option><option>Biweekly</option><option>Monthly</option><option>MISC</option>
                 </select>
               </div>
               <div style={{ flex: 1 }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Response Type</label>
-                <select value={newTask.response_type} onChange={e => setNewTask(p => ({ ...p, response_type: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none' }}>
-                  <option value="yes_no">Yes / No</option>
-                  <option value="yes_no_na">Yes / No / N/A</option>
-                  <option value="checkbox">Checkbox</option>
-                  <option value="photo">Photo Upload</option>
+                <select value={newTask.response_type} onChange={e => setNewTask(p => ({ ...p, response_type: e.target.value }))} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none' }}>
+                  <option value="yes_no">Yes / No</option><option value="yes_no_na">Yes / No / N/A</option><option value="checkbox">Checkbox</option><option value="photo">Photo Upload</option>
                 </select>
               </div>
             </div>
-
             <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
               <div style={{ flex: 1 }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  {canManage ? 'Assign To' : 'Suggested Assignee (optional)'}
-                </label>
-                <select value={newTask.assigned_to} onChange={e => setNewTask(p => ({ ...p, assigned_to: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{canManage ? 'Assign To' : 'Suggested Assignee (optional)'}</label>
+                <select value={newTask.assigned_to} onChange={e => setNewTask(p => ({ ...p, assigned_to: e.target.value }))} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none' }}>
                   <option value="">{canManage ? 'Select member...' : 'No suggestion'}</option>
                   {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
                 </select>
               </div>
               <div style={{ flex: 1 }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Due Date</label>
-                <input type="date" value={newTask.due_date} onChange={e => setNewTask(p => ({ ...p, due_date: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                <input type="date" value={newTask.due_date} onChange={e => setNewTask(p => ({ ...p, due_date: e.target.value }))} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
             </div>
-
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button onClick={() => setShowNewTaskForm(false)} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500 }}>Cancel</button>
-              <button onClick={handleCreateTask}
-                disabled={!newTask.title || (!canManage ? false : !newTask.assigned_to) || !newTask.due_date}
-                style={{
-                  padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none',
-                  background: !newTask.title || !newTask.due_date ? 'var(--border)' : 'var(--purple-primary)',
-                  color: !newTask.title || !newTask.due_date ? 'var(--text-muted)' : 'white', fontWeight: 600
-                }}>{canManage ? 'Create & Assign' : 'Submit Request'}</button>
+              <button onClick={handleCreateTask} disabled={!newTask.title || !newTask.due_date} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: !newTask.title || !newTask.due_date ? 'var(--border)' : 'var(--purple-primary)', color: !newTask.title || !newTask.due_date ? 'var(--text-muted)' : 'white', fontWeight: 600 }}>{canManage ? 'Create & Assign' : 'Submit Request'}</button>
             </div>
           </div>
         </div>
