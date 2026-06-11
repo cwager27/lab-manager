@@ -281,46 +281,46 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                             </button>
                           </>
                         )}
-                        <button onClick={() => setExpandedId(isExpanded ? null : contact.id)} style={{ padding: '6px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>
-                          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                        </button>
+                        {canManage && (
+  <button onClick={() => setExpandedId(isExpanded ? null : contact.id)} style={{ padding: '6px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>
+    {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+  </button>
+)}
                       </div>
                     </div>
 
-                    {isExpanded && (
-                      <div style={{ padding: '16px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                        {contact.alternative_email && (
-                          <div>
-                            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Alternative Email</p>
-                            <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: 0 }}>{contact.alternative_email}</p>
-                          </div>
-                        )}
-                        {contact.address && (
-                          <div>
-                            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Address</p>
-                            <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: 0 }}>{contact.address}</p>
-                          </div>
-                        )}
-                        {contact.emergency_contact_name && (
-                          <div style={{ gridColumn: '1 / -1', background: '#FEF9E7', borderRadius: 'var(--radius-sm)', padding: '12px', border: '1px solid #FAD7A0' }}>
-                            <p style={{ fontSize: '11px', color: '#F39C12', margin: '0 0 6px', textTransform: 'uppercase', fontWeight: 600 }}>Emergency Contact</p>
-                            <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: '0 0 2px', fontWeight: 600 }}>{contact.emergency_contact_name}</p>
-                            {contact.emergency_contact_relationship && <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 2px' }}>{contact.emergency_contact_relationship}</p>}
-                            {contact.emergency_contact_phone && (
-                              <a href={`tel:${contact.emergency_contact_phone}`} style={{ fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none' }}>
-                                {contact.emergency_contact_phone}
-                              </a>
-                            )}
-                          </div>
-                        )}
-                        {contact.notes && (
-                          <div style={{ gridColumn: '1 / -1' }}>
-                            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Notes</p>
-                            <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: 0, fontStyle: 'italic' }}>{contact.notes}</p>
-                          </div>
-                        )}
+                    {isExpanded && canManage && (
+  <div style={{ padding: '16px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+    {contact.alternative_email && (
+      <div>
+        <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Alternative Email</p>
+        <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: 0 }}>{contact.alternative_email}</p>
+      </div>
+    )}
+    {contact.address && (
+      <div>
+        <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Address</p>
+        <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: 0 }}>{contact.address}</p>
+      </div>
+    )}
+    {contact.emergency_contact_name && (
+      <div style={{ gridColumn: '1 / -1', background: '#FEF9E7', borderRadius: 'var(--radius-sm)', padding: '12px', border: '1px solid #FAD7A0' }}>
+        <p style={{ fontSize: '11px', color: '#F39C12', margin: '0 0 6px', textTransform: 'uppercase', fontWeight: 600 }}>Emergency Contact</p>
+        <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: '0 0 2px', fontWeight: 600 }}>{contact.emergency_contact_name}</p>
+        {contact.emergency_contact_relationship && <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 2px' }}>{contact.emergency_contact_relationship}</p>}
+        {contact.emergency_contact_phone && (
+          <a href={`tel:${contact.emergency_contact_phone}`} style={{ fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none' }}>{contact.emergency_contact_phone}</a>
+        )}
+      </div>
+    )}
+    {contact.notes && (
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Notes</p>
+                        <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: 0, fontStyle: 'italic' }}>{contact.notes}</p>
                       </div>
                     )}
+                  </div>
+                )}
                   </div>
                 );
               })}
