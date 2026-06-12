@@ -138,6 +138,59 @@ router.post('/preview-reagents', upload.single('file'), async (req, res) => {
 
 // Import confirmed reagents
 router.post('/import-reagents', async (req, res) => {
+  // Preview Nanoseq reagents
+router.post('/preview-nanoseq', upload.single('file'), async (req, res) => {
+  try {
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheet = workbook.Sheets['Nanoseq'] || workbook.Sheets[workbook.SheetNames[1]];
+    const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+    const headers = allRows[0];
+    const dataRows = allRows.slice(1);
+
+    console.log('Nanoseq headers:', headers);
+
+    const { data: existing } = await supabase.from('nanoseq_reagents').select('code');
+    const existingCodes = new Set((existing || []).map(e => String(e.code)));
+
+    const newReagents = [];
+    for (const row of dataRows) {
+      const name = row[1];
+      const code = row[3];
+      if (!name || existingCodes.has(String(code))) continue;
+      newReagents.push({
+        protocol: row[0] ? String(row[0]) : null,
+        name: String(name),
+        company: row[2] ? String(row[2]) : null,
+        code: code ? String(code) : null,
+        link: row[4] ? String(row[4]) : null,
+        cost: parseFloat(row[5]) || null,
+        amount: row[6] ? String(row[6]) : null,
+        n_reactions: parseFloat(row[7]) || null,
+      });
+    }
+
+    res.json({ newNanoseq: newReagents, count: newReagents.length });
+  } catch (error) {
+    console.error('Nanoseq preview error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Import Nanoseq reagents
+router.post('/import-nanoseq', async (req, res) => {
+  const { reagents } = req.body;
+  try {
+    let imported = 0;
+    for (const reagent of reagents) {
+      const { error } = await supabase.from('nanoseq_reagents').insert(reagent);
+      if (!error) imported++;
+    }
+    res.json({ success: true, imported });
+  } catch (error) {
+    console.error('Nanoseq import error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
   const { reagents } = req.body;
   try {
     let imported = 0;
