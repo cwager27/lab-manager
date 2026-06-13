@@ -86,6 +86,7 @@ router.get('/vacation-action', async (req, res) => {
       status: action, reviewed_at: new Date().toISOString()
     }).eq('id', id);
 
+    // Send approval/denial email to requester
     await transporter.sendMail({
       from: `"Petljak Lab" <${process.env.GMAIL_USER}>`,
       to: request.requester.email,
@@ -102,12 +103,180 @@ router.get('/vacation-action', async (req, res) => {
       `
     });
 
-    res.send(`<html><body style="font-family:Inter,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f8f6fb;margin:0;"><div style="background:white;padding:40px;border-radius:12px;text-align:center;max-width:400px;border:1px solid #e8e4f0;"><h2 style="color:${action === 'approved' ? '#27AE60' : '#E74C3C'};">Request ${action === 'approved' ? 'Approved' : 'Denied'}</h2><p style="color:#5A5A7A;">${request.requester.full_name}'s vacation request has been ${action}. They have been notified.</p><a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}" style="display:inline-block;padding:12px 24px;background:#7B3FA0;color:white;text-decoration:none;border-radius:8px;font-weight:600;">Return to Platform</a></div></body></html>`);
+    // If approved, reassign tasks
+    if (action === 'approved') {
+      try {
+        await reassignVacationTasks(request);
+        console.log('Reassignment completed for', request.requester.full_name);
+      } catch (err) {
+        console.error('Reassignment error:', err);
+      }
+    }
+
+    res.send(`<html><body style="font-family:Inter,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f8f6fb;margin:0;"><div style="background:white;padding:40px;border-radius:12px;text-align:center;max-width:400px;border:1px solid #e8e4f0;"><h2 style="color:${action === 'approved' ? '#27AE60' : '#E74C3C'};">Request ${action === 'approved' ? 'Approved' : 'Denied'}</h2><p style="color:#5A5A7A;">${request.requester.full_name}'s vacation request has been ${action}. They have been notified${action === 'approved' ? ' and their tasks have been reassigned.' : '.'}</p><a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}" style="display:inline-block;padding:12px 24px;background:#7B3FA0;color:white;text-decoration:none;border-radius:8px;font-weight:600;">Return to Platform</a></div></body></html>`);
   } catch (error) {
     console.error('Vacation action error:', error);
     res.status(500).send('Something went wrong.');
   }
 });
+
+async function reassignVacationTasks(vacationRequest) {
+  const startDate = new Date(vacationRequest.start_date);
+  const endDate = new Date(vacationRequest.end_date);
+  const vacationDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+
+  // Get all task assignments for the vacationing person
+  const { data: assignments } = await supabase
+    .from('task_assignments')
+    .select('*, task:tasks_definitions(title, frequency, category)')
+    .eq('assigned_to', vacationRequest.requested_by)
+    .eq('status', 'pending');
+
+  if (!assignments || assignments.length === 0) return;
+
+  // Filter tasks that fall within vacation period
+  const affectedAssignments = assignments.filter(a => {
+    if (!a.cycle_start && !a.cycle_end) return false;
+    const cycleStart = new Date(a.cycle_start);
+    const cycleEnd = new Date(a.cycle_end);
+    // Task overlaps with vacation period
+    return cycleStart <= endDate && cycleEnd >= startDate;
+  });
+
+  if (affectedAssignments.length === 0) return;
+
+  // Get all active members except the vacationing person
+  const { data: allMembers } = await supabase
+    .from('profiles')
+    .select('*')
+    .neq('id', vacationRequest.requested_by)
+    .in('role', ['admin', 'pm', 'member']);
+
+  if (!allMembers || allMembers.length === 0) {
+    // No one available — email Mia
+    const { data: mia } = await supabase.from('profiles').select('email').eq('role', 'admin').single();
+    if (mia) {
+      await transporter.sendMail({
+        from: `"Petljak Lab" <${process.env.GMAIL_USER}>`,
+        to: mia.email,
+        subject: `Petljak Lab — Action Required: No Available Members for Task Reassignment`,
+        html: `
+          <div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;padding:32px;background:#f8f6fb;">
+            <div style="background:white;border-radius:12px;padding:32px;border:1px solid #e8e4f0;">
+              <h1 style="color:#7B3FA0;font-size:20px;margin:0 0 24px;">PETLJAK LAB</h1>
+              <h2 style="font-size:18px;color:#E74C3C;margin:0 0 8px;">Action Required</h2>
+              <p style="color:#5A5A7A;font-size:14px;margin:0 0 16px;">${vacationRequest.requester.full_name} has been approved for vacation from ${vacationRequest.start_date} to ${vacationRequest.end_date}, but there are no available lab members to reassign their ${affectedAssignments.length} task(s) to.</p>
+              <p style="color:#5A5A7A;font-size:14px;margin:0 0 24px;">Please manually reassign their tasks in the platform.</p>
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}" style="display:inline-block;padding:12px 24px;background:#7B3FA0;color:white;text-decoration:none;border-radius:8px;font-weight:600;">Go to Platform</a>
+            </div>
+          </div>
+        `
+      });
+    }
+    return;
+  }
+
+  // Get managers for notification
+  const { data: managers } = await supabase
+    .from('profiles').select('email, full_name').in('role', ['admin', 'pm']);
+
+  // Calculate workload ratio for each member: task_counter / days_as_member
+  const now = new Date();
+  const membersWithRatio = allMembers.map(m => {
+    const joinedAt = new Date(m.joined_at || m.created_at);
+    const daysAsMember = Math.max(1, Math.ceil((now - joinedAt) / (1000 * 60 * 60 * 24)));
+    const ratio = (m.task_counter || 0) / daysAsMember;
+    return { ...m, ratio };
+  });
+
+  // Sort by ratio ascending (lowest ratio = least burdened)
+  membersWithRatio.sort((a, b) => a.ratio - b.ratio);
+
+  const reassignments = [];
+
+  for (const assignment of affectedAssignments) {
+    // Pick member with lowest ratio
+    const newAssignee = membersWithRatio[0];
+
+    // Update task assignment
+    await supabase.from('task_assignments')
+      .update({ assigned_to: newAssignee.id, updated_at: new Date().toISOString() })
+      .eq('id', assignment.id);
+
+    // Increment new assignee's task counter
+    await supabase.from('profiles')
+      .update({ task_counter: (newAssignee.task_counter || 0) + 1 })
+      .eq('id', newAssignee.id);
+
+    // Update local counter so next iteration reflects new ratio
+    newAssignee.task_counter = (newAssignee.task_counter || 0) + 1;
+    const joinedAt = new Date(newAssignee.joined_at || newAssignee.created_at);
+    const daysAsMember = Math.max(1, Math.ceil((now - joinedAt) / (1000 * 60 * 60 * 24)));
+    newAssignee.ratio = newAssignee.task_counter / daysAsMember;
+
+    // Re-sort after updating
+    membersWithRatio.sort((a, b) => a.ratio - b.ratio);
+
+    // Log reassignment
+    await supabase.from('task_reassignments').insert([{
+      task_assignment_id: assignment.id,
+      task_title: assignment.task?.title || 'Unknown Task',
+      original_assignee_id: vacationRequest.requested_by,
+      original_assignee_name: vacationRequest.requester.full_name,
+      new_assignee_id: newAssignee.id,
+      new_assignee_name: newAssignee.full_name,
+      vacation_request_id: vacationRequest.id,
+      reason: `Vacation: ${vacationRequest.start_date} to ${vacationRequest.end_date}`
+    }]);
+
+    reassignments.push({ task: assignment.task?.title, newAssignee: newAssignee.full_name });
+
+    // Email new assignee
+    await transporter.sendMail({
+      from: `"Petljak Lab" <${process.env.GMAIL_USER}>`,
+      to: newAssignee.email,
+      subject: `Petljak Lab — New Task Assigned: ${assignment.task?.title}`,
+      html: `
+        <div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;padding:32px;background:#f8f6fb;">
+          <div style="background:white;border-radius:12px;padding:32px;border:1px solid #e8e4f0;">
+            <h1 style="color:#7B3FA0;font-size:20px;margin:0 0 24px;">PETLJAK LAB</h1>
+            <h2 style="font-size:18px;color:#1A1A2E;margin:0 0 8px;">Task Reassigned to You</h2>
+            <p style="color:#5A5A7A;font-size:14px;margin:0 0 16px;">Hi ${newAssignee.full_name}, <strong>${vacationRequest.requester.full_name}</strong> is on vacation from ${vacationRequest.start_date} to ${vacationRequest.end_date}.</p>
+            <p style="color:#5A5A7A;font-size:14px;margin:0 0 16px;">The following task has been reassigned to you:</p>
+            <div style="background:#f8f6fb;border-radius:8px;padding:16px;margin-bottom:24px;border:1px solid #e8e4f0;">
+              <p style="margin:0 0 4px;font-weight:600;color:#1A1A2E;">${assignment.task?.title}</p>
+              <p style="margin:0;font-size:13px;color:#5A5A7A;">${assignment.task?.category} · ${assignment.task?.frequency} · ${assignment.cycle_start} to ${assignment.cycle_end}</p>             </div>
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}" style="display:inline-block;padding:12px 24px;background:#7B3FA0;color:white;text-decoration:none;border-radius:8px;font-weight:600;">View in Platform</a>
+          </div>
+        </div>
+      `
+    });
+  }
+
+  // Email all managers summary
+  if (reassignments.length > 0 && managers) {
+    const taskRows = reassignments.map(r => `<li style="margin-bottom:6px;color:#5A5A7A;">${r.task} → <strong>${r.newAssignee}</strong></li>`).join('');
+    for (const manager of managers) {
+      await transporter.sendMail({
+        from: `"Petljak Lab" <${process.env.GMAIL_USER}>`,
+        to: manager.email,
+        subject: `Petljak Lab — Task Reassignment Summary: ${vacationRequest.requester.full_name}'s Vacation`,
+        html: `
+          <div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;padding:32px;background:#f8f6fb;">
+            <div style="background:white;border-radius:12px;padding:32px;border:1px solid #e8e4f0;">
+              <h1 style="color:#7B3FA0;font-size:20px;margin:0 0 24px;">PETLJAK LAB</h1>
+              <h2 style="font-size:18px;color:#1A1A2E;margin:0 0 8px;">Task Reassignment Summary</h2>
+              <p style="color:#5A5A7A;font-size:14px;margin:0 0 16px;"><strong>${vacationRequest.requester.full_name}</strong> has been approved for vacation from <strong>${vacationRequest.start_date}</strong> to <strong>${vacationRequest.end_date}</strong>.</p>
+              <p style="color:#5A5A7A;font-size:14px;margin:0 0 12px;">The following ${reassignments.length} task(s) have been reassigned:</p>
+              <ul style="padding-left:20px;margin:0 0 24px;">${taskRows}</ul>
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}" style="display:inline-block;padding:12px 24px;background:#7B3FA0;color:white;text-decoration:none;border-radius:8px;font-weight:600;">View in Platform</a>
+            </div>
+          </div>
+        `
+      });
+    }
+  }
+}
 
 router.post('/vacation-reviewed', async (req, res) => {
   const { memberEmail, memberName, status, startDate, endDate, leaveType, reviewerComment } = req.body;
