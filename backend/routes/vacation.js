@@ -125,6 +125,107 @@ async function reassignVacationTasks(vacationRequest) {
   const endDate = new Date(vacationRequest.end_date);
   const vacationDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
 
+  // Check for lab meetings where this person is presenting during vacation
+  const { data: affectedMeetings } = await supabase
+    .from('lab_meetings')
+    .select('*')
+    .eq('presenter_id', vacationRequest.requested_by)
+    .eq('status', 'scheduled')
+    .gte('meeting_date', vacationRequest.start_date)
+    .lte('meeting_date', vacationRequest.end_date);
+
+  if (affectedMeetings && affectedMeetings.length > 0) {
+    // Get all approved vacations to filter out unavailable members
+    const { data: overlappingVacationsForMeetings } = await supabase
+      .from('vacation_requests')
+      .select('requested_by, start_date, end_date')
+      .eq('status', 'approved');
+
+    const { data: allMembersForMeetings } = await supabase
+      .from('profiles')
+      .select('*')
+      .neq('id', vacationRequest.requested_by)
+      .in('role', ['admin', 'pm', 'member']);
+
+    for (const meeting of affectedMeetings) {
+      // Find members not on vacation for this specific meeting date
+      const availableMembers = (allMembersForMeetings || []).filter(m => {
+        const onVacation = (overlappingVacationsForMeetings || []).some(v =>
+          v.requested_by === m.id &&
+          v.start_date <= meeting.meeting_date &&
+          v.end_date >= meeting.meeting_date
+        );
+        return !onVacation;
+      });
+
+      if (availableMembers.length === 0) {
+        // No one available - email Mia
+        const { data: admins } = await supabase.from('profiles').select('email').eq('role', 'admin');
+        for (const admin of (admins || [])) {
+          await transporter.sendMail({
+            from: `"Petljak Lab" <${process.env.GMAIL_USER}>`,
+            to: admin.email,
+            subject: `Petljak Lab — Action Required: No Available Presenter for ${meeting.meeting_date}`,
+            html: `
+              <div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;padding:32px;background:#f8f6fb;">
+                <div style="background:white;border-radius:12px;padding:32px;border:1px solid #e8e4f0;">
+                  <h1 style="color:#7B3FA0;font-size:20px;margin:0 0 24px;">PETLJAK LAB</h1>
+                  <h2 style="font-size:18px;color:#E74C3C;margin:0 0 8px;">Action Required</h2>
+                  <p style="color:#5A5A7A;font-size:14px;margin:0 0 24px;">${vacationRequest.requester.full_name} was scheduled to present on ${meeting.meeting_date} but is now on vacation. No other lab members are available. Please manually assign a presenter.</p>
+                  <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}" style="display:inline-block;padding:12px 24px;background:#7B3FA0;color:white;text-decoration:none;border-radius:8px;font-weight:600;">Go to Platform</a>
+                </div>
+              </div>
+            `
+          });
+        }
+        continue;
+      }
+
+      // Pick member with lowest workload ratio
+      const now = new Date();
+      const membersWithRatio = availableMembers.map(m => {
+        const joinedAt = new Date(m.joined_at || m.created_at);
+        const daysAsMember = Math.max(1, Math.ceil((now - joinedAt) / (1000 * 60 * 60 * 24)));
+        return { ...m, ratio: (m.task_counter || 0) / daysAsMember };
+      }).sort((a, b) => a.ratio - b.ratio);
+
+      const newPresenter = membersWithRatio[0];
+
+      // Generate confirmation token
+      const token = require('crypto').randomBytes(16).toString('hex');
+
+      await supabase.from('lab_meetings').update({
+        presenter_id: newPresenter.id,
+        confirmation_status: 'pending',
+        confirmation_token: token,
+        reminder_count: 0,
+        last_reminder_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }).eq('id', meeting.id);
+
+      const confirmUrl = `${process.env.BACKEND_URL || 'http://localhost:3001'}/api/confirm-presenter?token=${token}`;
+
+      // Email new presenter
+      await transporter.sendMail({
+        from: `"Petljak Lab" <${process.env.GMAIL_USER}>`,
+        to: newPresenter.email,
+        subject: `Petljak Lab — You are now presenting at the ${meeting.meeting_date} meeting — Please Confirm`,
+        html: `
+          <div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;padding:32px;background:#f8f6fb;">
+            <div style="background:white;border-radius:12px;padding:32px;border:1px solid #e8e4f0;">
+              <h1 style="color:#7B3FA0;font-size:20px;margin:0 0 24px;">PETLJAK LAB</h1>
+              <h2 style="font-size:18px;color:#1A1A2E;margin:0 0 8px;">You Have Been Assigned to Present</h2>
+              <p style="color:#5A5A7A;font-size:14px;margin:0 0 16px;">${vacationRequest.requester.full_name} is on vacation, so you have been assigned to present at the <strong>${meeting.meeting_date}</strong> lab meeting.</p>
+              <p style="color:#5A5A7A;font-size:13px;margin:0 0 24px;">Thursdays 1:30–3pm · Zoom: 987 7040 0275 · Passcode: 676073</p>
+              <a href="${confirmUrl}" style="display:inline-block;padding:12px 24px;background:#27AE60;color:white;text-decoration:none;border-radius:8px;font-weight:600;margin-right:10px;">Confirm I'm Aware</a>
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}" style="display:inline-block;padding:12px 24px;background:#7B3FA0;color:white;text-decoration:none;border-radius:8px;font-weight:600;">View Schedule</a>
+            </div>
+          </div>
+        `
+      });
+    }
+  }
+
   // Get all task assignments for the vacationing person
   const { data: assignments } = await supabase
     .from('task_assignments')
@@ -146,11 +247,24 @@ async function reassignVacationTasks(vacationRequest) {
   if (affectedAssignments.length === 0) return;
 
   // Get all active members except the vacationing person
-  const { data: allMembers } = await supabase
+  const { data: allMembersRaw } = await supabase
     .from('profiles')
     .select('*')
     .neq('id', vacationRequest.requested_by)
     .in('role', ['admin', 'pm', 'member']);
+
+  // Get all approved vacation requests that overlap with this vacation period
+  const { data: overlappingVacations } = await supabase
+    .from('vacation_requests')
+    .select('requested_by, start_date, end_date')
+    .eq('status', 'approved')
+    .lte('start_date', vacationRequest.end_date)
+    .gte('end_date', vacationRequest.start_date);
+
+  const onVacationIds = new Set((overlappingVacations || []).map(v => v.requested_by));
+
+  // Filter out members who are also on vacation during this period
+  const allMembers = (allMembersRaw || []).filter(m => !onVacationIds.has(m.id));
 
   if (!allMembers || allMembers.length === 0) {
     // No one available — email Mia

@@ -14,6 +14,7 @@ const STATUS_STYLES = {
 export default function LabMeetings({ userRole, userId, profile }) {
   const [meetings, setMeetings] = useState([]);
   const [members, setMembers] = useState([]);
+  const [vacations, setVacations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
@@ -28,6 +29,10 @@ export default function LabMeetings({ userRole, userId, profile }) {
   const canManage = userRole === 'admin' || userRole === 'pm';
   const canEditPresenter = userRole === 'admin';
 
+  function isOnVacation(memberId, date) {
+    return vacations.some(v => v.requested_by === memberId && v.start_date <= date && v.end_date >= date);
+  }
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     const { data: meetingData } = await supabase
@@ -36,8 +41,11 @@ export default function LabMeetings({ userRole, userId, profile }) {
       .order('meeting_date');
     const { data: memberData } = await supabase
       .from('profiles').select('*').order('full_name');
+    const { data: vacationData } = await supabase
+      .from('vacation_requests').select('*').eq('status', 'approved');
     setMeetings(meetingData || []);
     setMembers(memberData || []);
+    setVacations(vacationData || []);
     setLoading(false);
   }, []);
 
@@ -309,10 +317,21 @@ export default function LabMeetings({ userRole, userId, profile }) {
                   <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
                     <div style={{ flex: 1, minWidth: '160px' }}>
                       <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>Presenter</label>
-                      <select value={editForm.presenter_id} onChange={e => setEditForm(p => ({ ...p, presenter_id: e.target.value, guest_name: '' }))}
+                      <select value={editForm.presenter_id} onChange={e => {
+                        const memberId = e.target.value;
+                        if (memberId && memberId !== 'guest' && isOnVacation(memberId, editForm.meeting_date)) {
+                          const vac = vacations.find(v => v.requested_by === memberId && v.start_date <= editForm.meeting_date && v.end_date >= editForm.meeting_date);
+                          alert(`This person is on vacation from ${vac.start_date} to ${vac.end_date}. Please select someone else.`);
+                          return;
+                        }
+                        setEditForm(p => ({ ...p, presenter_id: memberId, guest_name: '' }));
+                      }}
                         style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none' }}>
                         <option value="">Select presenter...</option>
-                        {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
+                        {members.map(m => {
+                          const onVacation = isOnVacation(m.id, editForm.meeting_date);
+                          return <option key={m.id} value={m.id} disabled={onVacation}>{m.full_name}{onVacation ? ' (on vacation)' : ''}</option>;
+                        })}
                         <option value="guest">Guest</option>
                       </select>
                     </div>
@@ -382,10 +401,21 @@ export default function LabMeetings({ userRole, userId, profile }) {
               </div>
               <div style={{ flex: 1 }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Presenter</label>
-                <select value={newMeeting.presenter_id} onChange={e => setNewMeeting(p => ({ ...p, presenter_id: e.target.value }))}
+                <select value={newMeeting.presenter_id} onChange={e => {
+                  const memberId = e.target.value;
+                  if (memberId && memberId !== 'guest' && isOnVacation(memberId, newMeeting.meeting_date)) {
+                    const vac = vacations.find(v => v.requested_by === memberId && v.start_date <= newMeeting.meeting_date && v.end_date >= newMeeting.meeting_date);
+                    alert(`This person is on vacation from ${vac.start_date} to ${vac.end_date}. Please select someone else.`);
+                    return;
+                  }
+                  setNewMeeting(p => ({ ...p, presenter_id: memberId }));
+                }}
                   style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none' }}>
                   <option value="">Select...</option>
-                  {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
+                  {members.map(m => {
+                    const onVacation = isOnVacation(m.id, newMeeting.meeting_date);
+                    return <option key={m.id} value={m.id} disabled={onVacation}>{m.full_name}{onVacation ? ' (on vacation)' : ''}</option>;
+                  })}
                   <option value="guest">Guest</option>
                 </select>
               </div>

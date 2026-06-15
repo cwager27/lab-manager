@@ -13,6 +13,8 @@ const FREQUENCY_COLORS = {
 export default function AssignTasks({ userId }) {
   const [tasks, setTasks] = useState([]);
   const [members, setMembers] = useState([]);
+  const [vacations, setVacations] = useState([]);
+  const [vacationWarnings, setVacationWarnings] = useState({});
   const [assignments, setAssignments] = useState({});
   const [activeFrequency, setActiveFrequency] = useState('daily');
   const [activeCategory, setActiveCategory] = useState('MISC');
@@ -26,12 +28,14 @@ export default function AssignTasks({ userId }) {
 
   async function fetchData() {
     setLoading(true);
-    const [{ data: taskData }, { data: memberData }] = await Promise.all([
+    const [{ data: taskData }, { data: memberData }, { data: vacationData }] = await Promise.all([
       supabase.from('tasks_definitions').select('*').eq('status', 'published').order('frequency').order('category'),
-      supabase.from('profiles').select('*').order('full_name')
+      supabase.from('profiles').select('*').order('full_name'),
+      supabase.from('vacation_requests').select('*').eq('status', 'approved')
     ]);
     setTasks(taskData || []);
     setMembers(memberData || []);
+    setVacations(vacationData || []);
     setLoading(false);
   }
 
@@ -45,8 +49,57 @@ export default function AssignTasks({ userId }) {
     return d.toISOString().split('T')[0];
   }
 
+  function getVacationConflict(memberId, frequency, startDate, endDate) {
+    const memberVacations = vacations.filter(v => v.requested_by === memberId);
+    if (memberVacations.length === 0) return null;
+
+    const taskStart = new Date(startDate);
+    const taskEnd = new Date(endDate);
+
+    for (const vac of memberVacations) {
+      const vacStart = new Date(vac.start_date);
+      const vacEnd = new Date(vac.end_date);
+
+      // Check overlap
+      if (vacStart <= taskEnd && vacEnd >= taskStart) {
+        if (frequency === 'daily') {
+          // Block if the single day falls within vacation
+          return { type: 'block', vacStart: vac.start_date, vacEnd: vac.end_date };
+        } else {
+          // Weekly/monthly - check if entire period overlaps (all but one day not ok per earlier rules, "all but one day is ok")
+          const overlapStart = vacStart > taskStart ? vacStart : taskStart;
+          const overlapEnd = vacEnd < taskEnd ? vacEnd : taskEnd;
+          const overlapDays = Math.ceil((overlapEnd - overlapStart) / (1000 * 60 * 60 * 24)) + 1;
+          const totalDays = Math.ceil((taskEnd - taskStart) / (1000 * 60 * 60 * 24)) + 1;
+
+          if (overlapDays >= totalDays) {
+            // Fully overlapping - block
+            return { type: 'block', vacStart: vac.start_date, vacEnd: vac.end_date };
+          } else {
+            // Partial overlap - warn
+            return { type: 'warn', vacStart: vac.start_date, vacEnd: vac.end_date };
+          }
+        }
+      }
+    }
+    return null;
+  }
+
   function handleAssign(taskId, memberId) {
+    const task = tasks.find(t => t.id === taskId);
+    const cycleEnd = getCycleEnd(cycleStart, task?.frequency);
+    const conflict = getVacationConflict(memberId, task?.frequency, cycleStart, cycleEnd);
+
+    if (conflict?.type === 'block') {
+      alert(`This member is on vacation from ${conflict.vacStart} to ${conflict.vacEnd}. Please select someone else for this task.`);
+      return;
+    }
+
     setAssignments(prev => ({ ...prev, [taskId]: memberId }));
+    setVacationWarnings(prev => ({
+      ...prev,
+      [taskId]: conflict?.type === 'warn' ? conflict : null
+    }));
   }
 
   function assignAllToMember(memberId) {
@@ -265,23 +318,30 @@ export default function AssignTasks({ userId }) {
                 }}>SOP Trigger</span>
               )}
             </div>
-            <div style={{ position: 'relative', flexShrink: 0 }}>
-              <User size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-              <ChevronDown size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-              <select value={assignments[task.id] || ''} onChange={e => handleAssign(task.id, e.target.value)} style={{
-                padding: '8px 32px 8px 30px',
-                border: `1px solid ${assignments[task.id] ? 'var(--purple-primary)' : 'var(--border)'}`,
-                borderRadius: 'var(--radius-md)',
-                background: assignments[task.id] ? 'var(--purple-faint)' : 'var(--bg-primary)',
-                color: assignments[task.id] ? 'var(--purple-primary)' : 'var(--text-muted)',
-                fontSize: '13px', fontWeight: assignments[task.id] ? 500 : 400,
-                outline: 'none', appearance: 'none', minWidth: '160px', cursor: 'pointer'
-              }}>
-                <option value="">Assign to...</option>
-                {members.map(m => (
-                  <option key={m.id} value={m.id}>{m.full_name}</option>
-                ))}
-              </select>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flexShrink: 0 }}>
+              <div style={{ position: 'relative' }}>
+                <User size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                <ChevronDown size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                <select value={assignments[task.id] || ''} onChange={e => handleAssign(task.id, e.target.value)} style={{
+                  padding: '8px 32px 8px 30px',
+                  border: `1px solid ${vacationWarnings[task.id] ? '#F39C12' : assignments[task.id] ? 'var(--purple-primary)' : 'var(--border)'}`,
+                  borderRadius: 'var(--radius-md)',
+                  background: assignments[task.id] ? 'var(--purple-faint)' : 'var(--bg-primary)',
+                  color: assignments[task.id] ? 'var(--purple-primary)' : 'var(--text-muted)',
+                  fontSize: '13px', fontWeight: assignments[task.id] ? 500 : 400,
+                  outline: 'none', appearance: 'none', minWidth: '160px', cursor: 'pointer'
+                }}>
+                  <option value="">Assign to...</option>
+                  {members.map(m => (
+                    <option key={m.id} value={m.id}>{m.full_name}</option>
+                  ))}
+                </select>
+              </div>
+              {vacationWarnings[task.id] && (
+                <span style={{ fontSize: '11px', color: '#F39C12', textAlign: 'right', maxWidth: '180px' }}>
+                  On vacation {vacationWarnings[task.id].vacStart} to {vacationWarnings[task.id].vacEnd}
+                </span>
+              )}
             </div>
           </div>
         ))
