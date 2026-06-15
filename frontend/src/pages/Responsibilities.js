@@ -14,7 +14,7 @@ const FREQUENCY_COLORS = {
   yearly: { bg: '#FDEDEC', text: '#E74C3C', border: '#F1948A' },
 };
 
-function TaskItem({ task, response, onResponse, onPhotoUpload, canEdit, profile }) {
+function TaskItem({ task, response, existingResponse, onResponse, onPhotoUpload, canEdit, profile }) {
   const [expanded, setExpanded] = useState(false);
   const isNo = response?.response === 'no';
 
@@ -118,6 +118,14 @@ function TaskItem({ task, response, onResponse, onPhotoUpload, canEdit, profile 
             {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
         )}
+        {existingResponse && (
+  <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+    <span style={{ fontSize: '11px', color: 'var(--success)' }}>✓</span>
+    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+      Completed by {existingResponse.assignment?.profile?.full_name || 'Unknown'} on {new Date(existingResponse.responded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+    </span>
+  </div>
+)}
       </div>
       {isNo && expanded && task.conditional_text && (
         <div style={{ padding: '12px 16px', background: '#FEF0F0', borderTop: '1px solid #FADBD8' }}>
@@ -154,6 +162,7 @@ export default function Responsibilities({ userRole, userId, profile }) {
   const [tasks, setTasks] = useState([]);
   const [myAssignments, setMyAssignments] = useState([]);
   const [responses, setResponses] = useState({});
+  const [existingResponses, setExistingResponses] = useState({});
   const [activeFrequency, setActiveFrequency] = useState('daily');
   const [activeCategory, setActiveCategory] = useState('MISC');
   const [searchQuery, setSearchQuery] = useState('');
@@ -182,8 +191,21 @@ export default function Responsibilities({ userRole, userId, profile }) {
       .from('task_assignments').select('*')
       .eq('assigned_to', userId).eq('status', 'pending');
 
+    const { data: responseData } = await supabase
+      .from('task_responses')
+      .select('*, assignment:task_assignments(assigned_to, profile:profiles(full_name))')
+      .order('responded_at', { ascending: false });
+
+    const responseMap = {};
+    for (const r of (responseData || [])) {
+      if (!responseMap[r.task_definition_id]) {
+        responseMap[r.task_definition_id] = r;
+      }
+    }
+
     setTasks(taskData || []);
     setMyAssignments(assignmentData || []);
+    setExistingResponses(responseMap);
     setLoading(false);
   }
 
@@ -368,7 +390,7 @@ export default function Responsibilities({ userRole, userId, profile }) {
       ) : (
         <>
           {filteredTasks.map(task => (
-            <TaskItem key={task.id} task={task} response={responses[task.id]}
+            <TaskItem key={task.id} task={task} response={responses[task.id]} existingResponse={existingResponses[task.id]}
               onResponse={handleResponse} onPhotoUpload={handlePhotoUpload}
               canEdit={true} profile={profile} />
           ))}

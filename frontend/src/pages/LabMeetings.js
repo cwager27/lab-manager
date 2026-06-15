@@ -59,7 +59,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
     const oldMeeting = meetings.find(m => m.id === meetingId);
 
     await supabase.from('lab_meetings').update({
-      presenter_id: editForm.presenter_id || null,
+      presenter_id: (editForm.presenter_id && editForm.presenter_id !== 'guest') ? editForm.presenter_id : null,
       guest_name: editForm.guest_name || null,
       guest_title: editForm.guest_title || null,
       is_sof: editForm.is_sof,
@@ -77,6 +77,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          meetingId: oldMeeting.id,
           meetingDate: oldMeeting.meeting_date,
           oldPresenterEmail: oldPresenter?.email,
           oldPresenterName: oldPresenter?.full_name,
@@ -256,6 +257,11 @@ export default function LabMeetings({ userRole, userId, profile }) {
                       <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text }}>
                         {statusStyle.label}
                       </span>
+                      {meeting.confirmation_status === 'pending' && meeting.status !== 'cancelled' && (
+                        <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#FEF9E7', color: '#F39C12' }}>
+                          Awaiting Confirmation
+                        </span>
+                      )}
                       <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
                         {meeting.presenter?.full_name || meeting.guest_name || (meeting.status === 'cancelled' ? 'Cancelled' : 'TBD')}
                       </span>

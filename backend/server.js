@@ -24,8 +24,9 @@ const assignmentRoutes = require('./routes/assignments');
 const checklistRoutes = require('./routes/checklists');
 const sporadicRoutes = require('./routes/sporadic');
 const vacationRoutes = require('./routes/vacation');
-const meetingRoutes = require('./routes/meetings');
+const { router: meetingRoutes, checkPendingConfirmations } = require('./routes/meetings');
 const { router: financeRoutes, checkGrantAlerts } = require('./routes/finance');
+const memberRoutes = require('./routes/members');
 
 app.use('/api', assignmentRoutes);
 app.use('/api', checklistRoutes);
@@ -33,6 +34,7 @@ app.use('/api', sporadicRoutes);
 app.use('/api', vacationRoutes);
 app.use('/api', meetingRoutes);
 app.use('/api', financeRoutes);
+app.use('/api', memberRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Lab Manager API is running' });
@@ -70,6 +72,7 @@ cron.schedule('0 8 * * *', async () => {
   }
 
   await checkGrantAlerts();
+  await checkPendingConfirmations();
 });
 
 const PORT = process.env.PORT || 3001;
