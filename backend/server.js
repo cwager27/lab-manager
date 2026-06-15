@@ -25,6 +25,7 @@ const checklistRoutes = require('./routes/checklists');
 const sporadicRoutes = require('./routes/sporadic');
 const vacationRoutes = require('./routes/vacation');
 const { router: meetingRoutes, checkPendingConfirmations } = require('./routes/meetings');
+const { router: complianceRoutes, checkCertificateExpiries } = require('./routes/compliance');
 const { router: financeRoutes, checkGrantAlerts } = require('./routes/finance');
 const memberRoutes = require('./routes/members');
 
@@ -33,6 +34,7 @@ app.use('/api', checklistRoutes);
 app.use('/api', sporadicRoutes);
 app.use('/api', vacationRoutes);
 app.use('/api', meetingRoutes);
+app.use('/api', complianceRoutes);
 app.use('/api', financeRoutes);
 app.use('/api', memberRoutes);
 
@@ -73,6 +75,7 @@ cron.schedule('0 8 * * *', async () => {
 
   await checkGrantAlerts();
   await checkPendingConfirmations();
+  await checkCertificateExpiries();
 });
 
 const PORT = process.env.PORT || 3001;
