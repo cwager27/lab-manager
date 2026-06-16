@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import {
-  Calendar, ChevronLeft, ChevronRight,
-  Star, X, User, Edit2, Check, Plus
+  Calendar, Star, X, Edit2, Check, Plus
 } from 'lucide-react';
 
 const STATUS_STYLES = {

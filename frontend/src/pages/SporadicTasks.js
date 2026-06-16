@@ -34,6 +34,7 @@ export default function SporadicTasks({ userRole, userId, profile }) {
 
   const canManage = userRole === 'admin' || userRole === 'pm';
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchData(); }, [userId]);
 
   async function fetchData() {
@@ -133,7 +134,7 @@ export default function SporadicTasks({ userRole, userId, profile }) {
     if (!file) return;
     const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '-');
     const path = `sporadic-photos/${taskId}/${Date.now()}-${safeName}`;
-    const { data, error } = await supabase.storage.from('lab-files').upload(path, file);
+    const { error } = await supabase.storage.from('lab-files').upload(path, file);
     if (!error) {
       const { data: urlData } = supabase.storage.from('lab-files').getPublicUrl(path);
       setResponses(prev => ({ ...prev, [taskId]: { ...prev[taskId], photo_url: urlData.publicUrl } }));

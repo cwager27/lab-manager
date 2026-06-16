@@ -3,8 +3,8 @@ import { supabase } from '../lib/supabase';
 import {
   Plus, Send, CheckCircle, XCircle,
   AlertTriangle, Upload, ChevronDown,
-  ChevronUp, Search, Shield, Clock,
-  User, Calendar, Edit2, Trash2
+  ChevronUp, Search, Shield,
+  User, Edit2, Trash2
 } from 'lucide-react';
 
 const SECTION_COLORS = {
@@ -172,7 +172,7 @@ export default function Compliance({ userRole, userId, profile }) {
     if (!file) return;
     const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '-');
     const path = `compliance-photos/${taskId}/${Date.now()}-${safeName}`;
-    const { data, error } = await supabase.storage.from('lab-files').upload(path, file);
+    const { error } = await supabase.storage.from('lab-files').upload(path, file);
     if (!error) {
       const { data: urlData } = supabase.storage.from('lab-files').getPublicUrl(path);
       setResponses(prev => ({

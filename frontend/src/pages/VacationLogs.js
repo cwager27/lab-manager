@@ -35,6 +35,7 @@ export default function VacationLogs({ userRole, userId, profile }) {
 
   const isAdmin = userRole === 'admin';
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchRequests(); }, [userId]);
 
   async function fetchRequests() {
@@ -213,7 +214,6 @@ export default function VacationLogs({ userRole, userId, profile }) {
           const statusStyle = STATUS_STYLES[request.status] || STATUS_STYLES.pending;
           const leaveColor = LEAVE_COLORS[request.leave_type] || LEAVE_COLORS.Vacation;
           const days = getDayCount(request.start_date, request.end_date);
-          const isMyRequest = request.requested_by === userId;
           const isReviewing = reviewingId === request.id;
 
           return (

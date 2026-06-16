@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import {
-  Plus, Search, CheckCircle, XCircle,
-  AlertTriangle, Edit2, Trash2, Clock,
-  Upload, ChevronDown, History, FlaskConical
+  Plus, Search,
+  AlertTriangle, Edit2, Trash2
 } from 'lucide-react';
 
 const STATUS_STYLES = {

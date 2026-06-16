@@ -177,6 +177,7 @@ export default function Responsibilities({ userRole, userId, profile }) {
 
   const canManage = userRole === 'admin' || userRole === 'pm';
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchData(); }, [userId]);
 
   async function fetchData() {

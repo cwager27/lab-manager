@@ -128,8 +128,6 @@ export default function Finance({ userRole }) {
     if (data.success) { setPreviewNanoseq(null); fetchData(); }
   }
 
-  const categorySpend = orders.reduce((acc, o) => { if (!o.category || !o.total_price) return acc; acc[o.category] = (acc[o.category] || 0) + o.total_price; return acc; }, {});
-  const categoryChartData = Object.entries(categorySpend).map(([name, value]) => ({ name: name.length > 20 ? name.substring(0, 20) + '...' : name, value: Math.round(value) })).sort((a, b) => b.value - a.value).slice(0, 8);
   const statusByCategoryData = Object.entries(orders.reduce((acc, o) => { if (!o.category) return acc; if (!acc[o.category]) acc[o.category] = { name: o.category, complete: 0, processing: 0 }; if (o.status === 'complete') acc[o.category].complete += o.total_price || 0; else acc[o.category].processing += o.total_price || 0; return acc; }, {})).map(([_, v]) => ({ ...v, complete: Math.round(v.complete), processing: Math.round(v.processing) })).sort((a, b) => (b.complete + b.processing) - (a.complete + a.processing));
   const monthlySpend = orders.reduce((acc, o) => { if (!o.order_date || !o.total_price) return acc; const month = o.order_date.substring(0, 7); acc[month] = (acc[month] || 0) + o.total_price; return acc; }, {});
   const monthlyChartData = Object.entries(monthlySpend).map(([month, value]) => ({ month, value: Math.round(value) })).sort((a, b) => a.month.localeCompare(b.month));

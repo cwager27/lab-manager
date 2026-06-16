@@ -44,7 +44,7 @@ app.get('/', (req, res) => {
   res.json({ message: 'Lab Manager API is running' });
 });
 
-cron.schedule('0 8 * * *', async () => {
+async function runDailyChecks() {
   console.log('Running daily checks...');
   const today = new Date().toISOString().split('T')[0];
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
@@ -79,7 +79,27 @@ cron.schedule('0 8 * * *', async () => {
   await checkPendingConfirmations();
   await checkCertificateExpiries();
   await runBackup();
+}
+
+// Run via node-cron when running locally/always-on
+if (process.env.NODE_ENV !== 'production') {
+  cron.schedule('0 8 * * *', runDailyChecks);
+}
+
+// Endpoint for Vercel Cron to trigger daily checks in production
+app.get('/api/cron-daily', async (req, res) => {
+  try {
+    await runDailyChecks();
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Cron daily error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
+
+module.exports = app;

@@ -13,3 +13,5 @@ frontend/build/
 
 # Mac system files
 .DS_Store
+.vercel
+.env*

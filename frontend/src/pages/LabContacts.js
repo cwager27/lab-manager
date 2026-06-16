@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   Plus, Edit2, Trash2, Phone, Mail,
-  MapPin, AlertTriangle, User, Shield,
-  ChevronDown, ChevronUp, Search, Save
+  Shield,
+  ChevronDown, ChevronUp, Search
 } from 'lucide-react';
 
 const ROLE_ORDER = { admin: 1, pm: 2, member: 3, intern: 4 };
@@ -49,7 +49,6 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   const [showContactForm, setShowContactForm] = useState(false);
   const [showMemberForm, setShowMemberForm] = useState(false);
   const [editingContact, setEditingContact] = useState(null);
-  const [editingMember, setEditingMember] = useState(null);
   const [contactForm, setContactForm] = useState(EMPTY_CONTACT);
   const [memberForm, setMemberForm] = useState(EMPTY_MEMBER);
   const [saving, setSaving] = useState(false);
@@ -96,7 +95,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
     setSaving(true);
     try {
       // Create auth user
-      const { data: authData, error: authError } = await supabase.auth.admin?.createUser({
+      const { data: authData } = await supabase.auth.admin?.createUser({
         email: memberForm.email,
         password: memberForm.password,
         email_confirm: true

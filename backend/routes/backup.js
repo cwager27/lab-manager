@@ -2,17 +2,15 @@ const express = require('express');
 const router = express.Router();
 const { createClient } = require('@supabase/supabase-js');
 const { google } = require('googleapis');
-const fs = require('fs');
-const path = require('path');
 require('dotenv').config();
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
-const credentials = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'oauth-credentials.json')));
+const credentials = JSON.parse(process.env.OAUTH_CREDENTIALS);
 const { client_secret, client_id, redirect_uris } = credentials.installed;
 const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
 
-const token = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'drive-token.json')));
+const token = JSON.parse(process.env.DRIVE_TOKEN);
 oAuth2Client.setCredentials(token);
 
 const DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID;
