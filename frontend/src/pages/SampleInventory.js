@@ -84,6 +84,10 @@ export default function SampleInventory({ userRole, userId, profile }) {
   const [cellLines, setCellLines] = useState([]);
   const [mouseSamples, setMouseSamples] = useState([]);
   const [humanSamples, setHumanSamples] = useState([]);
+  const [sharedReagents, setSharedReagents] = useState([]);
+  const [showReagentForm, setShowReagentForm] = useState(false);
+  const [editingReagent, setEditingReagent] = useState(null);
+  const [reagentForm, setReagentForm] = useState({ name: '', category: '', location: '', quantity: '', status: 'in_stock', notes: '' });
   const [auditLog, setAuditLog] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -99,17 +103,38 @@ export default function SampleInventory({ userRole, userId, profile }) {
 
   async function fetchData() {
     setLoading(true);
-    const [{ data: cl }, { data: ms }, { data: hs }, { data: al }] = await Promise.all([
+    const [{ data: cl }, { data: ms }, { data: hs }, { data: al }, { data: sr }] = await Promise.all([
       supabase.from('cell_lines').select('*, taken_by_profile:profiles!cell_lines_taken_by_fkey(full_name)').order('name'),
       supabase.from('mouse_samples').select('*').order('created_at', { ascending: false }),
       supabase.from('human_samples').select('*').order('created_at', { ascending: false }),
-      supabase.from('sample_audit_log').select('*').order('created_at', { ascending: false }).limit(50)
+      supabase.from('sample_audit_log').select('*').order('created_at', { ascending: false }).limit(50),
+      supabase.from('shared_reagents').select('*, updater:profiles!shared_reagents_updated_by_fkey(full_name)').order('category').order('name')
     ]);
     setCellLines(cl || []);
     setMouseSamples(ms || []);
     setHumanSamples(hs || []);
     setAuditLog(al || []);
+    setSharedReagents(sr || []);
     setLoading(false);
+  }
+
+  async function handleSaveReagent() {
+    if (editingReagent) {
+      await supabase.from('shared_reagents').update({ ...reagentForm, updated_by: userId, updated_at: new Date().toISOString() }).eq('id', editingReagent.id);
+    } else {
+      await supabase.from('shared_reagents').insert([{ ...reagentForm, updated_by: userId }]);
+    }
+    setShowReagentForm(false);
+    setEditingReagent(null);
+    setReagentForm({ name: '', category: '', location: '', quantity: '', status: 'in_stock', notes: '' });
+    fetchData();
+  }
+
+  async function handleDeleteReagent(id) {
+    if (window.confirm('Remove this reagent?')) {
+      await supabase.from('shared_reagents').delete().eq('id', id);
+      fetchData();
+    }
   }
 
   async function logAction(sampleType, sampleId, sampleName, action, changes) {
@@ -316,6 +341,7 @@ export default function SampleInventory({ userRole, userId, profile }) {
           { id: 'cell_lines', label: 'Cell Lines' },
           { id: 'mouse', label: 'Mouse Samples' },
           { id: 'human', label: 'Human Samples' },
+          { id: 'shared_reagents', label: 'Shared Reagents' },
           { id: 'audit', label: 'Audit Log' },
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
@@ -327,7 +353,7 @@ export default function SampleInventory({ userRole, userId, profile }) {
         ))}
       </div>
 
-      {activeTab !== 'audit' && (
+      {activeTab !== 'audit' && activeTab !== 'shared_reagents' && (
         <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
             <Search size={14} color="var(--text-muted)" />
@@ -524,6 +550,105 @@ export default function SampleInventory({ userRole, userId, profile }) {
             </div>
           )}
         </>
+      )}
+
+      {activeTab === 'shared_reagents' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+            <button onClick={() => { setEditingReagent(null); setReagentForm({ name: '', category: '', location: '', quantity: '', status: 'in_stock', notes: '' }); setShowReagentForm(true); }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px' }}>
+              + Add Reagent
+            </button>
+          </div>
+
+          {sharedReagents.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
+              No shared reagents added yet.
+            </div>
+          ) : (
+            <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg-secondary)' }}>
+                    {['Name', 'Category', 'Location', 'Quantity', 'Status', 'Last Updated', 'Notes', ''].map(h => (
+                      <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sharedReagents.map(r => {
+                    const statusColors = {
+                      in_stock: { bg: '#EAF7F0', text: '#27AE60', label: 'In Stock' },
+                      low: { bg: '#FEF9E7', text: '#F39C12', label: 'Low' },
+                      empty: { bg: '#FDEDEC', text: '#E74C3C', label: 'Empty' },
+                      missing: { bg: '#FDEDEC', text: '#E74C3C', label: 'Missing' },
+                    };
+                    const sc = statusColors[r.status] || statusColors.in_stock;
+                    return (
+                      <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}>
+                        <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{r.name}</td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.category}</td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.location}</td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-primary)' }}>{r.quantity}</td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: sc.bg, color: sc.text }}>{sc.label}</span>
+                        </td>
+                        <td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                          {r.updater?.full_name && <span>{r.updater.full_name} · </span>}
+                          {r.updated_at ? new Date(r.updated_at).toLocaleDateString() : '—'}
+                        </td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>{r.notes}</td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button onClick={() => { setEditingReagent(r); setReagentForm({ name: r.name, category: r.category || '', location: r.location || '', quantity: r.quantity || '', status: r.status || 'in_stock', notes: r.notes || '' }); setShowReagentForm(true); }}
+                              style={{ padding: '4px 8px', fontSize: '11px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}>Edit</button>
+                            <button onClick={() => handleDeleteReagent(r.id)}
+                              style={{ padding: '4px 8px', fontSize: '11px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', cursor: 'pointer' }}>Delete</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {showReagentForm && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+              <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '480px', maxHeight: '80vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
+                <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>{editingReagent ? 'Edit Reagent' : 'Add Shared Reagent'}</h2>
+                {[
+                  { label: 'Name', key: 'name', required: true },
+                  { label: 'Category', key: 'category' },
+                  { label: 'Location in Lab', key: 'location' },
+                  { label: 'Quantity', key: 'quantity' },
+                  { label: 'Notes', key: 'notes' },
+                ].map(field => (
+                  <div key={field.key} style={{ marginBottom: '14px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}{field.required ? ' *' : ''}</label>
+                    <input value={reagentForm[field.key]} onChange={e => setReagentForm(p => ({ ...p, [field.key]: e.target.value }))}
+                      style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+                ))}
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</label>
+                  <select value={reagentForm.status} onChange={e => setReagentForm(p => ({ ...p, status: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none' }}>
+                    <option value="in_stock">In Stock</option>
+                    <option value="low">Low</option>
+                    <option value="empty">Empty</option>
+                    <option value="missing">Missing</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                  <button onClick={() => { setShowReagentForm(false); setEditingReagent(null); }} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500 }}>Cancel</button>
+                  <button onClick={handleSaveReagent} disabled={!reagentForm.name} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: !reagentForm.name ? 'var(--border)' : 'var(--purple-primary)', color: !reagentForm.name ? 'var(--text-muted)' : 'white', fontWeight: 600 }}>Save</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Add/Edit Form */}
