@@ -11,6 +11,7 @@ import Finance from './pages/Finance';
 import SampleInventory from './pages/SampleInventory';
 import LabContacts from './pages/LabContacts';
 import Compliance from './pages/Compliance';
+import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 
 export default function App() {
@@ -90,6 +91,7 @@ export default function App() {
         permissions={permissions}
       />
       <main style={{ marginLeft: '240px', flex: 1, padding: '32px', maxWidth: 'calc(100vw - 240px)' }}>
+        {currentPage === 'dashboard' && <Dashboard profile={profile} />}
         {currentPage === 'responsibilities' && <Responsibilities userRole={userRole} userId={user.id} profile={profile} />}
         {currentPage === 'assign' && canManage && <AssignTasks userId={user.id} />}
         {currentPage === 'sporadic' && <SporadicTasks userRole={userRole} userId={user.id} profile={profile} permissions={permissions} />}
@@ -104,7 +106,7 @@ export default function App() {
             You don't have permission to view the contact directory.
           </div>
         )}
-        {!['responsibilities', 'assign', 'sporadic', 'vacation', 'meetings', 'finance', 'inventory', 'compliance', 'contacts'].includes(currentPage) && (
+        {!['dashboard', 'responsibilities', 'assign', 'sporadic', 'vacation', 'meetings', 'finance', 'inventory', 'compliance', 'contacts'].includes(currentPage) && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--text-muted)', fontSize: '15px' }}>
             This system is coming soon.
           </div>

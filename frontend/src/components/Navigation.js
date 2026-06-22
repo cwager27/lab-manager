@@ -18,7 +18,7 @@ export default function Navigation({ currentPage, setCurrentPage, userRole, prof
     { id: 'responsibilities', label: 'Lab Responsibilities', icon: ClipboardList, always: true },
     { id: 'assign', label: 'Assign Tasks', icon: UserCheck, managerOnly: true },
     { id: 'sporadic', label: 'Sporadic Tasks', icon: ListTodo, always: true },
-    { id: 'vacation', label: 'Vacation Logs', icon: Palmtree, always: true },
+    { id: 'vacation', label: 'Time Away Requests', icon: Palmtree, always: true },
     { id: 'meetings', label: 'Lab Meetings', icon: Calendar, always: true },
     { id: 'finance', label: 'Finance', icon: FlaskConical, always: true },
     { id: 'inventory', label: 'Sample Inventory', icon: FlaskConical, always: true },
