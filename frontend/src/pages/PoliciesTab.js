@@ -16,7 +16,7 @@ export default function PoliciesTab({ policies, userId, fetchPolicies }) {
   const [expandedId, setExpandedId] = useState(null);
   const [editingContentId, setEditingContentId] = useState(null);
   const [contentDraft, setContentDraft] = useState('');
-  const [uploadingFile, setUploadingFile] = useState(false);
+  const [, setUploadingFile] = useState(false);
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
