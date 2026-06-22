@@ -4,8 +4,7 @@ import StudiesTab from './StudiesTab';
 import {
   Plus, Send, CheckCircle, XCircle,
   AlertTriangle, Upload, ChevronDown,
-  ChevronUp, Search, Shield,
-  User, Edit2, Trash2
+  ChevronUp, Search, Shield, User
 } from 'lucide-react';
 
 const SECTION_COLORS = {

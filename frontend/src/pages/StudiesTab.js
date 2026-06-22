@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Upload, Plus, Trash2, Edit2, ChevronDown, ChevronUp, CheckCircle, XCircle, FileText } from 'lucide-react';
 
