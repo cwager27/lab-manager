@@ -161,7 +161,7 @@ export default function Dashboard({ profile }) {
           )}
 
           {/* My Tasks */}
-          {(myTasks.length > 0 || myAssignments.length > 0) && (() => {
+          {(() => {
             const today = new Date().toISOString().split('T')[0];
             const freqOrder = ['daily', 'weekly', 'biweekly', 'monthly', 'yearly'];
             const freqColors = {
@@ -244,7 +244,9 @@ export default function Dashboard({ profile }) {
                   })}
 
                   {visibleAssignments.length === 0 && myTasks.length === 0 && (
-                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>No tasks for this frequency.</p>
+                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
+                      {taskFreq ? `No ${taskFreq} tasks assigned.` : 'No tasks assigned to you right now.'}
+                    </p>
                   )}
                 </div>
               </div>
