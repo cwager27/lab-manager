@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import StudiesTab from './StudiesTab';
+import PoliciesTab from './PoliciesTab';
 import {
   Plus, Send, CheckCircle, XCircle,
   AlertTriangle, Upload, ChevronDown,
@@ -127,6 +128,7 @@ export default function Compliance({ userRole, userId, profile }) {
   const [activeSection, setActiveSection] = useState('all');
   const [activeTab, setActiveTab] = useState('checklist');
   const [studies, setStudies] = useState([]);
+  const [policies, setPolicies] = useState([]);
   const [showStudyForm, setShowStudyForm] = useState(false);
   const [editingStudy, setEditingStudy] = useState(null);
   const [studyForm, setStudyForm] = useState({
@@ -151,16 +153,18 @@ export default function Compliance({ userRole, userId, profile }) {
 
   async function fetchData() {
     setLoading(true);
-    const [{ data: taskData }, { data: assignmentData }, { data: memberData }, { data: studyData }] = await Promise.all([
+    const [{ data: taskData }, { data: assignmentData }, { data: memberData }, { data: studyData }, { data: policyData }] = await Promise.all([
       supabase.from('compliance_tasks').select('*').eq('status', 'published').order('sort_order'),
       supabase.from('compliance_assignments').select('*, assignee:profiles!compliance_assignments_assigned_to_fkey(full_name, email)').order('created_at', { ascending: false }),
       supabase.from('profiles').select('*').order('full_name'),
-      supabase.from('compliance_studies').select('*').order('study_name')
+      supabase.from('compliance_studies').select('*').order('study_name'),
+      supabase.from('lab_policies').select('*').order('category').order('title')
     ]);
     setTasks(taskData || []);
     setAssignments(assignmentData || []);
     setMembers(memberData || []);
     setStudies(studyData || []);
+    setPolicies(policyData || []);
     setLoading(false);
   }
 
@@ -315,6 +319,17 @@ export default function Compliance({ userRole, userId, profile }) {
     if (!error) {
       const { data: urlData } = supabase.storage.from('lab-files').getPublicUrl(path);
       await supabase.from('compliance_studies').update({ certificate_url: urlData.publicUrl }).eq('id', studyId);
+
+      // Auto-complete any open sporadic tasks for this study's certificate renewal
+      const { data: study } = await supabase.from('compliance_studies').select('study_name').eq('id', studyId).single();
+      if (study) {
+        const taskTitle = `Renew compliance certificate: ${study.study_name}`;
+        await supabase.from('sporadic_tasks')
+          .update({ status: 'submitted', submitted_at: new Date().toISOString() })
+          .ilike('title', `${taskTitle}%`)
+          .neq('status', 'submitted');
+      }
+
       fetchData();
     }
   }
@@ -359,6 +374,7 @@ export default function Compliance({ userRole, userId, profile }) {
         {[
           { id: 'checklist', label: 'Compliance Checklist' },
           { id: 'studies', label: 'Studies' },
+          { id: 'policies', label: 'Lab Policies' },
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
             padding: '10px 20px',
@@ -534,6 +550,10 @@ export default function Compliance({ userRole, userId, profile }) {
           onSave={handleSaveStudy} onDelete={handleDeleteStudy} onCertUpload={handleCertUpload}
           userId={userId} fetchStudies={fetchData}
         />
+      )}
+
+      {activeTab === 'policies' && (
+        <PoliciesTab policies={policies} userId={userId} fetchPolicies={fetchData} />
       )}
 
       {/* Assign Form Modal */}

@@ -25,7 +25,7 @@ const checklistRoutes = require('./routes/checklists');
 const sporadicRoutes = require('./routes/sporadic');
 const vacationRoutes = require('./routes/vacation');
 const { router: meetingRoutes, checkPendingConfirmations } = require('./routes/meetings');
-const { router: complianceRoutes, checkCertificateExpiries } = require('./routes/compliance');
+const { router: complianceRoutes, checkCertificateExpiries, checkPolicyReminders } = require('./routes/compliance');
 const { router: backupRoutes, runBackup } = require('./routes/backup');
 const { router: financeRoutes, checkGrantAlerts } = require('./routes/finance');
 const memberRoutes = require('./routes/members');
@@ -78,6 +78,7 @@ async function runDailyChecks() {
   await checkGrantAlerts();
   await checkPendingConfirmations();
   await checkCertificateExpiries();
+  await checkPolicyReminders();
   await runBackup();
 }
 

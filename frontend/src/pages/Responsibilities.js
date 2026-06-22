@@ -27,17 +27,19 @@ function TaskItem({ task, response, existingResponse, onResponse, onPhotoUpload,
       const { data: urlData } = supabase.storage.from('lab-files').getPublicUrl(path);
       onPhotoUpload(task.id, urlData.publicUrl, true);
 
-      // Send SOP alert email
-      await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/sop-alert`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          taskTitle: task.title,
-          photoUrl: urlData.publicUrl,
-          submittedByName: profile?.full_name || 'Lab Member',
-          submittedByEmail: profile?.email || ''
-        })
-      });
+      // Send SOP alert email only for MISC tasks (not PM tasks)
+      if (task.category === 'MISC') {
+        await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/sop-alert`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            taskTitle: task.title,
+            photoUrl: urlData.publicUrl,
+            submittedByName: profile?.full_name || 'Lab Member',
+            submittedByEmail: profile?.email || ''
+          })
+        });
+      }
     }
   }
 
