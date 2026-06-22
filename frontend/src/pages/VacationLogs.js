@@ -89,6 +89,18 @@ export default function VacationLogs({ userRole, userId, profile }) {
     setLoading(false);
   }
 
+  async function autoReassignMeetings(requestedBy, startDate, endDate, requesterName) {
+    try {
+      await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auto-reassign-meetings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestedBy, startDate, endDate, requesterName }),
+      });
+    } catch (err) {
+      console.error('Auto-reassign failed:', err);
+    }
+  }
+
   async function handleSubmitRequest(e) {
     e.preventDefault();
     const autoApprove = NO_APPROVAL_REQUIRED.has(form.leave_type);
@@ -130,6 +142,10 @@ export default function VacationLogs({ userRole, userId, profile }) {
       });
     }
 
+    if (!error && data && autoApprove) {
+      await autoReassignMeetings(userId, form.start_date, form.end_date, profile?.full_name || 'Lab Member');
+    }
+
     if (!error) {
       setShowForm(false);
       setForm(EMPTY_FORM);
@@ -163,6 +179,10 @@ export default function VacationLogs({ userRole, userId, profile }) {
           reviewerComment: reviewerComment || '',
         }),
       });
+
+      if (status === 'approved') {
+        await autoReassignMeetings(request.requested_by, request.start_date, request.end_date, request.requester.full_name);
+      }
 
       setReviewingId(null);
       setReviewerComment('');

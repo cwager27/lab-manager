@@ -19,7 +19,7 @@ export default function Navigation({ currentPage, setCurrentPage, userRole, prof
     { id: 'assign', label: 'Assign Tasks', icon: UserCheck, managerOnly: true },
     { id: 'sporadic', label: 'Sporadic Tasks', icon: ListTodo, always: true },
     { id: 'vacation', label: 'Time Away Requests', icon: Palmtree, always: true },
-    { id: 'meetings', label: 'Lab Meetings', icon: Calendar, always: true },
+    { id: 'meetings', label: 'Team Meetings', icon: Calendar, always: true },
     { id: 'finance', label: 'Finance', icon: FlaskConical, always: true },
     { id: 'inventory', label: 'Sample Inventory', icon: FlaskConical, always: true },
     { id: 'compliance', label: 'Compliance', icon: ShieldCheck, always: true },

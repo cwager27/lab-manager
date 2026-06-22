@@ -5,6 +5,7 @@ const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -230,6 +231,93 @@ router.post('/meeting-added', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Meeting added error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Auto-reassign meetings when time off is approved
+router.post('/auto-reassign-meetings', async (req, res) => {
+  const { requestedBy, startDate, endDate, requesterName } = req.body;
+  try {
+    const { data: allMembers } = await supabaseAdmin.from('profiles').select('id, full_name, email');
+    const { data: allVacations } = await supabaseAdmin.from('vacation_requests').select('requested_by, start_date, end_date').eq('status', 'approved');
+
+    function isOnVacation(memberId, date) {
+      return (allVacations || []).some(v => v.requested_by === memberId && v.start_date <= date && v.end_date >= date);
+    }
+
+    function getFair(meetings, date, excludeId) {
+      const counts = {};
+      (allMembers || []).forEach(m => { counts[m.id] = 0; });
+      (meetings || []).filter(m => m.status !== 'cancelled' && m.presenter_id)
+        .forEach(m => { counts[m.presenter_id] = (counts[m.presenter_id] || 0) + 1; });
+      const available = (allMembers || []).filter(m => m.id !== excludeId && !isOnVacation(m.id, date));
+      if (!available.length) return null;
+      return [...available].sort((a, b) => (counts[a.id] || 0) - (counts[b.id] || 0))[0];
+    }
+
+    for (const tableName of ['lab_meetings', 'adhoc_meetings']) {
+      const { data: conflicts } = await supabaseAdmin.from(tableName)
+        .select('*, old_presenter:profiles!presenter_id(full_name, email)')
+        .eq('presenter_id', requestedBy).eq('status', 'scheduled')
+        .gte('meeting_date', startDate).lte('meeting_date', endDate);
+
+      if (!conflicts || conflicts.length === 0) continue;
+
+      const { data: allMeetings } = await supabaseAdmin.from(tableName).select('presenter_id, status');
+
+      for (const meeting of conflicts) {
+        const replacement = getFair(allMeetings, meeting.meeting_date, requestedBy);
+        if (!replacement) continue;
+
+        await supabaseAdmin.from(tableName).update({
+          presenter_id: replacement.id,
+          updated_at: new Date().toISOString(),
+        }).eq('id', meeting.id);
+
+        // Email the old presenter
+        if (meeting.old_presenter?.email) {
+          await transporter.sendMail({
+            from: `"Petljak Lab" <${process.env.GMAIL_USER}>`,
+            to: meeting.old_presenter.email,
+            subject: `Petljak Lab — You have been removed from the ${meeting.meeting_date} meeting`,
+            html: `
+              <div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;padding:32px;background:#f8f6fb;">
+                <div style="background:white;border-radius:12px;padding:32px;border:1px solid #e8e4f0;">
+                  <h1 style="color:#7B3FA0;font-size:20px;margin:0 0 24px;">PETLJAK LAB</h1>
+                  <h2 style="font-size:18px;color:#1A1A2E;margin:0 0 8px;">Presentation Automatically Reassigned</h2>
+                  <p style="color:#5A5A7A;font-size:14px;margin:0 0 16px;">Hi ${meeting.old_presenter.full_name}, because your approved time off overlaps with the <strong>${meeting.meeting_date}</strong> meeting, you have been removed as presenter. ${replacement.full_name} will present instead.</p>
+                  <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}" style="display:inline-block;padding:12px 24px;background:#7B3FA0;color:white;text-decoration:none;border-radius:8px;font-weight:600;">View Schedule</a>
+                </div>
+              </div>
+            `
+          });
+        }
+
+        // Email the new presenter
+        if (replacement.email) {
+          await transporter.sendMail({
+            from: `"Petljak Lab" <${process.env.GMAIL_USER}>`,
+            to: replacement.email,
+            subject: `Petljak Lab — You have been assigned to present on ${meeting.meeting_date}`,
+            html: `
+              <div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;padding:32px;background:#f8f6fb;">
+                <div style="background:white;border-radius:12px;padding:32px;border:1px solid #e8e4f0;">
+                  <h1 style="color:#7B3FA0;font-size:20px;margin:0 0 24px;">PETLJAK LAB</h1>
+                  <h2 style="font-size:18px;color:#1A1A2E;margin:0 0 8px;">You Have Been Assigned to Present</h2>
+                  <p style="color:#5A5A7A;font-size:14px;margin:0 0 16px;">Hi ${replacement.full_name}, you have been automatically assigned to present at the <strong>${meeting.meeting_date}</strong> meeting because ${requesterName} is on approved time off.</p>
+                  <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}" style="display:inline-block;padding:12px 24px;background:#7B3FA0;color:white;text-decoration:none;border-radius:8px;font-weight:600;">View Schedule</a>
+                </div>
+              </div>
+            `
+          });
+        }
+      }
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Auto-reassign error:', error);
     res.status(500).json({ error: error.message });
   }
 });
