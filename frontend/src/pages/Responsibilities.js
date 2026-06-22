@@ -14,8 +14,7 @@ const FREQUENCY_COLORS = {
   yearly: { bg: '#FDEDEC', text: '#E74C3C', border: '#F1948A' },
 };
 
-function TaskItem({ task, response, existingResponse, onResponse, onPhotoUpload, canEdit, profile }) {
-  const [expanded, setExpanded] = useState(false);
+function TaskItem({ task, response, existingResponse, onResponse, onPhotoUpload, canEdit, profile, canManage, onEdit, onDeactivate, isEditing, editingTask, setEditingTask, onSaveEdit }) {  const [expanded, setExpanded] = useState(false);
   const isNo = response?.response === 'no';
 
   async function handleSopPhoto(file) {
@@ -126,6 +125,52 @@ function TaskItem({ task, response, existingResponse, onResponse, onPhotoUpload,
     </span>
   </div>
 )}
+        {canManage && !isEditing && (
+          <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
+            <button onClick={onEdit} style={{ padding: '3px 8px', fontSize: '11px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}>Edit</button>
+            <button onClick={onDeactivate} style={{ padding: '3px 8px', fontSize: '11px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', cursor: 'pointer' }}>Deactivate</button>
+          </div>
+        )}
+        {isEditing && editingTask && (
+          <div style={{ marginTop: '10px', padding: '12px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--purple-border)' }}>
+            <textarea value={editingTask.title} onChange={e => setEditingTask(p => ({ ...p, title: e.target.value }))}
+              rows={2} style={{ width: '100%', padding: '8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', marginBottom: '8px', boxSizing: 'border-box', resize: 'vertical' }} />
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+              <select value={editingTask.category} onChange={e => setEditingTask(p => ({ ...p, category: e.target.value }))}
+                style={{ padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px' }}>
+                <option value="MISC">MISC</option>
+                <option value="PM">PM</option>
+              </select>
+              <select value={editingTask.frequency} onChange={e => setEditingTask(p => ({ ...p, frequency: e.target.value }))}
+                style={{ padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px' }}>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="biweekly">Biweekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="yearly">Yearly</option>
+              </select>
+              <select value={editingTask.response_type} onChange={e => setEditingTask(p => ({ ...p, response_type: e.target.value }))}
+                style={{ padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px' }}>
+                <option value="yes_no">Yes/No</option>
+                <option value="yes_no_na">Yes/No/NA</option>
+                <option value="checkbox">Checkbox</option>
+              </select>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}>
+                <input type="checkbox" checked={editingTask.sop_trigger} onChange={e => setEditingTask(p => ({ ...p, sop_trigger: e.target.checked }))} />
+                SOP Trigger
+              </label>
+            </div>
+            {editingTask.sop_trigger && (
+              <textarea value={editingTask.conditional_text || ''} onChange={e => setEditingTask(p => ({ ...p, conditional_text: e.target.value }))}
+                placeholder="SOP/conditional text..." rows={2}
+                style={{ width: '100%', padding: '8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', marginBottom: '8px', boxSizing: 'border-box', resize: 'vertical' }} />
+            )}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={onSaveEdit} style={{ padding: '6px 14px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '12px', fontWeight: 600 }}>Save</button>
+              <button onClick={() => setEditingTask(null)} style={{ padding: '6px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '12px' }}>Cancel</button>
+            </div>
+          </div>
+        )}
       </div>
       {isNo && expanded && task.conditional_text && (
         <div style={{ padding: '12px 16px', background: '#FEF0F0', borderTop: '1px solid #FADBD8' }}>
@@ -174,7 +219,8 @@ export default function Responsibilities({ userRole, userId, profile }) {
     title: '', category: 'MISC', frequency: 'daily',
     response_type: 'yes_no', sop_trigger: false, conditional_text: ''
   });
-
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [editingTask, setEditingTask] = useState(null);
   const canManage = userRole === 'admin' || userRole === 'pm';
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -266,10 +312,27 @@ export default function Responsibilities({ userRole, userId, profile }) {
   async function handleAddTask(e) {
     e.preventDefault();
     const { error } = await supabase
-      .from('tasks_definitions').insert([{ ...newTask, status: 'pending_review' }]);
+      .from('tasks_definitions').insert([{ ...newTask, status: 'published', created_by: userId }]);
     if (!error) {
       setShowNewTaskForm(false);
       setNewTask({ title: '', category: 'MISC', frequency: 'daily', response_type: 'yes_no', sop_trigger: false, conditional_text: '' });
+      fetchData();
+    }
+  }
+
+  async function handleEditTask(taskId) {
+    const { error } = await supabase
+      .from('tasks_definitions').update({ ...editingTask }).eq('id', taskId);
+    if (!error) {
+      setEditingTaskId(null);
+      setEditingTask(null);
+      fetchData();
+    }
+  }
+
+  async function handleDeactivateTask(taskId) {
+    if (window.confirm('Deactivate this task? It will no longer appear in checklists.')) {
+      await supabase.from('tasks_definitions').update({ status: 'unpublished' }).eq('id', taskId);
       fetchData();
     }
   }
@@ -390,10 +453,18 @@ export default function Responsibilities({ userRole, userId, profile }) {
         </div>
       ) : (
         <>
-          {filteredTasks.map(task => (
+         {filteredTasks.map(task => (
             <TaskItem key={task.id} task={task} response={responses[task.id]} existingResponse={existingResponses[task.id]}
               onResponse={handleResponse} onPhotoUpload={handlePhotoUpload}
-              canEdit={true} profile={profile} />
+              canEdit={true} profile={profile}
+              canManage={canManage}
+              onEdit={() => { setEditingTaskId(task.id); setEditingTask({ ...task }); }}
+              onDeactivate={() => handleDeactivateTask(task.id)}
+              isEditing={editingTaskId === task.id}
+              editingTask={editingTask}
+              setEditingTask={setEditingTask}
+              onSaveEdit={() => handleEditTask(task.id)}
+            />
           ))}
           <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end' }}>
             <button onClick={handleSubmitChecklist} disabled={submitting} style={{
