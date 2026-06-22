@@ -1,7 +1,7 @@
 import {
   ClipboardList, Calendar, FlaskConical,
   Users, ShieldCheck, Palmtree,
-  LayoutDashboard, LogOut,
+  LayoutDashboard, LogOut, DollarSign,
 } from 'lucide-react';
 
 const ROLE_LABELS = {
@@ -17,7 +17,7 @@ export default function Navigation({ currentPage, setCurrentPage, userRole, prof
     { id: 'tasks', label: 'Tasks', icon: ClipboardList, always: true },
     { id: 'vacation', label: 'Time Away Requests', icon: Palmtree, always: true },
     { id: 'meetings', label: 'Team Meetings', icon: Calendar, always: true },
-    { id: 'finance', label: 'Finance', icon: FlaskConical, always: true },
+    { id: 'finance', label: 'Finance', icon: DollarSign, always: true },
     { id: 'inventory', label: 'Sample Inventory', icon: FlaskConical, always: true },
     { id: 'compliance', label: 'Compliance', icon: ShieldCheck, always: true },
     { id: 'contacts', label: 'Lab Contacts', icon: Users, contactsOnly: true },
