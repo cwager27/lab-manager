@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import StudiesTab from './StudiesTab';
 import {
   Plus, Send, CheckCircle, XCircle,
   AlertTriangle, Upload, ChevronDown,
@@ -532,6 +533,7 @@ export default function Compliance({ userRole, userId, profile }) {
           editingStudy={editingStudy} setEditingStudy={setEditingStudy}
           studyForm={studyForm} setStudyForm={setStudyForm}
           onSave={handleSaveStudy} onDelete={handleDeleteStudy} onCertUpload={handleCertUpload}
+          userId={userId} fetchStudies={fetchData}
         />
       )}
 
@@ -598,173 +600,6 @@ export default function Compliance({ userRole, userId, profile }) {
                 background: !assignForm.assigned_to ? 'var(--border)' : 'var(--purple-primary)',
                 color: !assignForm.assigned_to ? 'var(--text-muted)' : 'white', fontWeight: 600
               }}>Assign & Notify</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StudiesTab({ studies, members, canManage, showStudyForm, setShowStudyForm, editingStudy, setEditingStudy, studyForm, setStudyForm, onSave, onDelete, onCertUpload }) {
-  return (
-    <div>
-      {studies.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
-          No studies added yet. Click Add Study to get started.
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {studies.map(study => {
-            const daysLeft = study.certificate_expiry ? Math.ceil((new Date(study.certificate_expiry) - new Date()) / (1000 * 60 * 60 * 24)) : null;
-            const isExpiringSoon = daysLeft !== null && daysLeft <= 60;
-            const isExpired = daysLeft !== null && daysLeft < 0;
-            const teamNames = members.filter(m => (study.team_members || []).includes(m.id)).map(m => m.full_name);
-
-            return (
-              <div key={study.id} style={{
-                background: 'var(--bg-card)', border: `1px solid ${isExpired ? '#FADBD8' : isExpiringSoon ? '#FAD7A0' : 'var(--border)'}`,
-                borderRadius: 'var(--radius-md)', padding: '16px', boxShadow: 'var(--shadow-sm)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '12px' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
-                      <h3 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{study.study_name}</h3>
-                      {study.irb_exception ? (
-                        <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#F2F3F4', color: '#5A5A7A' }}>IRB Exception</span>
-                      ) : study.irb_number ? (
-                        <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#EBF5FB', color: '#2980B9', fontFamily: 'monospace' }}>IRB {study.irb_number}</span>
-                      ) : null}
-                      {study.tissues_held && <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#FEF9E7', color: '#F39C12' }}>Tissues Held</span>}
-                      {isExpired && <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#FDEDEC', color: '#E74C3C' }}>Cert Expired</span>}
-                      {isExpiringSoon && !isExpired && <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#FEF9E7', color: '#F39C12' }}>Cert Expiring</span>}
-                    </div>
-                    <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                      {study.ilab_exists && (
-                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                          iLab: {study.ilab_link ? <a href={study.ilab_link} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--purple-primary)' }}>Link</a> : 'Yes'}
-                        </span>
-                      )}
-                      {study.certificate_expiry && (
-                        <span style={{ fontSize: '12px', color: isExpired ? '#E74C3C' : isExpiringSoon ? '#F39C12' : 'var(--text-muted)' }}>
-                          Certificate expires: {study.certificate_expiry}
-                        </span>
-                      )}
-                      {study.certificate_url && (
-                        <a href={study.certificate_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: 'var(--purple-primary)' }}>View Certificate</a>
-                      )}
-                    </div>
-                    {teamNames.length > 0 && (
-                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 4px' }}>Team: {teamNames.join(', ')}</p>
-                    )}
-                    {study.notes && <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>{study.notes}</p>}
-                  </div>
-                  <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                    <label style={{ padding: '6px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                      <Upload size={14} />
-                      <input type="file" accept=".pdf,image/*" style={{ display: 'none' }} onChange={e => onCertUpload(study.id, e.target.files[0])} />
-                    </label>
-                    <button onClick={() => { setEditingStudy(study); setStudyForm(study); setShowStudyForm(true); }} style={{ padding: '6px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>
-                      <Edit2 size={14} />
-                    </button>
-                    <button onClick={() => onDelete(study.id)} style={{ padding: '6px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)' }}>
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {showStudyForm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
-          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '520px', maxHeight: '85vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>{editingStudy ? 'Edit Study' : 'Add Study'}</h2>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Study Name</label>
-              <input value={studyForm.study_name} onChange={e => setStudyForm(p => ({ ...p, study_name: e.target.value }))}
-                style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>IRB Number</label>
-                <input value={studyForm.irb_number} onChange={e => setStudyForm(p => ({ ...p, irb_number: e.target.value }))}
-                  disabled={studyForm.irb_exception}
-                  style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box', opacity: studyForm.irb_exception ? 0.5 : 1 }} />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '10px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  <input type="checkbox" checked={studyForm.irb_exception} onChange={e => setStudyForm(p => ({ ...p, irb_exception: e.target.checked }))} />
-                  IRB Exception
-                </label>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '20px', marginBottom: '16px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                <input type="checkbox" checked={studyForm.tissues_held} onChange={e => setStudyForm(p => ({ ...p, tissues_held: e.target.checked }))} />
-                Tissues Held
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                <input type="checkbox" checked={studyForm.ilab_exists} onChange={e => setStudyForm(p => ({ ...p, ilab_exists: e.target.checked }))} />
-                iLab Exists
-              </label>
-            </div>
-
-            {studyForm.ilab_exists && (
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>iLab Link</label>
-                <input value={studyForm.ilab_link} onChange={e => setStudyForm(p => ({ ...p, ilab_link: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
-              </div>
-            )}
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Team Members</label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {members.map(m => {
-                  const isSelected = (studyForm.team_members || []).includes(m.id);
-                  return (
-                    <button key={m.id} type="button" onClick={() => {
-                      setStudyForm(p => ({
-                        ...p,
-                        team_members: isSelected ? p.team_members.filter(id => id !== m.id) : [...(p.team_members || []), m.id]
-                      }));
-                    }} style={{
-                      padding: '6px 12px', borderRadius: 'var(--radius-md)',
-                      border: `1px solid ${isSelected ? 'var(--purple-primary)' : 'var(--border)'}`,
-                      background: isSelected ? 'var(--purple-faint)' : 'transparent',
-                      color: isSelected ? 'var(--purple-primary)' : 'var(--text-secondary)',
-                      fontSize: '12px', fontWeight: isSelected ? 600 : 400
-                    }}>{m.full_name}</button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Certificate Expiry Date</label>
-              <input type="date" value={studyForm.certificate_expiry || ''} onChange={e => setStudyForm(p => ({ ...p, certificate_expiry: e.target.value }))}
-                style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
-            </div>
-
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Notes</label>
-              <textarea value={studyForm.notes || ''} onChange={e => setStudyForm(p => ({ ...p, notes: e.target.value }))}
-                rows={2} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button onClick={() => { setShowStudyForm(false); setEditingStudy(null); }} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500 }}>Cancel</button>
-              <button onClick={onSave} disabled={!studyForm.study_name} style={{
-                padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none',
-                background: !studyForm.study_name ? 'var(--border)' : 'var(--purple-primary)',
-                color: !studyForm.study_name ? 'var(--text-muted)' : 'white', fontWeight: 600
-              }}>Save Study</button>
             </div>
           </div>
         </div>
