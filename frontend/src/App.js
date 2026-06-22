@@ -2,9 +2,7 @@ import './styles/global.css';
 import { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import Navigation from './components/Navigation';
-import Responsibilities from './pages/Responsibilities';
-import AssignTasks from './pages/AssignTasks';
-import SporadicTasks from './pages/SporadicTasks';
+import Tasks from './pages/Tasks';
 import VacationLogs from './pages/VacationLogs';
 import LabMeetings from './pages/LabMeetings';
 import Finance from './pages/Finance';
@@ -92,9 +90,7 @@ export default function App() {
       />
       <main style={{ marginLeft: '240px', flex: 1, padding: '32px', maxWidth: 'calc(100vw - 240px)' }}>
         {currentPage === 'dashboard' && <Dashboard profile={profile} />}
-        {currentPage === 'responsibilities' && <Responsibilities userRole={userRole} userId={user.id} profile={profile} />}
-        {currentPage === 'assign' && canManage && <AssignTasks userId={user.id} />}
-        {currentPage === 'sporadic' && <SporadicTasks userRole={userRole} userId={user.id} profile={profile} permissions={permissions} />}
+        {currentPage === 'tasks' && <Tasks userRole={userRole} userId={user.id} profile={profile} />}
         {currentPage === 'vacation' && <VacationLogs userRole={userRole} userId={user.id} profile={profile} />}
         {currentPage === 'meetings' && <LabMeetings userRole={userRole} userId={user.id} profile={profile} permissions={permissions} />}
         {currentPage === 'finance' && permissions.can_view_finance && <Finance userRole={userRole} />}
@@ -106,7 +102,7 @@ export default function App() {
             You don't have permission to view the contact directory.
           </div>
         )}
-        {!['dashboard', 'responsibilities', 'assign', 'sporadic', 'vacation', 'meetings', 'finance', 'inventory', 'compliance', 'contacts'].includes(currentPage) && (
+        {!['dashboard', 'tasks', 'vacation', 'meetings', 'finance', 'inventory', 'compliance', 'contacts'].includes(currentPage) && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--text-muted)', fontSize: '15px' }}>
             This system is coming soon.
           </div>

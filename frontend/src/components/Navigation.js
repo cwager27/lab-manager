@@ -1,8 +1,7 @@
 import {
   ClipboardList, Calendar, FlaskConical,
   Users, ShieldCheck, Palmtree,
-  LayoutDashboard, LogOut, ListTodo,
-  UserCheck
+  LayoutDashboard, LogOut,
 } from 'lucide-react';
 
 const ROLE_LABELS = {
@@ -15,9 +14,7 @@ const ROLE_LABELS = {
 export default function Navigation({ currentPage, setCurrentPage, userRole, profile, onLogout, canManage, permissions }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, always: true },
-    { id: 'responsibilities', label: 'Lab Responsibilities', icon: ClipboardList, always: true },
-    { id: 'assign', label: 'Assign Tasks', icon: UserCheck, managerOnly: true },
-    { id: 'sporadic', label: 'Sporadic Tasks', icon: ListTodo, always: true },
+    { id: 'tasks', label: 'Tasks', icon: ClipboardList, always: true },
     { id: 'vacation', label: 'Time Away Requests', icon: Palmtree, always: true },
     { id: 'meetings', label: 'Team Meetings', icon: Calendar, always: true },
     { id: 'finance', label: 'Finance', icon: FlaskConical, always: true },

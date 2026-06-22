@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Calendar, Palmtree, Star } from 'lucide-react';
+import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle } from 'lucide-react';
 
 const LEAVE_COLORS = {
   'Vacation':                  { bg: '#EBF5FB', text: '#2980B9' },
@@ -35,16 +35,20 @@ export default function Dashboard({ profile }) {
   const [upcoming, setUpcoming] = useState([]);
   const [labMeetings, setLabMeetings] = useState([]);
   const [adhocMeetings, setAdhocMeetings] = useState([]);
+  const [myTasks, setMyTasks] = useState([]);
+  const [myAssignments, setMyAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { fetchAll(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchAll(); }, [profile]);
 
   async function fetchAll() {
+    if (!profile?.id) return;
     setLoading(true);
     const today = new Date().toISOString().split('T')[0];
     const thirtyDays = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    const [{ data: vacData }, { data: labData }, { data: adhocData }] = await Promise.all([
+    const [{ data: vacData }, { data: labData }, { data: adhocData }, { data: sporData }, { data: assignData }] = await Promise.all([
       supabase.from('vacation_requests')
         .select('*, requester:profiles!vacation_requests_requested_by_fkey(full_name)')
         .eq('status', 'approved').lte('start_date', thirtyDays).gte('end_date', today).order('start_date'),
@@ -54,6 +58,12 @@ export default function Dashboard({ profile }) {
       supabase.from('adhoc_meetings')
         .select('*, presenter:profiles!adhoc_meetings_presenter_id_fkey(full_name)')
         .eq('status', 'scheduled').gte('meeting_date', today).order('meeting_date').limit(2),
+      supabase.from('sporadic_tasks')
+        .select('*, assigner:profiles!sporadic_tasks_assigned_by_fkey(full_name)')
+        .eq('assigned_to', profile.id).in('status', ['pending', 'in_progress']).order('due_date'),
+      supabase.from('task_assignments')
+        .select('*, task:tasks_definitions(title, frequency, category)')
+        .eq('assigned_to', profile.id).eq('status', 'pending'),
     ]);
 
     const all = vacData || [];
@@ -61,6 +71,8 @@ export default function Dashboard({ profile }) {
     setUpcoming(all.filter(r => r.start_date > today));
     setLabMeetings(labData || []);
     setAdhocMeetings(adhocData || []);
+    setMyTasks(sporData || []);
+    setMyAssignments(assignData || []);
     setLoading(false);
   }
 
@@ -134,6 +146,44 @@ export default function Dashboard({ profile }) {
                           <Calendar size={11} />
                           {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
                         </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* My Tasks */}
+          {(myTasks.length > 0 || myAssignments.length > 0) && (
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+              <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ClipboardList size={15} color="var(--purple-primary)" />
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>My Tasks</span>
+              </div>
+              <div style={{ padding: '10px 18px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {myAssignments.map(a => {
+                  const today = new Date().toISOString().split('T')[0];
+                  const isOverdue = a.cycle_end && a.cycle_end < today;
+                  return (
+                    <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                      <span style={{ fontSize: '13px', color: 'var(--text-primary)', flex: 1 }}>{a.task?.title || 'Task'}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ padding: '2px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: 600, background: 'var(--purple-faint)', color: 'var(--purple-primary)' }}>{a.task?.frequency}</span>
+                        {isOverdue && <AlertTriangle size={12} color="#E74C3C" title="Overdue" />}
+                      </div>
+                    </div>
+                  );
+                })}
+                {myTasks.map(task => {
+                  const today = new Date().toISOString().split('T')[0];
+                  const overdue = task.due_date < today;
+                  return (
+                    <div key={task.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                      <span style={{ fontSize: '13px', color: 'var(--text-primary)', flex: 1 }}>{task.title}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '11px', color: overdue ? '#E74C3C' : 'var(--text-muted)' }}>Due {task.due_date}</span>
+                        {overdue && <AlertTriangle size={12} color="#E74C3C" />}
                       </div>
                     </div>
                   );
