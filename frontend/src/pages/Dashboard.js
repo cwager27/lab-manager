@@ -1,6 +1,19 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle } from 'lucide-react';
+import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle, Users, Mail, Phone, MapPin } from 'lucide-react';
+
+const ROLE_LABELS = { admin: 'Supervisor', pm: 'Program Manager', member: 'Lab Member', intern: 'Intern' };
+const ROLE_COLORS = {
+  admin:  { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
+  pm:     { bg: '#EBF5FB', text: '#2980B9', border: '#AED6F1' },
+  member: { bg: '#EAF7F0', text: '#27AE60', border: '#A9DFBF' },
+  intern: { bg: '#FEF9E7', text: '#F39C12', border: '#FAD7A0' },
+};
+
+function getDisplayName(c) {
+  if (c.first_name || c.last_name) return [c.first_name, c.last_name].filter(Boolean).join(' ');
+  return c.full_name || '';
+}
 
 const LEAVE_COLORS = {
   'Vacation':                  { bg: '#EBF5FB', text: '#2980B9' },
@@ -38,6 +51,7 @@ export default function Dashboard({ profile }) {
   const [myTasks, setMyTasks] = useState([]);
   const [myAssignments, setMyAssignments] = useState([]);
   const [taskFreq, setTaskFreq] = useState(null);
+  const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -49,7 +63,7 @@ export default function Dashboard({ profile }) {
     const today = new Date().toISOString().split('T')[0];
     const thirtyDays = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    const [{ data: vacData }, { data: labData }, { data: adhocData }, { data: sporData }, { data: assignData }] = await Promise.all([
+    const [{ data: vacData }, { data: labData }, { data: adhocData }, { data: sporData }, { data: assignData }, { data: contactData }] = await Promise.all([
       supabase.from('vacation_requests')
         .select('*, requester:profiles!vacation_requests_requested_by_fkey(full_name)')
         .eq('status', 'approved').lte('start_date', thirtyDays).gte('end_date', today).order('start_date'),
@@ -65,6 +79,7 @@ export default function Dashboard({ profile }) {
       supabase.from('task_assignments')
         .select('*, task:tasks_definitions(title, frequency, category)')
         .eq('assigned_to', profile.id).eq('status', 'pending'),
+      supabase.from('lab_contacts').select('*').eq('status', 'active').order('sort_order').order('last_name').order('first_name'),
     ]);
 
     const all = vacData || [];
@@ -75,6 +90,7 @@ export default function Dashboard({ profile }) {
     const assigns = assignData || [];
     setMyTasks(sporData || []);
     setMyAssignments(assigns);
+    setContacts(contactData || []);
     // default to the first frequency that has assignments
     const freqOrder = ['daily', 'weekly', 'biweekly', 'monthly', 'yearly'];
     const firstFreq = freqOrder.find(f => assigns.some(a => a.task?.frequency === f));
@@ -289,6 +305,65 @@ export default function Dashboard({ profile }) {
               </div>
             ))}
           </div>
+          {/* Lab Directory */}
+          {contacts.length > 0 && (
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+              <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Users size={15} color="var(--purple-primary)" />
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>Lab Directory</span>
+              </div>
+              <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {contacts.map(contact => {
+                  const name = getDisplayName(contact);
+                  const colors = ROLE_COLORS[contact.role] || ROLE_COLORS.member;
+                  const initial = name.charAt(0).toUpperCase();
+                  return (
+                    <div key={contact.id} style={{ display: 'flex', gap: '12px', padding: '12px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+                      {/* Avatar */}
+                      <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: colors.bg, border: `2px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <span style={{ fontSize: '15px', fontWeight: 700, color: colors.text }}>{initial}</span>
+                      </div>
+                      {/* Info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{name}</span>
+                          <span style={{ padding: '1px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: 600, background: colors.bg, color: colors.text, border: `1px solid ${colors.border}` }}>
+                            {ROLE_LABELS[contact.role] || contact.role}
+                          </span>
+                        </div>
+                        {contact.title && <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 4px' }}>{contact.title}</p>}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                          {contact.email && (
+                            <a href={`mailto:${contact.email}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none' }}>
+                              <Mail size={11} /> {contact.email}
+                            </a>
+                          )}
+                          {contact.phone && (
+                            <a href={`tel:${contact.phone}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--text-secondary)', textDecoration: 'none' }}>
+                              <Phone size={11} /> {contact.phone}
+                            </a>
+                          )}
+                          {contact.address && (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                              <MapPin size={11} /> {contact.address}
+                            </span>
+                          )}
+                        </div>
+                        {contact.supervisor && (
+                          <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                            Supervisor: <span style={{ fontWeight: 600 }}>{contact.supervisor}</span>
+                          </p>
+                        )}
+                        {contact.notes && (
+                          <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '3px 0 0', fontStyle: 'italic' }}>{contact.notes}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
