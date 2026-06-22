@@ -6,7 +6,7 @@ const CATEGORIES = ['General', 'Benchling', 'IBC', 'IACUC', 'Human Studies', 'Sa
 
 const EMPTY_FORM = {
   title: '', category: 'General', description: '',
-  content: '', review_date: '', file_url: '', file_name: ''
+  content: '', review_date: '', file_url: '', file_name: '', benchling_url: ''
 };
 
 export default function PoliciesTab({ policies, userId, fetchPolicies }) {
@@ -108,6 +108,7 @@ export default function PoliciesTab({ policies, userId, fetchPolicies }) {
                           </div>
                           {policy.description && <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 4px' }}>{policy.description}</p>}
                           {policy.review_date && <p style={{ fontSize: '11px', color: isOverdue ? '#E74C3C' : isDueSoon ? '#F39C12' : 'var(--text-muted)', margin: 0 }}>Review date: {policy.review_date}</p>}
+                          {policy.benchling_url && <a href={policy.benchling_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: '#27AE60', fontWeight: 500 }}>📗 Open in Benchling</a>}
                         </div>
                         <div style={{ display: 'flex', gap: '6px', flexShrink: 0, alignItems: 'center' }}>
                           {policy.file_url && (
@@ -194,6 +195,12 @@ export default function PoliciesTab({ policies, userId, fetchPolicies }) {
             <div style={{ marginBottom: '20px' }}>
               <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Review Date</label>
               <input type="date" value={form.review_date} onChange={e => setForm(p => ({ ...p, review_date: e.target.value }))}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Benchling URL</label>
+              <input value={form.benchling_url || ''} onChange={e => setForm(p => ({ ...p, benchling_url: e.target.value }))}
+                placeholder="https://benchling.com/..."
                 style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>

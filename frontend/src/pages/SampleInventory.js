@@ -13,7 +13,7 @@ const STATUS_STYLES = {
 
 const EMPTY_CELL_LINE = {
   name: '', cell_type: '', passage_number: '', storage_location: '',
-  freezer: '', shelf: '', box: '', status: 'present', notes: ''
+  freezer: '', shelf: '', box: '', status: 'present', notes: '', benchling_url: ''
 };
 
 const EMPTY_MOUSE = {
@@ -235,6 +235,7 @@ export default function SampleInventory({ userRole, userId, profile }) {
       { value: 'depleted', label: 'Depleted' }
     ]},
     { key: 'notes', label: 'Notes', full: true },
+    { key: 'benchling_url', label: 'Benchling URL', full: true },
   ];
 
   const mouseSampleFields = [
@@ -403,6 +404,7 @@ export default function SampleInventory({ userRole, userId, profile }) {
                           {item.shelf && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Shelf: {item.shelf}</span>}
                           {item.box && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Box: {item.box}</span>}
                           {item.storage_location && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{item.storage_location}</span>}
+                          {item.benchling_url && <a href={item.benchling_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: '#27AE60', fontWeight: 500 }}>📗 Open in Benchling</a>}
                         </div>
                         {item.status === 'absent' && item.taken_at && (
                           <div style={{ marginTop: '8px', padding: '8px 12px', background: '#FEF0F0', borderRadius: 'var(--radius-sm)' }}>

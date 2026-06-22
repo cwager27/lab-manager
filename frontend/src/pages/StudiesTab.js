@@ -157,6 +157,7 @@ export default function StudiesTab({ studies, members, canManage, showStudyForm,
                       {study.ilab_exists && <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>iLab: {study.ilab_link ? <a href={study.ilab_link} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--purple-primary)' }}>Link</a> : 'Yes'}</span>}
                       {study.certificate_expiry && <span style={{ fontSize: '12px', color: isExpired ? '#E74C3C' : isExpiringSoon ? '#F39C12' : 'var(--text-muted)' }}>Certificate expires: {study.certificate_expiry}</span>}
                       {study.certificate_url && <a href={study.certificate_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: 'var(--purple-primary)' }}>View Certificate</a>}
+                      {study.benchling_url && <a href={study.benchling_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: '#27AE60', fontWeight: 500 }}>📗 Open in Benchling</a>}
                     </div>
                     {teamNames.length > 0 && <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 4px' }}>Team: {teamNames.join(', ')}</p>}
                     {study.notes && <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>{study.notes}</p>}
@@ -397,7 +398,12 @@ export default function StudiesTab({ studies, members, canManage, showStudyForm,
               <input type="date" value={studyForm.certificate_expiry || ''} onChange={e => setStudyForm(p => ({ ...p, certificate_expiry: e.target.value }))}
                 style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
-
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Benchling URL</label>
+              <input value={studyForm.benchling_url || ''} onChange={e => setStudyForm(p => ({ ...p, benchling_url: e.target.value }))}
+                placeholder="https://benchling.com/..."
+                style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
             <div style={{ marginBottom: '24px' }}>
               <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Notes</label>
               <textarea value={studyForm.notes || ''} onChange={e => setStudyForm(p => ({ ...p, notes: e.target.value }))}

@@ -375,6 +375,7 @@ export default function Compliance({ userRole, userId, profile }) {
           { id: 'checklist', label: 'Compliance Checklist' },
           { id: 'studies', label: 'Studies' },
           { id: 'policies', label: 'Lab Policies' },
+          { id: 'benchling', label: 'Benchling' },
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
             padding: '10px 20px',
@@ -554,6 +555,64 @@ export default function Compliance({ userRole, userId, profile }) {
 
       {activeTab === 'policies' && (
         <PoliciesTab policies={policies} userId={userId} fetchPolicies={fetchData} />
+      )}
+
+      {activeTab === 'benchling' && (
+        <div>
+          <div style={{ background: '#EAF7F0', border: '1px solid #A9DFBF', borderRadius: 'var(--radius-md)', padding: '14px 16px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '20px' }}>📗</span>
+            <div>
+              <p style={{ fontSize: '13px', fontWeight: 600, color: '#27AE60', margin: 0 }}>Benchling Integration</p>
+              <p style={{ fontSize: '12px', color: '#27AE60', margin: 0, opacity: 0.8 }}>All Benchling-linked resources across the platform. Add Benchling URLs to studies, policies, and cell lines to see them here.</p>
+            </div>
+          </div>
+
+          {/* Linked Studies */}
+          {studies.filter(s => s.benchling_url).length > 0 && (
+            <div style={{ marginBottom: '24px' }}>
+              <h3 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px', paddingBottom: '6px', borderBottom: '2px solid var(--border)' }}>Studies</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {studies.filter(s => s.benchling_url).map(s => (
+                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+                    <div>
+                      <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 2px' }}>{s.study_name}</p>
+                      {s.irb_number && <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, fontFamily: 'monospace' }}>IRB {s.irb_number}</p>}
+                    </div>
+                    <a href={s.benchling_url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 'var(--radius-md)', background: '#EAF7F0', color: '#27AE60', textDecoration: 'none', fontSize: '12px', fontWeight: 600, border: '1px solid #A9DFBF' }}>
+                      📗 Open in Benchling
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Linked Policies */}
+          {policies.filter(p => p.benchling_url).length > 0 && (
+            <div style={{ marginBottom: '24px' }}>
+              <h3 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px', paddingBottom: '6px', borderBottom: '2px solid var(--border)' }}>Policies</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {policies.filter(p => p.benchling_url).map(p => (
+                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+                    <div>
+                      <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 2px' }}>{p.title}</p>
+                      {p.category && <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0 }}>{p.category}</p>}
+                    </div>
+                    <a href={p.benchling_url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 'var(--radius-md)', background: '#EAF7F0', color: '#27AE60', textDecoration: 'none', fontSize: '12px', fontWeight: 600, border: '1px solid #A9DFBF' }}>
+                      📗 Open in Benchling
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {studies.filter(s => s.benchling_url).length === 0 && policies.filter(p => p.benchling_url).length === 0 && (
+            <div style={{ textAlign: 'center', padding: '40px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
+              No Benchling links added yet. Add Benchling URLs to your studies or policies to see them here.
+            </div>
+          )}
+        </div>
       )}
 
       {/* Assign Form Modal */}
