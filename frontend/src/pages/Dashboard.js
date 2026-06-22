@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Calendar, Palmtree } from 'lucide-react';
+import { Calendar, Palmtree, Star } from 'lucide-react';
 
 const LEAVE_COLORS = {
   'Vacation':                  { bg: '#EBF5FB', text: '#2980B9' },
@@ -33,26 +33,34 @@ function formatDate(d) {
 export default function Dashboard({ profile }) {
   const [outToday, setOutToday] = useState([]);
   const [upcoming, setUpcoming] = useState([]);
+  const [labMeetings, setLabMeetings] = useState([]);
+  const [adhocMeetings, setAdhocMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { fetchTimeAway(); }, []);
+  useEffect(() => { fetchAll(); }, []);
 
-  async function fetchTimeAway() {
+  async function fetchAll() {
     setLoading(true);
     const today = new Date().toISOString().split('T')[0];
     const thirtyDays = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    const { data } = await supabase
-      .from('vacation_requests')
-      .select('*, requester:profiles!vacation_requests_requested_by_fkey(full_name)')
-      .eq('status', 'approved')
-      .lte('start_date', thirtyDays)
-      .gte('end_date', today)
-      .order('start_date');
+    const [{ data: vacData }, { data: labData }, { data: adhocData }] = await Promise.all([
+      supabase.from('vacation_requests')
+        .select('*, requester:profiles!vacation_requests_requested_by_fkey(full_name)')
+        .eq('status', 'approved').lte('start_date', thirtyDays).gte('end_date', today).order('start_date'),
+      supabase.from('lab_meetings')
+        .select('*, presenter:profiles!lab_meetings_presenter_id_fkey(full_name)')
+        .eq('status', 'scheduled').gte('meeting_date', today).order('meeting_date').limit(2),
+      supabase.from('adhoc_meetings')
+        .select('*, presenter:profiles!adhoc_meetings_presenter_id_fkey(full_name)')
+        .eq('status', 'scheduled').gte('meeting_date', today).order('meeting_date').limit(2),
+    ]);
 
-    const all = data || [];
+    const all = vacData || [];
     setOutToday(all.filter(r => r.start_date <= today && r.end_date >= today));
     setUpcoming(all.filter(r => r.start_date > today));
+    setLabMeetings(labData || []);
+    setAdhocMeetings(adhocData || []);
     setLoading(false);
   }
 
@@ -103,7 +111,7 @@ export default function Dashboard({ profile }) {
             )}
           </div>
 
-          {/* Upcoming */}
+          {/* Upcoming time away */}
           {upcoming.length > 0 && (
             <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
               <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -133,6 +141,43 @@ export default function Dashboard({ profile }) {
               </div>
             </div>
           )}
+
+          {/* Upcoming meetings row */}
+          <div style={{ display: 'flex', gap: '16px' }}>
+            {[
+              { label: 'Next Lab Meetings', meetings: labMeetings },
+              { label: 'Next Ad-hoc Meetings', meetings: adhocMeetings },
+            ].map(({ label, meetings }) => (
+              <div key={label} style={{ flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Calendar size={15} color="var(--purple-primary)" />
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{label}</span>
+                </div>
+                {meetings.length === 0 ? (
+                  <p style={{ padding: '14px 18px', fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>None scheduled.</p>
+                ) : (
+                  <div style={{ padding: '10px 18px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {meetings.map(m => (
+                      <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                        <div>
+                          <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            {new Date(m.meeting_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })}
+                            {m.is_sof && <Star size={11} color="#7B3FA0" fill="#7B3FA0" />}
+                          </div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '1px' }}>
+                            {m.presenter?.full_name || m.guest_name || <em>TBD</em>}
+                          </div>
+                        </div>
+                        {m.is_sof && (
+                          <span style={{ padding: '2px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, background: 'var(--purple-faint)', color: 'var(--purple-primary)', flexShrink: 0 }}>SOF</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
