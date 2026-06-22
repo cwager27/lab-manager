@@ -37,6 +37,7 @@ export default function Dashboard({ profile }) {
   const [adhocMeetings, setAdhocMeetings] = useState([]);
   const [myTasks, setMyTasks] = useState([]);
   const [myAssignments, setMyAssignments] = useState([]);
+  const [taskFreq, setTaskFreq] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -71,8 +72,13 @@ export default function Dashboard({ profile }) {
     setUpcoming(all.filter(r => r.start_date > today));
     setLabMeetings(labData || []);
     setAdhocMeetings(adhocData || []);
+    const assigns = assignData || [];
     setMyTasks(sporData || []);
-    setMyAssignments(assignData || []);
+    setMyAssignments(assigns);
+    // default to the first frequency that has assignments
+    const freqOrder = ['daily', 'weekly', 'biweekly', 'monthly', 'yearly'];
+    const firstFreq = freqOrder.find(f => assigns.some(a => a.task?.frequency === f));
+    setTaskFreq(prev => prev || firstFreq || null);
     setLoading(false);
   }
 
@@ -155,42 +161,95 @@ export default function Dashboard({ profile }) {
           )}
 
           {/* My Tasks */}
-          {(myTasks.length > 0 || myAssignments.length > 0) && (
-            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-              <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <ClipboardList size={15} color="var(--purple-primary)" />
-                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>My Tasks</span>
-              </div>
-              <div style={{ padding: '10px 18px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {myAssignments.map(a => {
-                  const today = new Date().toISOString().split('T')[0];
-                  const isOverdue = a.cycle_end && a.cycle_end < today;
-                  return (
-                    <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                      <span style={{ fontSize: '13px', color: 'var(--text-primary)', flex: 1 }}>{a.task?.title || 'Task'}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ padding: '2px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: 600, background: 'var(--purple-faint)', color: 'var(--purple-primary)' }}>{a.task?.frequency}</span>
-                        {isOverdue && <AlertTriangle size={12} color="#E74C3C" title="Overdue" />}
-                      </div>
+          {(myTasks.length > 0 || myAssignments.length > 0) && (() => {
+            const today = new Date().toISOString().split('T')[0];
+            const freqOrder = ['daily', 'weekly', 'biweekly', 'monthly', 'yearly'];
+            const freqColors = {
+              daily:    { bg: '#EBF5FB', text: '#2980B9', active: '#2980B9' },
+              weekly:   { bg: '#EAF7F0', text: '#27AE60', active: '#27AE60' },
+              biweekly: { bg: '#FEF9E7', text: '#F39C12', active: '#F39C12' },
+              monthly:  { bg: '#F5EEF8', text: '#7B3FA0', active: '#7B3FA0' },
+              yearly:   { bg: '#FDEDEC', text: '#E74C3C', active: '#E74C3C' },
+            };
+            const availableFreqs = freqOrder.filter(f => myAssignments.some(a => a.task?.frequency === f));
+            const visibleAssignments = taskFreq
+              ? myAssignments.filter(a => a.task?.frequency === taskFreq)
+              : myAssignments;
+
+            return (
+              <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                {/* Header */}
+                <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <ClipboardList size={15} color="var(--purple-primary)" />
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>My Tasks</span>
+                  </div>
+                  {/* Frequency pills — only show if there are recurring assignments */}
+                  {availableFreqs.length > 0 && (
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                      {availableFreqs.map(f => {
+                        const c = freqColors[f];
+                        const active = taskFreq === f;
+                        const count = myAssignments.filter(a => a.task?.frequency === f).length;
+                        return (
+                          <button key={f} onClick={() => setTaskFreq(active ? null : f)} style={{
+                            padding: '3px 9px', borderRadius: '12px', border: `1px solid ${active ? c.text : 'var(--border)'}`,
+                            background: active ? c.bg : 'transparent',
+                            color: active ? c.text : 'var(--text-muted)',
+                            fontSize: '11px', fontWeight: active ? 600 : 400,
+                          }}>
+                            {f.charAt(0).toUpperCase() + f.slice(1)} {count > 1 ? `(${count})` : ''}
+                          </button>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-                {myTasks.map(task => {
-                  const today = new Date().toISOString().split('T')[0];
-                  const overdue = task.due_date < today;
-                  return (
-                    <div key={task.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                      <span style={{ fontSize: '13px', color: 'var(--text-primary)', flex: 1 }}>{task.title}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '11px', color: overdue ? '#E74C3C' : 'var(--text-muted)' }}>Due {task.due_date}</span>
-                        {overdue && <AlertTriangle size={12} color="#E74C3C" />}
+                  )}
+                </div>
+
+                <div style={{ padding: '10px 18px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                  {/* Recurring assignments */}
+                  {visibleAssignments.length > 0 && (
+                    <>
+                      {visibleAssignments.map(a => {
+                        const overdue = a.cycle_end && a.cycle_end < today;
+                        const c = freqColors[a.task?.frequency];
+                        return (
+                          <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '13px', color: 'var(--text-primary)', flex: 1, lineHeight: 1.4 }}>{a.task?.title || 'Task'}</span>
+                            {!taskFreq && c && (
+                              <span style={{ padding: '2px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: 600, background: c.bg, color: c.text, flexShrink: 0 }}>{a.task?.frequency}</span>
+                            )}
+                            {overdue && <AlertTriangle size={12} color="#E74C3C" title="Overdue" style={{ flexShrink: 0 }} />}
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+
+                  {/* Divider between recurring and one-off if both present */}
+                  {visibleAssignments.length > 0 && myTasks.length > 0 && (
+                    <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
+                  )}
+
+                  {/* One-off sporadic tasks */}
+                  {myTasks.map(task => {
+                    const overdue = task.due_date < today;
+                    return (
+                      <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '13px', color: 'var(--text-primary)', flex: 1, lineHeight: 1.4 }}>{task.title}</span>
+                        <span style={{ fontSize: '11px', color: overdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0 }}>Due {task.due_date}</span>
+                        {overdue && <AlertTriangle size={12} color="#E74C3C" style={{ flexShrink: 0 }} />}
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+
+                  {visibleAssignments.length === 0 && myTasks.length === 0 && (
+                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>No tasks for this frequency.</p>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Upcoming meetings row */}
           <div style={{ display: 'flex', gap: '16px' }}>
