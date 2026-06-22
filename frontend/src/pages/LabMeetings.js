@@ -20,7 +20,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newMeeting, setNewMeeting] = useState({
     meeting_date: '', presenter_id: '', guest_name: '',
-    guest_title: '', is_sof: false, notes: '', status: 'scheduled'
+    guest_title: '', is_sof: false, sof_topic: '', notes: '', status: 'scheduled'
   });
   const [filter, setFilter] = useState('upcoming');
   const [saving, setSaving] = useState(false);
@@ -70,6 +70,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
       guest_name: editForm.guest_name || null,
       guest_title: editForm.guest_title || null,
       is_sof: editForm.is_sof,
+      sof_topic: editForm.sof_topic || null,
       notes: editForm.notes || null,
       status: editForm.status,
       updated_at: new Date().toISOString()
@@ -125,6 +126,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
       presenter_id: newMeeting.presenter_id || null,
       guest_name: newMeeting.guest_name || null,
       guest_title: newMeeting.guest_title || null,
+      sof_topic: newMeeting.sof_topic || null,
     }]);
 
     // Email whole lab
@@ -141,7 +143,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
     });
 
     setShowAddForm(false);
-    setNewMeeting({ meeting_date: '', presenter_id: '', guest_name: '', guest_title: '', is_sof: false, notes: '', status: 'scheduled' });
+    setNewMeeting({ meeting_date: '', presenter_id: '', guest_name: '', guest_title: '', is_sof: false, sof_topic: '', notes: '', status: 'scheduled' });
     fetchData();
   }
 
@@ -276,6 +278,9 @@ export default function LabMeetings({ userRole, userId, profile }) {
                         <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>— {meeting.guest_title}</span>
                       )}
                     </div>
+                    {meeting.sof_topic && meeting.is_sof && (
+                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--purple-primary)', fontWeight: 500 }}>Topic: {meeting.sof_topic}</p>
+                    )}
                     {meeting.notes && (
                       <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>{meeting.notes}</p>
                     )}
@@ -291,6 +296,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
                           guest_name: meeting.guest_name || '',
                           guest_title: meeting.guest_title || '',
                           is_sof: meeting.is_sof,
+                          sof_topic: meeting.sof_topic || '',
                           notes: meeting.notes || '',
                           status: meeting.status
                         });
@@ -371,6 +377,14 @@ export default function LabMeetings({ userRole, userId, profile }) {
                       <label htmlFor={`sof-${meeting.id}`} style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>SOF</label>
                     </div>
                   </div>
+                  {editForm.is_sof && (
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>SOF Topic</label>
+                      <input value={editForm.sof_topic || ''} onChange={e => setEditForm(p => ({ ...p, sof_topic: e.target.value }))}
+                        placeholder="e.g. State of the field: APOBEC3A detection methods"
+                        style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                     <button onClick={() => setEditingId(null)} style={{ padding: '7px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px' }}>Cancel</button>
                     <button onClick={() => handleSaveEdit(meeting.id)} disabled={saving} style={{
@@ -441,12 +455,21 @@ export default function LabMeetings({ userRole, userId, profile }) {
                 style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: newMeeting.is_sof ? '12px' : '24px' }}>
               <input type="checkbox" id="new-sof" checked={newMeeting.is_sof}
                 onChange={e => setNewMeeting(p => ({ ...p, is_sof: e.target.checked }))}
                 style={{ width: '16px', height: '16px', accentColor: 'var(--purple-primary)' }} />
               <label htmlFor="new-sof" style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>State of the Field (SOF)</label>
             </div>
+
+            {newMeeting.is_sof && (
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>SOF Topic</label>
+                <input value={newMeeting.sof_topic || ''} onChange={e => setNewMeeting(p => ({ ...p, sof_topic: e.target.value }))}
+                  placeholder="e.g. State of the field: APOBEC3A detection methods"
+                  style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button onClick={() => setShowAddForm(false)} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500 }}>Cancel</button>
