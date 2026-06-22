@@ -26,10 +26,10 @@ const PERMISSIONS = [
 ];
 
 const EMPTY_CONTACT = {
-  full_name: '', role: 'member', title: '', phone: '', email: '',
-  alternative_email: '', address: '', emergency_contact_name: '',
-  emergency_contact_phone: '', emergency_contact_relationship: '',
-  status: 'active', sort_order: 99, notes: ''
+  first_name: '', last_name: '', role: 'member', title: '', phone: '', email: '',
+  alternative_email: '', address: '', supervisor: '', supervisor_email: '',
+  emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_email: '',
+  emergency_contact_relationship: '', status: 'active', sort_order: 99, notes: ''
 };
 
 const EMPTY_MEMBER = {
@@ -38,6 +38,13 @@ const EMPTY_MEMBER = {
   can_edit_meetings: false, can_view_finance: true,
   can_edit_samples: true, can_view_contacts: false, can_add_members: false
 };
+
+function getDisplayName(contact) {
+  if (contact.first_name || contact.last_name) {
+    return [contact.first_name, contact.last_name].filter(Boolean).join(' ');
+  }
+  return contact.full_name || '';
+}
 
 export default function LabContacts({ userRole, userId, profile, permissions }) {
   const [contacts, setContacts] = useState([]);
@@ -54,13 +61,14 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   const [saving, setSaving] = useState(false);
 
   const canManage = userRole === 'admin' || (permissions?.can_add_members);
+  const canViewEmergency = userRole === 'pm' || profile?.full_name?.toLowerCase().startsWith('mia');
 
   useEffect(() => { fetchData(); }, []);
 
   async function fetchData() {
     setLoading(true);
     const [{ data: contactData }, { data: memberData }] = await Promise.all([
-      supabase.from('lab_contacts').select('*').order('sort_order').order('full_name'),
+      supabase.from('lab_contacts').select('*').order('sort_order').order('last_name').order('first_name'),
       supabase.from('profiles').select('*').order('full_name')
     ]);
     setContacts(contactData || []);
@@ -155,10 +163,12 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   }
 
   const sortedMembers = [...members].sort((a, b) => (ROLE_ORDER[a.role] || 99) - (ROLE_ORDER[b.role] || 99));
-  const filteredContacts = contacts.filter(c =>
-    searchQuery === '' || c.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.role?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredContacts = contacts.filter(c => {
+    if (searchQuery === '') return true;
+    const q = searchQuery.toLowerCase();
+    const name = getDisplayName(c).toLowerCase();
+    return name.includes(q) || c.role?.toLowerCase().includes(q);
+  });
 
   function setDefaultPermissions(role) {
     const defaults = {
@@ -242,12 +252,12 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                         display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
                       }}>
                         <span style={{ fontSize: '16px', fontWeight: 700, color: roleColors.text }}>
-                          {contact.full_name?.charAt(0).toUpperCase()}
+                          {(contact.first_name || contact.full_name || '?').charAt(0).toUpperCase()}
                         </span>
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                          <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>{contact.full_name}</span>
+                          <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>{getDisplayName(contact)}</span>
                           <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: roleColors.bg, color: roleColors.text, border: `1px solid ${roleColors.border}` }}>
                             {ROLE_LABELS[contact.role] || contact.role}
                           </span>
@@ -302,13 +312,25 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
         <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: 0 }}>{contact.address}</p>
       </div>
     )}
-    {contact.emergency_contact_name && (
+    {(contact.supervisor || contact.supervisor_email) && (
+      <div style={{ gridColumn: '1 / -1' }}>
+        <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Supervisor</p>
+        {contact.supervisor && <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: '0 0 2px', fontWeight: 600 }}>{contact.supervisor}</p>}
+        {contact.supervisor_email && (
+          <a href={`mailto:${contact.supervisor_email}`} style={{ fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none' }}>{contact.supervisor_email}</a>
+        )}
+      </div>
+    )}
+    {canViewEmergency && contact.emergency_contact_name && (
       <div style={{ gridColumn: '1 / -1', background: '#FEF9E7', borderRadius: 'var(--radius-sm)', padding: '12px', border: '1px solid #FAD7A0' }}>
         <p style={{ fontSize: '11px', color: '#F39C12', margin: '0 0 6px', textTransform: 'uppercase', fontWeight: 600 }}>Emergency Contact</p>
         <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: '0 0 2px', fontWeight: 600 }}>{contact.emergency_contact_name}</p>
         {contact.emergency_contact_relationship && <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 2px' }}>{contact.emergency_contact_relationship}</p>}
         {contact.emergency_contact_phone && (
-          <a href={`tel:${contact.emergency_contact_phone}`} style={{ fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none' }}>{contact.emergency_contact_phone}</a>
+          <a href={`tel:${contact.emergency_contact_phone}`} style={{ display: 'block', fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none', marginBottom: '2px' }}>{contact.emergency_contact_phone}</a>
+        )}
+        {contact.emergency_contact_email && (
+          <a href={`mailto:${contact.emergency_contact_email}`} style={{ fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none' }}>{contact.emergency_contact_email}</a>
         )}
       </div>
     )}
@@ -428,7 +450,8 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
             <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>{editingContact ? 'Edit Contact' : 'Add Contact'}</h2>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
               {[
-                { key: 'full_name', label: 'Full Name', required: true, full: true },
+                { key: 'first_name', label: 'First Name', required: true },
+                { key: 'last_name', label: 'Last Name', required: true },
                 { key: 'title', label: 'Title / Position' },
                 { key: 'role', label: 'Role', type: 'select', options: [
                   { value: 'admin', label: 'Supervisor' },
@@ -440,6 +463,8 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                 { key: 'alternative_email', label: 'Alternative Email' },
                 { key: 'phone', label: 'Phone' },
                 { key: 'address', label: 'Address', full: true },
+                { key: 'supervisor', label: 'Supervisor Name' },
+                { key: 'supervisor_email', label: 'Supervisor Email' },
                 { key: 'status', label: 'Status', type: 'select', options: [
                   { value: 'active', label: 'Active' },
                   { value: 'alumni', label: 'Alumni' },
@@ -468,7 +493,8 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                 {[
                   { key: 'emergency_contact_name', label: 'Name' },
                   { key: 'emergency_contact_relationship', label: 'Relationship' },
-                  { key: 'emergency_contact_phone', label: 'Phone', full: true },
+                  { key: 'emergency_contact_phone', label: 'Phone' },
+                  { key: 'emergency_contact_email', label: 'Email' },
                 ].map(field => (
                   <div key={field.key} style={{ gridColumn: field.full ? '1 / -1' : 'auto' }}>
                     <label style={{ fontSize: '11px', fontWeight: 600, color: '#F39C12', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
