@@ -12,7 +12,7 @@ const ROLE_LABELS = {
   intern: 'Intern'
 };
 
-export default function Navigation({ currentPage, setCurrentPage, userRole, profile, onLogout, canManage }) {
+export default function Navigation({ currentPage, setCurrentPage, userRole, profile, onLogout, canManage, permissions }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, always: true },
     { id: 'responsibilities', label: 'Lab Responsibilities', icon: ClipboardList, always: true },
@@ -23,8 +23,8 @@ export default function Navigation({ currentPage, setCurrentPage, userRole, prof
     { id: 'finance', label: 'Finance', icon: FlaskConical, always: true },
     { id: 'inventory', label: 'Sample Inventory', icon: FlaskConical, always: true },
     { id: 'compliance', label: 'Compliance', icon: ShieldCheck, always: true },
-    { id: 'contacts', label: 'Lab Contacts', icon: Users, always: true },
-  ].filter(item => item.always || (item.managerOnly && canManage));
+    { id: 'contacts', label: 'Lab Contacts', icon: Users, contactsOnly: true },
+  ].filter(item => item.always || (item.managerOnly && canManage) || (item.contactsOnly && (permissions?.can_view_contacts || canManage)));
 
   return (
     <nav style={{

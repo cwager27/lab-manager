@@ -98,7 +98,12 @@ export default function App() {
         {currentPage === 'finance' && permissions.can_view_finance && <Finance userRole={userRole} />}
         {currentPage === 'inventory' && <SampleInventory userRole={userRole} userId={user.id} profile={profile} />}
         {currentPage === 'compliance' && <Compliance userRole={userRole} userId={user.id} profile={profile} />}
-        {currentPage === 'contacts' && permissions.can_view_contacts && <LabContacts userRole={userRole} userId={user.id} profile={profile} permissions={permissions} />}
+        {currentPage === 'contacts' && (permissions.can_view_contacts || userRole === 'admin' || userRole === 'pm') && <LabContacts userRole={userRole} userId={user.id} profile={profile} permissions={permissions} />}
+        {currentPage === 'contacts' && !permissions.can_view_contacts && userRole !== 'admin' && userRole !== 'pm' && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--text-muted)', fontSize: '15px' }}>
+            You don't have permission to view the contact directory.
+          </div>
+        )}
         {!['responsibilities', 'assign', 'sporadic', 'vacation', 'meetings', 'finance', 'inventory', 'compliance', 'contacts'].includes(currentPage) && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--text-muted)', fontSize: '15px' }}>
             This system is coming soon.
