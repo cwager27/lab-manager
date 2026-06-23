@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle, Users, Mail, Phone, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
 
-const ROLE_LABELS = { admin: 'Supervisor', pm: 'Program Manager', member: 'Lab Member', intern: 'Intern' };
+const ROLE_LABELS = { admin: 'Supervisor', pm: 'Program Manager', member: 'Lab Member', intern: 'Intern', external: 'NYU Contact' };
 const ROLE_COLORS = {
-  admin:  { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
-  pm:     { bg: '#EBF5FB', text: '#2980B9', border: '#AED6F1' },
-  member: { bg: '#EAF7F0', text: '#27AE60', border: '#A9DFBF' },
-  intern: { bg: '#FEF9E7', text: '#F39C12', border: '#FAD7A0' },
+  admin:    { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
+  pm:       { bg: '#EBF5FB', text: '#2980B9', border: '#AED6F1' },
+  member:   { bg: '#EAF7F0', text: '#27AE60', border: '#A9DFBF' },
+  intern:   { bg: '#FEF9E7', text: '#F39C12', border: '#FAD7A0' },
+  external: { bg: '#F2F3F4', text: '#5D6D7E', border: '#CCD1D1' },
 };
 
 function getDisplayName(c) {
