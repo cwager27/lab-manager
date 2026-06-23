@@ -1,16 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { SEED_TASKS } from '../data/seedTasks';
 import {
   Plus, Send, CheckCircle, XCircle, AlertTriangle,
-  Upload, Clock, Search, User, Calendar, ChevronDown
+  Upload, Clock, Search, User, Calendar, ChevronDown, Database
 } from 'lucide-react';
 
 const FREQ_COLORS = {
-  daily:    { bg: '#EBF5FB', text: '#2980B9', border: '#AED6F1' },
-  weekly:   { bg: '#EAF7F0', text: '#27AE60', border: '#A9DFBF' },
-  biweekly: { bg: '#FEF9E7', text: '#F39C12', border: '#FAD7A0' },
-  monthly:  { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
-  yearly:   { bg: '#FDEDEC', text: '#E74C3C', border: '#F1948A' },
+  daily:     { bg: '#EBF5FB', text: '#2980B9', border: '#AED6F1' },
+  weekly:    { bg: '#EAF7F0', text: '#27AE60', border: '#A9DFBF' },
+  biweekly:  { bg: '#FEF9E7', text: '#F39C12', border: '#FAD7A0' },
+  monthly:   { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
+  quarterly: { bg: '#FDEBD0', text: '#D35400', border: '#F0B27A' },
+  yearly:    { bg: '#FDEDEC', text: '#E74C3C', border: '#F1948A' },
 };
 
 const SPORADIC_STATUS = {
@@ -22,7 +24,9 @@ const SPORADIC_STATUS = {
   denied:      { bg: '#FDEDEC', text: '#E74C3C', label: 'Denied' },
 };
 
-const EMPTY_RECURRING = { title: '', category: 'MISC', frequency: 'daily', response_type: 'yes_no', sop_trigger: false, conditional_text: '' };
+const ALL_FREQS = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'];
+
+const EMPTY_RECURRING = { title: '', category: 'MISC', frequency: 'daily', response_type: 'yes_no', sop_trigger: false, conditional_text: '', group_name: '', sort_order: 0 };
 const EMPTY_SPORADIC = { title: '', description: '', category: 'MISC', assigned_to: '', due_date: '', response_type: 'yes_no' };
 
 function isOverdue(dueDate, status) {
@@ -35,6 +39,7 @@ function getCycleEnd(start, frequency) {
   else if (frequency === 'weekly') d.setDate(d.getDate() + 7);
   else if (frequency === 'biweekly') d.setDate(d.getDate() + 14);
   else if (frequency === 'monthly') d.setMonth(d.getMonth() + 1);
+  else if (frequency === 'quarterly') d.setMonth(d.getMonth() + 3);
   else if (frequency === 'yearly') d.setFullYear(d.getFullYear() + 1);
   return d.toISOString().split('T')[0];
 }
@@ -67,6 +72,7 @@ export default function Tasks({ userRole, userId, profile }) {
   const [newRecur, setNewRecur] = useState(EMPTY_RECURRING);
   const [sendingAssign, setSendingAssign] = useState(false);
   const [assignSent, setAssignSent] = useState(false);
+  const [seeding, setSeeding] = useState(false);
 
   // sporadic
   const [sporTasks, setSporTasks] = useState([]);
@@ -85,7 +91,7 @@ export default function Tasks({ userRole, userId, profile }) {
       { data: memberData },
       { data: vacData },
     ] = await Promise.all([
-      supabase.from('tasks_definitions').select('*').eq('status', 'published').order('category').order('frequency'),
+      supabase.from('tasks_definitions').select('*').eq('status', 'published').order('category').order('frequency').order('sort_order'),
       supabase.from('task_assignments').select('*').eq('assigned_to', userId).eq('status', 'pending'),
       supabase.from('task_responses').select('*, assignment:task_assignments(assigned_to, profile:profiles(full_name))').order('responded_at', { ascending: false }),
       (() => {
@@ -156,6 +162,22 @@ export default function Tasks({ userRole, userId, profile }) {
     setAssignments(p => ({ ...p, ...next }));
   }
 
+  function handleResponse(taskId, value) {
+    setResponses(p => ({ ...p, [taskId]: { ...p[taskId], response: value } }));
+  }
+
+  function handleNotes(taskId, value) {
+    setResponses(p => ({ ...p, [taskId]: { ...p[taskId], notes: value } }));
+  }
+
+  function handleConditionalCheck(taskId, item, checked) {
+    setResponses(p => {
+      const current = p[taskId]?.conditional_checks || [];
+      const updated = checked ? [...current, item] : current.filter(i => i !== item);
+      return { ...p, [taskId]: { ...p[taskId], conditional_checks: updated } };
+    });
+  }
+
   async function handleSendAssignments() {
     const filtered = recurTasks.filter(t => t.frequency === recurFreq && t.category === recurCategory);
     const toAssign = filtered.filter(t => assignments[t.id]);
@@ -183,10 +205,6 @@ export default function Tasks({ userRole, userId, profile }) {
     fetchAll();
   }
 
-  function handleResponse(taskId, value) {
-    setResponses(p => ({ ...p, [taskId]: { ...p[taskId], response: value } }));
-  }
-
   async function handlePhotoUpload(taskId, file, isSop = false) {
     if (!file) return;
     const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '-');
@@ -208,8 +226,12 @@ export default function Tasks({ userRole, userId, profile }) {
     const responseArray = visibleRecurTasks.map(task => ({
       taskId: task.id, taskTitle: task.title,
       response: responses[task.id]?.response || '',
+      notes: responses[task.id]?.notes || '',
       photoUrl: responses[task.id]?.photo_url || '',
       sopPhotoUrl: responses[task.id]?.sop_photo_url || '',
+      conditionalResponse: responses[task.id]?.conditional_checks?.length
+        ? JSON.stringify(responses[task.id].conditional_checks)
+        : null,
     }));
     setSubmitting(true);
     const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/submit-checklist`, {
@@ -242,6 +264,26 @@ export default function Tasks({ userRole, userId, profile }) {
     }
   }
 
+  async function handleSeedTasks() {
+    if (!window.confirm(`Seed ${SEED_TASKS.length} tasks from the PM project document? Duplicates (same title + category + frequency) will be skipped.`)) return;
+    setSeeding(true);
+    const { data: existing } = await supabase.from('tasks_definitions').select('title, category, frequency');
+    const existingSet = new Set((existing || []).map(t => `${t.title}|${t.category}|${t.frequency}`));
+    const toInsert = SEED_TASKS.filter(t => !existingSet.has(`${t.title}|${t.category}|${t.frequency}`));
+    if (toInsert.length === 0) {
+      alert('All tasks already exist — nothing new to seed.');
+      setSeeding(false);
+      return;
+    }
+    for (let i = 0; i < toInsert.length; i += 50) {
+      const chunk = toInsert.slice(i, i + 50);
+      await supabase.from('tasks_definitions').insert(chunk.map(t => ({ ...t, status: 'published', created_by: userId })));
+    }
+    alert(`Seeded ${toInsert.length} tasks successfully.`);
+    setSeeding(false);
+    fetchAll();
+  }
+
   const assignedIds = new Set(myAssignments.map(a => a.task_definition_id));
 
   const visibleRecurTasks = recurTasks.filter(t =>
@@ -249,6 +291,17 @@ export default function Tasks({ userRole, userId, profile }) {
     (recurSearch === '' || t.title.toLowerCase().includes(recurSearch.toLowerCase())) &&
     (canManage || assignedIds.has(t.id))
   );
+
+  // Group by group_name preserving sort_order
+  const visibleGroups = (() => {
+    const map = new Map();
+    for (const task of visibleRecurTasks) {
+      const key = task.group_name || '';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(task);
+    }
+    return [...map.entries()];
+  })();
 
   const completedCount = visibleRecurTasks.filter(t => responses[t.id]?.response).length;
   const assignedCount = visibleRecurTasks.filter(t => assignments[t.id]).length;
@@ -289,10 +342,20 @@ export default function Tasks({ userRole, userId, profile }) {
     await supabase.from('sporadic_tasks').update({ status: 'in_progress' }).eq('id', taskId);
   }
 
+  function handleSporNotes(taskId, value) {
+    setSporResponses(p => ({ ...p, [taskId]: { ...p[taskId], notes: value } }));
+  }
+
   async function handleSubmitSporadic(task) {
     const response = sporResponses[task.id];
     if (!response?.response) { alert('Please provide a response before submitting.'); return; }
-    await supabase.from('sporadic_tasks').update({ status: 'submitted', response: response.response, photo_url: response.photo_url || null, submitted_at: new Date().toISOString() }).eq('id', task.id);
+    await supabase.from('sporadic_tasks').update({
+      status: 'submitted',
+      response: response.response,
+      notes: response.notes || null,
+      photo_url: response.photo_url || null,
+      submitted_at: new Date().toISOString(),
+    }).eq('id', task.id);
     await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/sporadic-submitted`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ taskTitle: task.title, memberName: profile?.full_name, response: response.response, assignedByName: task.assigner?.full_name }),
@@ -332,18 +395,26 @@ export default function Tasks({ userRole, userId, profile }) {
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Tasks</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>Lab responsibilities and one-off assignments</p>
         </div>
-        {canManage && (
-          <button onClick={() => tab === 'recurring' ? setShowRecurForm(true) : setShowSporForm(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px' }}>
-            <Plus size={16} /> {tab === 'recurring' ? 'Add Task' : 'New One-off'}
-          </button>
-        )}
-        {!canManage && tab === 'one-off' && (
-          <button onClick={() => setShowSporForm(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px' }}>
-            <Plus size={16} /> Request Task
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {canManage && (
+            <button onClick={handleSeedTasks} disabled={seeding}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', background: seeding ? 'var(--border)' : 'var(--bg-primary)', color: seeding ? 'var(--text-muted)' : 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px' }}>
+              <Database size={14} /> {seeding ? 'Seeding…' : 'Seed Tasks'}
+            </button>
+          )}
+          {canManage && (
+            <button onClick={() => tab === 'recurring' ? setShowRecurForm(true) : setShowSporForm(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px' }}>
+              <Plus size={16} /> {tab === 'recurring' ? 'Add Task' : 'New One-off'}
+            </button>
+          )}
+          {!canManage && tab === 'one-off' && (
+            <button onClick={() => setShowSporForm(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px' }}>
+              <Plus size={16} /> Request Task
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Tab bar */}
@@ -374,9 +445,10 @@ export default function Tasks({ userRole, userId, profile }) {
               ))}
             </div>
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              {['daily', 'weekly', 'biweekly', 'monthly', 'yearly'].map(freq => {
+              {ALL_FREQS.map(freq => {
                 const c = FREQ_COLORS[freq];
                 const count = recurTasks.filter(t => t.frequency === freq && t.category === recurCategory && (canManage || assignedIds.has(t.id))).length;
+                if (!canManage && count === 0) return null;
                 return (
                   <button key={freq} onClick={() => setRecurFreq(freq)} style={{ padding: '7px 14px', borderRadius: 'var(--radius-md)', border: `1px solid ${recurFreq === freq ? c.border : 'var(--border)'}`, background: recurFreq === freq ? c.bg : 'var(--bg-primary)', color: recurFreq === freq ? c.text : 'var(--text-secondary)', fontWeight: recurFreq === freq ? 600 : 400, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Clock size={12} />
@@ -437,104 +509,157 @@ export default function Tasks({ userRole, userId, profile }) {
             </div>
           ) : (
             <>
-              {visibleRecurTasks.map(task => {
-                const resp = responses[task.id];
-                const isNo = resp?.response === 'no';
-                const done = resp?.response === 'yes' || resp?.response === 'checked';
-                const isEdit = editingId === task.id;
-
-                return (
-                  <div key={task.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '8px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px' }}>
-                      {/* Response buttons */}
-                      <div style={{ display: 'flex', gap: '5px', flexShrink: 0, marginTop: '2px' }}>
-                        {(task.response_type === 'yes_no' || task.response_type === 'yes_no_na') ? (
-                          <>
-                            <button onClick={() => handleResponse(task.id, 'yes')} title="Yes" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'yes' ? 'var(--success)' : 'var(--border)', background: resp?.response === 'yes' ? 'var(--success)' : 'transparent', color: resp?.response === 'yes' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CheckCircle size={13} /></button>
-                            <button onClick={() => handleResponse(task.id, 'no')} title="No" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'no' ? 'var(--danger)' : 'var(--border)', background: resp?.response === 'no' ? 'var(--danger)' : 'transparent', color: resp?.response === 'no' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><XCircle size={13} /></button>
-                            {task.response_type === 'yes_no_na' && <button onClick={() => handleResponse(task.id, 'na')} style={{ padding: '0 7px', height: '26px', borderRadius: '13px', border: '2px solid', borderColor: resp?.response === 'na' ? 'var(--text-muted)' : 'var(--border)', background: resp?.response === 'na' ? 'var(--text-muted)' : 'transparent', color: resp?.response === 'na' ? 'white' : 'var(--text-muted)', fontSize: '10px', fontWeight: 600 }}>N/A</button>}
-                          </>
-                        ) : task.response_type === 'checkbox' ? (
-                          <button onClick={() => handleResponse(task.id, resp?.response === 'checked' ? '' : 'checked')} style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid', borderColor: resp?.response === 'checked' ? 'var(--purple-primary)' : 'var(--border)', background: resp?.response === 'checked' ? 'var(--purple-primary)' : 'transparent', color: resp?.response === 'checked' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CheckCircle size={13} /></button>
-                        ) : (
-                          <label style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                            <Upload size={13} />
-                            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handlePhotoUpload(task.id, e.target.files[0])} />
-                          </label>
-                        )}
-                      </div>
-
-                      {/* Title + meta */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', lineHeight: 1.5, margin: 0 }}>{task.title}</p>
-                        {task.sop_trigger && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px', padding: '2px 7px', background: '#FEF0F0', color: 'var(--danger)', borderRadius: '12px', fontSize: '10px', fontWeight: 600 }}><AlertTriangle size={9} /> SOP</span>}
-                        {existingResponses[task.id] && (
-                          <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
-                            <span style={{ color: 'var(--success)' }}>✓</span> Done by {existingResponses[task.id].assignment?.profile?.full_name || '?'} on {new Date(existingResponses[task.id].responded_at).toLocaleDateString()}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* PM: assign dropdown */}
-                      {canManage && !isEdit && (
-                        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
-                          <div style={{ position: 'relative' }}>
-                            <User size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                            <ChevronDown size={12} style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                            <select value={assignments[task.id] || ''} onChange={e => handleAssign(task.id, e.target.value)} style={{ padding: '5px 26px 5px 24px', border: `1px solid ${vacWarn[task.id] ? '#F39C12' : assignments[task.id] ? 'var(--purple-primary)' : 'var(--border)'}`, borderRadius: 'var(--radius-sm)', background: assignments[task.id] ? 'var(--purple-faint)' : 'var(--bg-primary)', color: assignments[task.id] ? 'var(--purple-primary)' : 'var(--text-muted)', fontSize: '12px', outline: 'none', appearance: 'none', minWidth: '140px' }}>
-                              <option value="">Assign…</option>
-                              {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
-                            </select>
-                          </div>
-                          {vacWarn[task.id] && <span style={{ fontSize: '10px', color: '#F39C12' }}>On vac {vacWarn[task.id].vacStart}–{vacWarn[task.id].vacEnd}</span>}
-                          <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
-                            <button onClick={() => { setEditingId(task.id); setEditingTask({ ...task }); }} style={{ padding: '3px 8px', fontSize: '11px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)' }}>Edit</button>
-                            <button onClick={() => handleDeactivate(task.id)} style={{ padding: '3px 8px', fontSize: '11px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)' }}>Deactivate</button>
-                          </div>
-                        </div>
-                      )}
+              {visibleGroups.map(([groupName, tasks]) => (
+                <div key={groupName || 'ungrouped'} style={{ marginBottom: '4px' }}>
+                  {groupName && (
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '10px 2px 5px', borderBottom: '1px solid var(--border)', marginBottom: '6px' }}>
+                      {groupName}
                     </div>
+                  )}
+                  {tasks.map(task => {
+                    const resp = responses[task.id];
+                    const isNo = resp?.response === 'no';
+                    const done = resp?.response === 'yes' || resp?.response === 'checked';
+                    const isEdit = editingId === task.id;
 
-                    {/* Inline edit */}
-                    {isEdit && editingTask && (
-                      <div style={{ margin: '0 14px 12px', padding: '12px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--purple-border)' }}>
-                        <textarea value={editingTask.title} onChange={e => setEditingTask(p => ({ ...p, title: e.target.value }))} rows={2} style={{ width: '100%', padding: '8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', marginBottom: '8px', boxSizing: 'border-box', resize: 'vertical' }} />
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                          {[
-                            { key: 'category', opts: ['MISC', 'PM'] },
-                            { key: 'frequency', opts: ['daily', 'weekly', 'biweekly', 'monthly', 'yearly'] },
-                            { key: 'response_type', opts: ['yes_no', 'yes_no_na', 'checkbox', 'photo'] },
-                          ].map(({ key, opts }) => (
-                            <select key={key} value={editingTask[key]} onChange={e => setEditingTask(p => ({ ...p, [key]: e.target.value }))}
-                              style={{ padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px' }}>
-                              {opts.map(o => <option key={o} value={o}>{o}</option>)}
-                            </select>
-                          ))}
-                          <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}>
-                            <input type="checkbox" checked={editingTask.sop_trigger} onChange={e => setEditingTask(p => ({ ...p, sop_trigger: e.target.checked }))} /> SOP
-                          </label>
+                    if (task.response_type === 'placeholder') {
+                      return (
+                        <div key={task.id} style={{ padding: '8px 14px', color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>
+                          Tasks to be defined.
                         </div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <button onClick={() => handleSaveEdit(task.id)} style={{ padding: '5px 14px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '12px', fontWeight: 600 }}>Save</button>
-                          <button onClick={() => { setEditingId(null); setEditingTask(null); }} style={{ padding: '5px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '12px' }}>Cancel</button>
-                        </div>
-                      </div>
-                    )}
+                      );
+                    }
 
-                    {/* SOP conditional panel */}
-                    {isNo && task.conditional_text && (
-                      <div style={{ padding: '10px 14px', background: '#FEF0F0', borderTop: '1px solid #FADBD8' }}>
-                        <p style={{ fontSize: '12px', color: 'var(--danger)', fontWeight: 500, marginBottom: '8px' }}><AlertTriangle size={11} style={{ marginRight: '5px', verticalAlign: 'middle' }} />{task.conditional_text}</p>
-                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '5px 10px', background: 'white', border: '1px solid var(--danger)', borderRadius: 'var(--radius-sm)', color: 'var(--danger)', fontSize: '12px', cursor: 'pointer' }}>
-                          <Upload size={11} /> Upload Photo
-                          <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handlePhotoUpload(task.id, e.target.files[0], true)} />
-                        </label>
-                        {resp?.sop_photo_url && <span style={{ marginLeft: '8px', fontSize: '11px', color: 'var(--success)' }}>Photo uploaded</span>}
+                    return (
+                      <div key={task.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px' }}>
+                          {/* Response buttons */}
+                          <div style={{ display: 'flex', gap: '5px', flexShrink: 0, marginTop: '2px' }}>
+                            {(task.response_type === 'yes_no' || task.response_type === 'yes_no_na') ? (
+                              <>
+                                <button onClick={() => handleResponse(task.id, 'yes')} title="Yes" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'yes' ? 'var(--success)' : 'var(--border)', background: resp?.response === 'yes' ? 'var(--success)' : 'transparent', color: resp?.response === 'yes' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CheckCircle size={13} /></button>
+                                <button onClick={() => handleResponse(task.id, 'no')} title="No" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'no' ? 'var(--danger)' : 'var(--border)', background: resp?.response === 'no' ? 'var(--danger)' : 'transparent', color: resp?.response === 'no' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><XCircle size={13} /></button>
+                                {task.response_type === 'yes_no_na' && <button onClick={() => handleResponse(task.id, 'na')} style={{ padding: '0 7px', height: '26px', borderRadius: '13px', border: '2px solid', borderColor: resp?.response === 'na' ? 'var(--text-muted)' : 'var(--border)', background: resp?.response === 'na' ? 'var(--text-muted)' : 'transparent', color: resp?.response === 'na' ? 'white' : 'var(--text-muted)', fontSize: '10px', fontWeight: 600 }}>N/A</button>}
+                              </>
+                            ) : task.response_type === 'checkbox' ? (
+                              <button onClick={() => handleResponse(task.id, resp?.response === 'checked' ? '' : 'checked')} style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid', borderColor: resp?.response === 'checked' ? 'var(--purple-primary)' : 'var(--border)', background: resp?.response === 'checked' ? 'var(--purple-primary)' : 'transparent', color: resp?.response === 'checked' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CheckCircle size={13} /></button>
+                            ) : (
+                              <label style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                                <Upload size={13} />
+                                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handlePhotoUpload(task.id, e.target.files[0])} />
+                              </label>
+                            )}
+                          </div>
+
+                          {/* Title + meta + notes */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', lineHeight: 1.5, margin: 0 }}>{task.title}</p>
+                            {task.sop_trigger && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px', padding: '2px 7px', background: '#FEF0F0', color: 'var(--danger)', borderRadius: '12px', fontSize: '10px', fontWeight: 600 }}><AlertTriangle size={9} /> SOP</span>}
+                            {existingResponses[task.id] && (
+                              <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                                <span style={{ color: 'var(--success)' }}>✓</span> Done by {existingResponses[task.id].assignment?.profile?.full_name || '?'} on {new Date(existingResponses[task.id].responded_at).toLocaleDateString()}
+                              </div>
+                            )}
+                            {resp?.response && (
+                              <textarea
+                                value={resp?.notes || ''}
+                                onChange={e => handleNotes(task.id, e.target.value)}
+                                placeholder="Notes (optional)"
+                                rows={1}
+                                style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }}
+                              />
+                            )}
+                          </div>
+
+                          {/* PM: assign dropdown */}
+                          {canManage && !isEdit && (
+                            <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
+                              <div style={{ position: 'relative' }}>
+                                <User size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                                <ChevronDown size={12} style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                                <select value={assignments[task.id] || ''} onChange={e => handleAssign(task.id, e.target.value)} style={{ padding: '5px 26px 5px 24px', border: `1px solid ${vacWarn[task.id] ? '#F39C12' : assignments[task.id] ? 'var(--purple-primary)' : 'var(--border)'}`, borderRadius: 'var(--radius-sm)', background: assignments[task.id] ? 'var(--purple-faint)' : 'var(--bg-primary)', color: assignments[task.id] ? 'var(--purple-primary)' : 'var(--text-muted)', fontSize: '12px', outline: 'none', appearance: 'none', minWidth: '140px' }}>
+                                  <option value="">Assign…</option>
+                                  {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
+                                </select>
+                              </div>
+                              {vacWarn[task.id] && <span style={{ fontSize: '10px', color: '#F39C12' }}>On vac {vacWarn[task.id].vacStart}–{vacWarn[task.id].vacEnd}</span>}
+                              <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
+                                <button onClick={() => { setEditingId(task.id); setEditingTask({ ...task }); }} style={{ padding: '3px 8px', fontSize: '11px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)' }}>Edit</button>
+                                <button onClick={() => handleDeactivate(task.id)} style={{ padding: '3px 8px', fontSize: '11px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)' }}>Deactivate</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Inline edit */}
+                        {isEdit && editingTask && (
+                          <div style={{ margin: '0 14px 12px', padding: '12px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--purple-border)' }}>
+                            <textarea value={editingTask.title} onChange={e => setEditingTask(p => ({ ...p, title: e.target.value }))} rows={2} style={{ width: '100%', padding: '8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', marginBottom: '8px', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }} />
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                              {[
+                                { key: 'category', opts: ['MISC', 'PM'] },
+                                { key: 'frequency', opts: ALL_FREQS },
+                                { key: 'response_type', opts: ['yes_no', 'yes_no_na', 'checkbox', 'photo'] },
+                              ].map(({ key, opts }) => (
+                                <select key={key} value={editingTask[key]} onChange={e => setEditingTask(p => ({ ...p, [key]: e.target.value }))}
+                                  style={{ padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px' }}>
+                                  {opts.map(o => <option key={o} value={o}>{o}</option>)}
+                                </select>
+                              ))}
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}>
+                                <input type="checkbox" checked={editingTask.sop_trigger} onChange={e => setEditingTask(p => ({ ...p, sop_trigger: e.target.checked }))} /> SOP
+                              </label>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                              <input value={editingTask.group_name || ''} onChange={e => setEditingTask(p => ({ ...p, group_name: e.target.value }))} placeholder="Group name" style={{ flex: 1, padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', outline: 'none' }} />
+                              <input type="number" value={editingTask.sort_order || 0} onChange={e => setEditingTask(p => ({ ...p, sort_order: parseInt(e.target.value) || 0 }))} placeholder="Order" style={{ width: '70px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', outline: 'none' }} />
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button onClick={() => handleSaveEdit(task.id)} style={{ padding: '5px 14px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '12px', fontWeight: 600 }}>Save</button>
+                              <button onClick={() => { setEditingId(null); setEditingTask(null); }} style={{ padding: '5px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '12px' }}>Cancel</button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* SOP conditional panel */}
+                        {isNo && task.sop_trigger && task.conditional_text && (
+                          <div style={{ padding: '10px 14px', background: '#FEF0F0', borderTop: '1px solid #FADBD8' }}>
+                            <p style={{ fontSize: '12px', color: 'var(--danger)', fontWeight: 500, marginBottom: '8px' }}><AlertTriangle size={11} style={{ marginRight: '5px', verticalAlign: 'middle' }} />{task.conditional_text}</p>
+                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '5px 10px', background: 'white', border: '1px solid var(--danger)', borderRadius: 'var(--radius-sm)', color: 'var(--danger)', fontSize: '12px', cursor: 'pointer' }}>
+                              <Upload size={11} /> Upload Photo
+                              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handlePhotoUpload(task.id, e.target.files[0], true)} />
+                            </label>
+                            {resp?.sop_photo_url && <span style={{ marginLeft: '8px', fontSize: '11px', color: 'var(--success)' }}>Photo uploaded</span>}
+                          </div>
+                        )}
+                        {task.sub_items?.length > 0 && (() => {
+                          const subOnYes = task.conditional_text === 'on_yes';
+                          const showSub = subOnYes ? resp?.response === 'yes' : resp?.response === 'no';
+                          if (!showSub) return null;
+                          return (
+                            <div style={{ padding: '10px 14px', background: '#FFF8F0', borderTop: '1px solid #FAD7A0' }}>
+                              <p style={{ fontSize: '11px', fontWeight: 600, color: '#D35400', marginBottom: '8px' }}>
+                                {subOnYes ? 'Confirm all steps were completed:' : 'Check all that apply (at least one required):'}
+                              </p>
+                              {task.sub_items.map((item, i) => (
+                                <label key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '6px', cursor: 'pointer' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={resp?.conditional_checks?.includes(item) || false}
+                                    onChange={e => handleConditionalCheck(task.id, item, e.target.checked)}
+                                    style={{ marginTop: '2px', accentColor: '#D35400', flexShrink: 0 }}
+                                  />
+                                  <span style={{ fontSize: '12px', color: '#1A1A2E', lineHeight: 1.4 }}>{item}</span>
+                                </label>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              ))}
 
               <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
                 <button onClick={handleSubmitChecklist} disabled={submitting} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '11px 22px', background: submitted ? 'var(--success)' : 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '14px' }}>
@@ -606,24 +731,35 @@ export default function Tasks({ userRole, userId, profile }) {
                 </div>
 
                 {isAssigned && task.status !== 'submitted' && task.status !== 'requested' && task.status !== 'denied' && (
-                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '10px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    {(task.response_type === 'yes_no' || task.response_type === 'yes_no_na') ? (
-                      <>
-                        <button onClick={() => handleSporResponse(task.id, 'yes')} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', borderRadius: 'var(--radius-md)', border: '2px solid', borderColor: resp?.response === 'yes' ? 'var(--success)' : 'var(--border)', background: resp?.response === 'yes' ? 'var(--success)' : 'transparent', color: resp?.response === 'yes' ? 'white' : 'var(--text-muted)', fontSize: '12px' }}><CheckCircle size={13} /> Yes</button>
-                        <button onClick={() => handleSporResponse(task.id, 'no')} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', borderRadius: 'var(--radius-md)', border: '2px solid', borderColor: resp?.response === 'no' ? 'var(--danger)' : 'var(--border)', background: resp?.response === 'no' ? 'var(--danger)' : 'transparent', color: resp?.response === 'no' ? 'white' : 'var(--text-muted)', fontSize: '12px' }}><XCircle size={13} /> No</button>
-                        {task.response_type === 'yes_no_na' && <button onClick={() => handleSporResponse(task.id, 'na')} style={{ padding: '5px 12px', borderRadius: 'var(--radius-md)', border: '2px solid', borderColor: resp?.response === 'na' ? 'var(--text-muted)' : 'var(--border)', background: resp?.response === 'na' ? 'var(--text-muted)' : 'transparent', color: resp?.response === 'na' ? 'white' : 'var(--text-muted)', fontSize: '12px' }}>N/A</button>}
-                      </>
-                    ) : task.response_type === 'checkbox' ? (
-                      <button onClick={() => handleSporResponse(task.id, resp?.response === 'checked' ? '' : 'checked')} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', borderRadius: 'var(--radius-md)', border: '2px solid', borderColor: resp?.response === 'checked' ? 'var(--purple-primary)' : 'var(--border)', background: resp?.response === 'checked' ? 'var(--purple-primary)' : 'transparent', color: resp?.response === 'checked' ? 'white' : 'var(--text-muted)', fontSize: '12px' }}><CheckCircle size={13} /> Mark Complete</button>
-                    ) : (
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer' }}>
-                        <Upload size={13} /> Upload Photo
-                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleSporPhoto(task.id, e.target.files[0])} />
-                      </label>
-                    )}
-                    {resp?.photo_url && <span style={{ fontSize: '11px', color: 'var(--success)' }}><CheckCircle size={11} style={{ verticalAlign: 'middle' }} /> Photo ready</span>}
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: resp?.response ? '8px' : '0' }}>
+                      {(task.response_type === 'yes_no' || task.response_type === 'yes_no_na') ? (
+                        <>
+                          <button onClick={() => handleSporResponse(task.id, 'yes')} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', borderRadius: 'var(--radius-md)', border: '2px solid', borderColor: resp?.response === 'yes' ? 'var(--success)' : 'var(--border)', background: resp?.response === 'yes' ? 'var(--success)' : 'transparent', color: resp?.response === 'yes' ? 'white' : 'var(--text-muted)', fontSize: '12px' }}><CheckCircle size={13} /> Yes</button>
+                          <button onClick={() => handleSporResponse(task.id, 'no')} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', borderRadius: 'var(--radius-md)', border: '2px solid', borderColor: resp?.response === 'no' ? 'var(--danger)' : 'var(--border)', background: resp?.response === 'no' ? 'var(--danger)' : 'transparent', color: resp?.response === 'no' ? 'white' : 'var(--text-muted)', fontSize: '12px' }}><XCircle size={13} /> No</button>
+                          {task.response_type === 'yes_no_na' && <button onClick={() => handleSporResponse(task.id, 'na')} style={{ padding: '5px 12px', borderRadius: 'var(--radius-md)', border: '2px solid', borderColor: resp?.response === 'na' ? 'var(--text-muted)' : 'var(--border)', background: resp?.response === 'na' ? 'var(--text-muted)' : 'transparent', color: resp?.response === 'na' ? 'white' : 'var(--text-muted)', fontSize: '12px' }}>N/A</button>}
+                        </>
+                      ) : task.response_type === 'checkbox' ? (
+                        <button onClick={() => handleSporResponse(task.id, resp?.response === 'checked' ? '' : 'checked')} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', borderRadius: 'var(--radius-md)', border: '2px solid', borderColor: resp?.response === 'checked' ? 'var(--purple-primary)' : 'var(--border)', background: resp?.response === 'checked' ? 'var(--purple-primary)' : 'transparent', color: resp?.response === 'checked' ? 'white' : 'var(--text-muted)', fontSize: '12px' }}><CheckCircle size={13} /> Mark Complete</button>
+                      ) : (
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer' }}>
+                          <Upload size={13} /> Upload Photo
+                          <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleSporPhoto(task.id, e.target.files[0])} />
+                        </label>
+                      )}
+                      {resp?.photo_url && <span style={{ fontSize: '11px', color: 'var(--success)' }}><CheckCircle size={11} style={{ verticalAlign: 'middle' }} /> Photo ready</span>}
+                      {resp?.response && (
+                        <button onClick={() => handleSubmitSporadic(task)} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '12px', fontWeight: 600, marginLeft: 'auto' }}><Send size={13} /> Submit</button>
+                      )}
+                    </div>
                     {resp?.response && (
-                      <button onClick={() => handleSubmitSporadic(task)} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '12px', fontWeight: 600, marginLeft: 'auto' }}><Send size={13} /> Submit</button>
+                      <textarea
+                        value={resp?.notes || ''}
+                        onChange={e => handleSporNotes(task.id, e.target.value)}
+                        placeholder="Notes (optional)"
+                        rows={1}
+                        style={{ width: '100%', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }}
+                      />
                     )}
                   </div>
                 )}
@@ -640,6 +776,7 @@ export default function Tasks({ userRole, userId, profile }) {
                   <div style={{ borderTop: '1px solid var(--border)', paddingTop: '10px', display: 'flex', alignItems: 'center', gap: '5px' }}>
                     <CheckCircle size={13} color="var(--success)" />
                     <span style={{ fontSize: '12px', color: 'var(--success)', fontWeight: 500 }}>Completed — Response: {task.response}</span>
+                    {task.notes && <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginLeft: '8px' }}>· {task.notes}</span>}
                   </div>
                 )}
               </div>
@@ -651,16 +788,16 @@ export default function Tasks({ userRole, userId, profile }) {
       {/* ─── ADD RECURRING MODAL ────────────────────────────────────── */}
       {showRecurForm && canManage && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
-          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '520px', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '520px', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)', maxHeight: '90vh', overflowY: 'auto' }}>
             <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>Add Recurring Task</h2>
             <div style={{ marginBottom: '14px' }}>
               <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '5px', textTransform: 'uppercase' }}>Description</label>
-              <textarea value={newRecur.title} onChange={e => setNewRecur(p => ({ ...p, title: e.target.value }))} rows={3} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
+              <textarea value={newRecur.title} onChange={e => setNewRecur(p => ({ ...p, title: e.target.value }))} rows={3} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
             </div>
             <div style={{ display: 'flex', gap: '12px', marginBottom: '14px' }}>
               {[
                 { label: 'Category', key: 'category', opts: ['MISC', 'PM'] },
-                { label: 'Frequency', key: 'frequency', opts: ['daily', 'weekly', 'biweekly', 'monthly', 'yearly'] },
+                { label: 'Frequency', key: 'frequency', opts: ALL_FREQS },
                 { label: 'Response', key: 'response_type', opts: ['yes_no', 'yes_no_na', 'checkbox', 'photo'] },
               ].map(({ label, key, opts }) => (
                 <div key={key} style={{ flex: 1 }}>
@@ -671,14 +808,24 @@ export default function Tasks({ userRole, userId, profile }) {
                 </div>
               ))}
             </div>
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '14px' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '5px', textTransform: 'uppercase' }}>Group Name</label>
+                <input value={newRecur.group_name} onChange={e => setNewRecur(p => ({ ...p, group_name: e.target.value }))} placeholder="e.g. Morning Lab Check" style={{ width: '100%', padding: '9px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ width: '80px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '5px', textTransform: 'uppercase' }}>Order</label>
+                <input type="number" value={newRecur.sort_order} onChange={e => setNewRecur(p => ({ ...p, sort_order: parseInt(e.target.value) || 0 }))} style={{ width: '100%', padding: '9px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
               <input type="checkbox" id="sop-new" checked={newRecur.sop_trigger} onChange={e => setNewRecur(p => ({ ...p, sop_trigger: e.target.checked }))} style={{ width: '15px', height: '15px', accentColor: 'var(--purple-primary)' }} />
-              <label htmlFor="sop-new" style={{ fontSize: '13px', fontWeight: 500 }}>SOP Trigger</label>
+              <label htmlFor="sop-new" style={{ fontSize: '13px', fontWeight: 500 }}>SOP Trigger (requires photo when marked No)</label>
             </div>
             {newRecur.sop_trigger && (
               <div style={{ marginBottom: '14px' }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '5px', textTransform: 'uppercase' }}>Conditional text (shown when marked No)</label>
-                <textarea value={newRecur.conditional_text} onChange={e => setNewRecur(p => ({ ...p, conditional_text: e.target.value }))} rows={2} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
+                <textarea value={newRecur.conditional_text} onChange={e => setNewRecur(p => ({ ...p, conditional_text: e.target.value }))} rows={2} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
               </div>
             )}
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
@@ -700,7 +847,7 @@ export default function Tasks({ userRole, userId, profile }) {
             </div>
             <div style={{ marginBottom: '14px' }}>
               <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '5px', textTransform: 'uppercase' }}>Description (optional)</label>
-              <textarea value={newSpor.description} onChange={e => setNewSpor(p => ({ ...p, description: e.target.value }))} rows={2} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
+              <textarea value={newSpor.description} onChange={e => setNewSpor(p => ({ ...p, description: e.target.value }))} rows={2} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
             </div>
             <div style={{ display: 'flex', gap: '12px', marginBottom: '14px' }}>
               <div style={{ flex: 1 }}>

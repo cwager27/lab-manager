@@ -31,6 +31,7 @@ router.post('/submit-checklist', async (req, res) => {
         assignment_id: assignmentId || null,
         task_definition_id: response.taskId,
         response: response.response,
+        notes: response.notes || null,
         conditional_response: response.conditionalResponse || null,
         photo_url: response.photoUrl || null,
         sop_photo_url: response.sopPhotoUrl || null,
@@ -56,7 +57,10 @@ router.post('/submit-checklist', async (req, res) => {
 
     const responseRows = responses.map(r => `
       <tr style="border-bottom: 1px solid #e8e4f0;">
-        <td style="padding: 10px 12px; font-size: 13px; color: #1A1A2E;">${r.taskTitle}</td>
+        <td style="padding: 10px 12px; font-size: 13px; color: #1A1A2E;">
+          ${r.taskTitle}
+          ${r.notes ? `<div style="font-size: 11px; color: #9A9AB0; margin-top: 3px;">Note: ${r.notes}</div>` : ''}
+        </td>
         <td style="padding: 10px 12px; text-align: center;">
           <span style="padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;
             background: ${r.response === 'yes' || r.response === 'checked' ? '#EAF7F0' : r.response === 'no' ? '#FEF0F0' : '#F5F5F5'};
