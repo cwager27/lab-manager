@@ -62,7 +62,8 @@ export default function Tasks({ userRole, userId, profile }) {
   const [recurFreq, setRecurFreq] = useState('daily');
   const [recurSearch, setRecurSearch] = useState('');
   const [cycleStart, setCycleStart] = useState(new Date().toISOString().split('T')[0]);
-  const [assignments, setAssignments] = useState({});
+  const [assignments, setAssignments] = useState({});   // { [taskId]: [{type,id?,name,email}] }
+  const [otherInputs, setOtherInputs] = useState({});   // { [taskId]: {show,name,email} }
   const [vacWarn, setVacWarn] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -72,6 +73,8 @@ export default function Tasks({ userRole, userId, profile }) {
   const [newRecur, setNewRecur] = useState(EMPTY_RECURRING);
   const [sendingAssign, setSendingAssign] = useState(false);
   const [assignSent, setAssignSent] = useState(false);
+  const [assignAllOther, setAssignAllOther] = useState({ show: false, name: '', email: '' });
+  const [hiddenAssignAll, setHiddenAssignAll] = useState(new Set());
   const [seeding, setSeeding] = useState(false);
 
   // sporadic
@@ -80,6 +83,7 @@ export default function Tasks({ userRole, userId, profile }) {
   const [sporResponses, setSporResponses] = useState({});
   const [showSporForm, setShowSporForm] = useState(false);
   const [newSpor, setNewSpor] = useState(EMPTY_SPORADIC);
+  const [labContacts, setLabContacts] = useState([]);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -90,6 +94,7 @@ export default function Tasks({ userRole, userId, profile }) {
       { data: sporData },
       { data: memberData },
       { data: vacData },
+      { data: contactData },
     ] = await Promise.all([
       supabase.from('tasks_definitions').select('*').eq('status', 'published').order('category').order('frequency').order('sort_order'),
       supabase.from('task_assignments').select('*').eq('assigned_to', userId).eq('status', 'pending'),
@@ -103,6 +108,7 @@ export default function Tasks({ userRole, userId, profile }) {
       })(),
       supabase.from('profiles').select('*').order('full_name'),
       supabase.from('vacation_requests').select('*').eq('status', 'approved'),
+      supabase.from('lab_contacts').select('id, full_name, email, phone, title').order('full_name'),
     ]);
 
     const respMap = {};
@@ -116,6 +122,7 @@ export default function Tasks({ userRole, userId, profile }) {
     setSporTasks(sporData || []);
     setMembers(memberData || []);
     setVacations(vacData || []);
+    setLabContacts(contactData || []);
     setLoading(false);
   }, [userId, canManage]);
 
@@ -142,24 +149,58 @@ export default function Tasks({ userRole, userId, profile }) {
     return null;
   }
 
-  function handleAssign(taskId, memberId) {
-    if (!memberId) { setAssignments(p => ({ ...p, [taskId]: '' })); return; }
+  function addMemberAssignee(taskId, memberId) {
+    if (memberId === '__other__') {
+      setOtherInputs(p => ({ ...p, [taskId]: { show: true, name: '', email: '' } }));
+      return;
+    }
+    const m = members.find(m => m.id === memberId);
+    if (!m) return;
     const task = recurTasks.find(t => t.id === taskId);
     const cycleEnd = getCycleEnd(cycleStart, task?.frequency);
     const conflict = getVacConflict(memberId, task?.frequency, cycleStart, cycleEnd);
     if (conflict?.type === 'block') {
-      alert(`This member is on vacation ${conflict.vacStart}–${conflict.vacEnd}. Choose someone else.`);
+      alert(`${m.full_name} is on vacation ${conflict.vacStart}–${conflict.vacEnd}. Choose someone else.`);
       return;
     }
-    setAssignments(p => ({ ...p, [taskId]: memberId }));
-    setVacWarn(p => ({ ...p, [taskId]: conflict?.type === 'warn' ? conflict : null }));
+    if (conflict?.type === 'warn') setVacWarn(p => ({ ...p, [taskId]: conflict }));
+    setAssignments(p => {
+      const current = p[taskId] || [];
+      if (current.some(a => a.id === memberId)) return p;
+      return { ...p, [taskId]: [...current, { type: 'member', id: memberId, name: m.full_name, email: m.email }] };
+    });
+  }
+
+  function addOtherAssignee(taskId) {
+    const inp = otherInputs[taskId];
+    if (!inp?.name?.trim()) { alert('Please enter a name.'); return; }
+    setAssignments(p => {
+      const current = p[taskId] || [];
+      return { ...p, [taskId]: [...current, { type: 'other', name: inp.name.trim(), email: inp.email?.trim() || '' }] };
+    });
+    setOtherInputs(p => ({ ...p, [taskId]: { show: false, name: '', email: '' } }));
+  }
+
+  function removeAssignee(taskId, index) {
+    setAssignments(p => ({ ...p, [taskId]: (p[taskId] || []).filter((_, i) => i !== index) }));
   }
 
   function assignAllTo(memberId) {
+    const m = members.find(m => m.id === memberId);
+    if (!m) return;
     const filtered = recurTasks.filter(t => t.frequency === recurFreq && t.category === recurCategory);
     const next = {};
-    filtered.forEach(t => { next[t.id] = memberId; });
+    filtered.forEach(t => { next[t.id] = [{ type: 'member', id: memberId, name: m.full_name, email: m.email }]; });
     setAssignments(p => ({ ...p, ...next }));
+  }
+
+  function assignAllToOther() {
+    if (!assignAllOther.name.trim()) { alert('Please enter a name.'); return; }
+    const filtered = recurTasks.filter(t => t.frequency === recurFreq && t.category === recurCategory);
+    const next = {};
+    filtered.forEach(t => { next[t.id] = [{ type: 'other', name: assignAllOther.name.trim(), email: assignAllOther.email.trim() }]; });
+    setAssignments(p => ({ ...p, ...next }));
+    setAssignAllOther({ show: false, name: '', email: '' });
   }
 
   function handleResponse(taskId, value) {
@@ -180,24 +221,30 @@ export default function Tasks({ userRole, userId, profile }) {
 
   async function handleSendAssignments() {
     const filtered = recurTasks.filter(t => t.frequency === recurFreq && t.category === recurCategory);
-    const toAssign = filtered.filter(t => assignments[t.id]);
+    const toAssign = filtered.filter(t => (assignments[t.id] || []).length > 0);
     if (!toAssign.length) return;
     setSendingAssign(true);
     const cycleEnd = getCycleEnd(cycleStart, recurFreq);
+    const emailAssignments = [];
     for (const task of toAssign) {
-      await supabase.from('task_assignments').insert([{
-        task_definition_id: task.id, assigned_to: assignments[task.id],
-        assigned_by: userId, cycle_start: cycleStart, cycle_end: cycleEnd, status: 'pending',
-      }]);
+      for (const assignee of (assignments[task.id] || [])) {
+        if (assignee.type === 'member') {
+          await supabase.from('task_assignments').insert([{
+            task_definition_id: task.id, assigned_to: assignee.id,
+            assigned_by: userId, cycle_start: cycleStart, cycle_end: cycleEnd, status: 'pending',
+          }]);
+        }
+        if (assignee.email) {
+          emailAssignments.push({ memberId: assignee.id || null, memberEmail: assignee.email, memberName: assignee.name, taskTitle: task.title });
+        }
+      }
     }
-    const emailAssignments = toAssign.map(task => {
-      const m = members.find(m => m.id === assignments[task.id]);
-      return { memberId: m.id, memberEmail: m.email, memberName: m.full_name, taskTitle: task.title };
-    });
-    await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/send-assignments`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assignments: emailAssignments, cycleStart, cycleEnd, assignedBy: userId }),
-    });
+    if (emailAssignments.length > 0) {
+      await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/send-assignments`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignments: emailAssignments, cycleStart, cycleEnd, assignedBy: userId }),
+      });
+    }
     setAssignSent(true);
     setAssignments({});
     setTimeout(() => setAssignSent(false), 4000);
@@ -304,7 +351,7 @@ export default function Tasks({ userRole, userId, profile }) {
   })();
 
   const completedCount = visibleRecurTasks.filter(t => responses[t.id]?.response).length;
-  const assignedCount = visibleRecurTasks.filter(t => assignments[t.id]).length;
+  const assignedCount = visibleRecurTasks.filter(t => (assignments[t.id] || []).length > 0).length;
 
   // ── Sporadic helpers ────────────────────────────────────────────────
 
@@ -468,12 +515,48 @@ export default function Tasks({ userRole, userId, profile }) {
                 <input type="date" value={cycleStart} onChange={e => setCycleStart(e.target.value)} style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', outline: 'none' }} />
               </div>
               <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>Assign all to:</span>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {members.map(m => (
-                  <button key={m.id} onClick={() => assignAllTo(m.id)} style={{ padding: '5px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--purple-faint)', color: 'var(--purple-primary)', fontSize: '12px', fontWeight: 500 }}>
-                    {m.full_name}
-                  </button>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                {members.filter(m => !hiddenAssignAll.has(m.id)).map(m => (
+                  <div key={m.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '0', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', overflow: 'hidden' }}>
+                    <button onClick={() => assignAllTo(m.id)} style={{ padding: '5px 10px', border: 'none', background: 'var(--purple-faint)', color: 'var(--purple-primary)', fontSize: '12px', fontWeight: 500 }}>
+                      {m.full_name}
+                    </button>
+                    <button onClick={() => setHiddenAssignAll(p => new Set([...p, m.id]))} title="Remove from list" style={{ padding: '5px 6px', border: 'none', borderLeft: '1px solid var(--border)', background: 'var(--purple-faint)', color: 'var(--purple-primary)', fontSize: '13px', lineHeight: 1, cursor: 'pointer' }}>×</button>
+                  </div>
                 ))}
+                {/* Re-add hidden members */}
+                {hiddenAssignAll.size > 0 && (
+                  <select onChange={e => { if (e.target.value) { setHiddenAssignAll(p => { const n = new Set(p); n.delete(e.target.value); return n; }); e.target.value = ''; } }}
+                    style={{ padding: '5px 8px', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: '12px', outline: 'none' }}>
+                    <option value="">+ Add member…</option>
+                    {members.filter(m => hiddenAssignAll.has(m.id)).map(m => (
+                      <option key={m.id} value={m.id}>{m.full_name}</option>
+                    ))}
+                  </select>
+                )}
+                {!assignAllOther.show && (
+                  <button onClick={() => setAssignAllOther(p => ({ ...p, show: true }))} style={{ padding: '5px 10px', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 500 }}>
+                    + Other…
+                  </button>
+                )}
+                {assignAllOther.show && (
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {labContacts.length > 0 && (
+                      <select onChange={e => {
+                        const c = labContacts.find(c => String(c.id) === e.target.value);
+                        if (c) setAssignAllOther(p => ({ ...p, name: c.full_name || '', email: c.email || '' }));
+                        e.target.value = '';
+                      }} style={{ padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', background: 'var(--bg-secondary)', color: 'var(--text-primary)', outline: 'none' }}>
+                        <option value="">Select existing contact…</option>
+                        {labContacts.map(c => <option key={c.id} value={c.id}>{c.full_name}{c.title ? ` — ${c.title}` : ''}</option>)}
+                      </select>
+                    )}
+                    <input value={assignAllOther.name} onChange={e => setAssignAllOther(p => ({ ...p, name: e.target.value }))} placeholder="Name *" style={{ padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', outline: 'none', width: '120px' }} />
+                    <input value={assignAllOther.email} onChange={e => setAssignAllOther(p => ({ ...p, email: e.target.value }))} placeholder="Email (optional)" style={{ padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', outline: 'none', width: '160px' }} />
+                    <button onClick={assignAllToOther} style={{ padding: '5px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '12px', fontWeight: 600 }}>Assign all</button>
+                    <button onClick={() => setAssignAllOther({ show: false, name: '', email: '' })} style={{ padding: '5px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: '12px' }}>Cancel</button>
+                  </div>
+                )}
               </div>
               <button onClick={handleSendAssignments} disabled={sendingAssign || assignedCount === 0}
                 style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 'var(--radius-md)', border: 'none', background: assignSent ? '#27AE60' : assignedCount === 0 ? 'var(--border)' : 'var(--purple-primary)', color: assignedCount === 0 ? 'var(--text-muted)' : 'white', fontWeight: 600, fontSize: '12px' }}>
@@ -571,25 +654,60 @@ export default function Tasks({ userRole, userId, profile }) {
                             )}
                           </div>
 
-                          {/* PM: assign dropdown */}
+                          {/* PM: multi-assignee widget */}
                           {canManage && !isEdit && (
-                            <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
-                              <div style={{ position: 'relative' }}>
-                                <User size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                                <ChevronDown size={12} style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                                <select value={assignments[task.id] || ''} onChange={e => handleAssign(task.id, e.target.value)} style={{ padding: '5px 26px 5px 24px', border: `1px solid ${vacWarn[task.id] ? '#F39C12' : assignments[task.id] ? 'var(--purple-primary)' : 'var(--border)'}`, borderRadius: 'var(--radius-sm)', background: assignments[task.id] ? 'var(--purple-faint)' : 'var(--bg-primary)', color: assignments[task.id] ? 'var(--purple-primary)' : 'var(--text-muted)', fontSize: '12px', outline: 'none', appearance: 'none', minWidth: '140px' }}>
-                                  <option value="">Assign…</option>
-                                  {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
-                                </select>
-                              </div>
-                              {vacWarn[task.id] && <span style={{ fontSize: '10px', color: '#F39C12' }}>On vac {vacWarn[task.id].vacStart}–{vacWarn[task.id].vacEnd}</span>}
-                              <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
-                                <button onClick={() => { setEditingId(task.id); setEditingTask({ ...task }); }} style={{ padding: '3px 8px', fontSize: '11px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)' }}>Edit</button>
-                                <button onClick={() => handleDeactivate(task.id)} style={{ padding: '3px 8px', fontSize: '11px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)' }}>Deactivate</button>
-                              </div>
+                            <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                              <button onClick={() => { setEditingId(task.id); setEditingTask({ ...task }); }} style={{ padding: '3px 8px', fontSize: '11px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)' }}>Edit</button>
+                              <button onClick={() => handleDeactivate(task.id)} style={{ padding: '3px 8px', fontSize: '11px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)' }}>Deactivate</button>
                             </div>
                           )}
                         </div>
+
+                        {/* Assignees row — always visible to PM/admin */}
+                        {canManage && !isEdit && (
+                          <div style={{ borderTop: '1px solid var(--border)', padding: '8px 14px', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'flex-start', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, paddingTop: '4px', flexShrink: 0 }}>Assignees:</span>
+                            {/* Current tags */}
+                            {(assignments[task.id] || []).map((a, i) => (
+                              <div key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 6px 2px 10px', background: 'var(--purple-faint)', border: '1px solid var(--purple-border)', borderRadius: '12px', fontSize: '11px', color: 'var(--purple-primary)' }}>
+                                {a.name}{a.type === 'other' ? ' (ext)' : ''}
+                                <button onClick={() => removeAssignee(task.id, i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--purple-primary)', padding: '0 0 0 2px', fontSize: '14px', lineHeight: 1 }}>×</button>
+                              </div>
+                            ))}
+                            {/* Add dropdown */}
+                            <div style={{ position: 'relative' }}>
+                              <select value="" onChange={e => { addMemberAssignee(task.id, e.target.value); e.target.value = ''; }}
+                                style={{ padding: '3px 24px 3px 8px', border: '1px dashed var(--border)', borderRadius: '12px', background: 'transparent', color: 'var(--text-muted)', fontSize: '11px', outline: 'none', appearance: 'none', cursor: 'pointer' }}>
+                                <option value="">+ Add person…</option>
+                                {members.filter(m => !(assignments[task.id] || []).some(a => a.id === m.id)).map(m => (
+                                  <option key={m.id} value={m.id}>{m.full_name}</option>
+                                ))}
+                                <option value="__other__">Other (name & email)…</option>
+                              </select>
+                              <ChevronDown size={11} style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
+                            </div>
+                            {/* Other inline form */}
+                            {otherInputs[task.id]?.show && (
+                              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                {labContacts.length > 0 && (
+                                  <select onChange={e => {
+                                    const c = labContacts.find(c => String(c.id) === e.target.value);
+                                    if (c) setOtherInputs(p => ({ ...p, [task.id]: { ...p[task.id], name: c.full_name || '', email: c.email || '' } }));
+                                    e.target.value = '';
+                                  }} style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '11px', background: 'var(--bg-secondary)', color: 'var(--text-primary)', outline: 'none' }}>
+                                    <option value="">Select existing contact…</option>
+                                    {labContacts.map(c => <option key={c.id} value={c.id}>{c.full_name}{c.title ? ` — ${c.title}` : ''}</option>)}
+                                  </select>
+                                )}
+                                <input value={otherInputs[task.id]?.name || ''} onChange={e => setOtherInputs(p => ({ ...p, [task.id]: { ...p[task.id], name: e.target.value } }))} placeholder="Name *" style={{ padding: '3px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '11px', outline: 'none', width: '110px' }} />
+                                <input value={otherInputs[task.id]?.email || ''} onChange={e => setOtherInputs(p => ({ ...p, [task.id]: { ...p[task.id], email: e.target.value } }))} placeholder="Email (optional)" style={{ padding: '3px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '11px', outline: 'none', width: '150px' }} />
+                                <button onClick={() => addOtherAssignee(task.id)} style={{ padding: '3px 10px', fontSize: '11px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600 }}>Add</button>
+                                <button onClick={() => setOtherInputs(p => ({ ...p, [task.id]: { show: false } }))} style={{ padding: '3px 8px', fontSize: '11px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)' }}>Cancel</button>
+                              </div>
+                            )}
+                            {vacWarn[task.id] && <span style={{ fontSize: '10px', color: '#F39C12', paddingTop: '4px' }}>⚠ On vacation {vacWarn[task.id].vacStart}–{vacWarn[task.id].vacEnd}</span>}
+                          </div>
+                        )}
 
                         {/* Inline edit */}
                         {isEdit && editingTask && (
