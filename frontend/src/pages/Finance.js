@@ -72,6 +72,7 @@ const labReagentsMonthlyData = [
   { month: "Jun '26", value: null },
 ];
 
+
 const SUB_CHARTS = [
   { title: 'Subcapital',              data: getCatMonthlyData('Subcapital') },
   { title: 'Travel & Conferences',   data: getCatMonthlyData('Travel & Conferences') },
@@ -85,6 +86,624 @@ const SUB_CHARTS = [
   { title: 'Cores',                  data: getCatMonthlyData('Cores') },
   { title: 'Lab reagents',           data: labReagentsMonthlyData },
 ];
+
+const GRANT_NAMES = [
+  'Startup', 'Packard', 'DOD Benzene', 'Emergency Relief Packard Fund',
+  'TOV A3 Inhibitors', 'TRP Breast Specimens IHC/WGS', 'TRP Colon WGS',
+  '2026 Perlmutter Cancer Center Shared Resource Initiative Grant',
+];
+
+const ORDERS_DATA = {
+  'Startup': {
+    "Aug '25": { complete: 25054.20, processing: 0 },
+    "Sep '25": { complete: 4096.30,  processing: 0 },
+    "Oct '25": { complete: 990.26,   processing: 0 },
+    "Nov '25": { complete: 1798.55,  processing: 0 },
+    "Dec '25": { complete: 2774.38,  processing: 0 },
+    "Jan '26": { complete: 9767.80,  processing: 0 },
+    "Feb '26": { complete: 1559.49,  processing: 30000.00 },
+    "Mar '26": { complete: 3951.98,  processing: 0 },
+    "Apr '26": { complete: 8796.65,  processing: 1994.93 },
+    "May '26": { complete: 953.44,   processing: 0 },
+    "Jun '26": { complete: 0,        processing: 0 },
+  },
+  'DOD Benzene': {
+    "Aug '25": { complete: 0,        processing: 0 },
+    "Sep '25": { complete: 0,        processing: 0 },
+    "Oct '25": { complete: 2732.82,  processing: 0 },
+    "Nov '25": { complete: 8556.79,  processing: 0 },
+    "Dec '25": { complete: 4438.32,  processing: 0 },
+    "Jan '26": { complete: 1898.92,  processing: 0 },
+    "Feb '26": { complete: 1318.16,  processing: 70000.00 },
+    "Mar '26": { complete: 0,        processing: 0 },
+    "Apr '26": { complete: 10873.36, processing: 1402.81 },
+    "May '26": { complete: 552.70,   processing: 0 },
+    "Jun '26": { complete: 222.67,   processing: 408.80 },
+  },
+  'Packard': {
+    "Aug '25": { complete: 0,      processing: 0 },
+    "Sep '25": { complete: 0,      processing: 0 },
+    "Oct '25": { complete: 0,      processing: 0 },
+    "Nov '25": { complete: 0,      processing: 0 },
+    "Dec '25": { complete: 0,      processing: 0 },
+    "Jan '26": { complete: 19.99,  processing: 0 },
+    "Feb '26": { complete: 0,      processing: 0 },
+    "Mar '26": { complete: 836.89, processing: 0 },
+    "Apr '26": { complete: 77.90,  processing: 0 },
+    "May '26": { complete: 389.61, processing: 0 },
+    "Jun '26": { complete: 0,      processing: 0 },
+  },
+  'TOV A3 Inhibitors': {
+    "Aug '25": { complete: 0,       processing: 0 },
+    "Sep '25": { complete: 0,       processing: 0 },
+    "Oct '25": { complete: 3485.40, processing: 0 },
+    "Nov '25": { complete: 603.99,  processing: 0 },
+    "Dec '25": { complete: 4761.46, processing: 0 },
+    "Jan '26": { complete: 540.73,  processing: 0 },
+    "Feb '26": { complete: 108.88,  processing: 0 },
+    "Mar '26": { complete: 0,       processing: 0 },
+    "Apr '26": { complete: 0,       processing: 0 },
+    "May '26": { complete: 0,       processing: 0 },
+    "Jun '26": { complete: 0,       processing: 0 },
+  },
+  'TRP Breast Specimens IHC/WGS': {
+    "Aug '25": { complete: 0,       processing: 0 },
+    "Sep '25": { complete: 0,       processing: 0 },
+    "Oct '25": { complete: 0,       processing: 0 },
+    "Nov '25": { complete: 2803.38, processing: 0 },
+    "Dec '25": { complete: 0,       processing: 0 },
+    "Jan '26": { complete: 0,       processing: 0 },
+    "Feb '26": { complete: 0,       processing: 0 },
+    "Mar '26": { complete: 0,       processing: 0 },
+    "Apr '26": { complete: 330.00,  processing: 990.64 },
+    "May '26": { complete: 0,       processing: 0 },
+    "Jun '26": { complete: 0,       processing: 0 },
+  },
+  'TRP Colon WGS': {
+    "Aug '25": { complete: 0,        processing: 0 },
+    "Sep '25": { complete: 0,        processing: 0 },
+    "Oct '25": { complete: 13822.51, processing: 0 },
+    "Nov '25": { complete: 2694.16,  processing: 0 },
+    "Dec '25": { complete: 342.15,   processing: 0 },
+    "Jan '26": { complete: 146.27,   processing: 0 },
+    "Feb '26": { complete: 6.45,     processing: 0 },
+    "Mar '26": { complete: 773.31,   processing: 0 },
+    "Apr '26": { complete: 143.47,   processing: 0 },
+    "May '26": { complete: 0,        processing: 0 },
+    "Jun '26": { complete: 0,        processing: 0 },
+  },
+  'Emergency Relief Packard Fund': {
+    "Aug '25": { complete: 0,      processing: 0 },
+    "Sep '25": { complete: 0,      processing: 0 },
+    "Oct '25": { complete: 0,      processing: 0 },
+    "Nov '25": { complete: 0,      processing: 0 },
+    "Dec '25": { complete: 0,      processing: 0 },
+    "Jan '26": { complete: 0,      processing: 0 },
+    "Feb '26": { complete: 0,      processing: 0 },
+    "Mar '26": { complete: 0,      processing: 0 },
+    "Apr '26": { complete: 0,      processing: 0 },
+    "May '26": { complete: 0,      processing: 0 },
+    "Jun '26": { complete: 500.40, processing: 1170.72 },
+  },
+  '2026 Perlmutter Cancer Center Shared Resource Initiative Grant': {
+    "Aug '25": { complete: 0, processing: 0 },
+    "Sep '25": { complete: 0, processing: 0 },
+    "Oct '25": { complete: 0, processing: 0 },
+    "Nov '25": { complete: 0, processing: 0 },
+    "Dec '25": { complete: 0, processing: 0 },
+    "Jan '26": { complete: 0, processing: 0 },
+    "Feb '26": { complete: 0, processing: 0 },
+    "Mar '26": { complete: 0, processing: 0 },
+    "Apr '26": { complete: 0, processing: 0 },
+    "May '26": { complete: 0, processing: 0 },
+    "Jun '26": { complete: 0, processing: 218.27 },
+  },
+};
+
+const ORDER_ROWS = [
+  {month:"Aug '25",grant:"Startup",status:"complete",price:193.82},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:83.53},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:338.4},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:1088.8},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:352.0},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:1408.8},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:1322.4},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:177.28},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:118.88},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:164.4},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:98.22},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:559.41},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:277.88},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:54.79},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:309.06},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:410.29},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:58.78},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:442.56},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:345.18},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:91.67},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:151.0},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:1272.0},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:208.21},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:272.1},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:358.96},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:426.86},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:210.64},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:169.5},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:250.5},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:148.92},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:496.4},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:216.32},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:716.22},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:58.08},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:58.08},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:417.06},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:532.2},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:100.31},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:301.6},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:513.16},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:98.82},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:94.83},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:2857.6},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:157.17},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:327.5},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:915.77},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:56.32},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:273.05},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:309.06},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:87.0},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:147.96},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:2059.2},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:75.5},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:96.03},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:857.5},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:1264.92},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:25.3},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:473.4},
+  {month:"Aug '25",grant:"Startup",status:"complete",price:103.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:706.79},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:79.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:35.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:2.95},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:2.81},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:2.95},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:3.1},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:2.81},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:2.95},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:88.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:130.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:35.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:555.2},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:257.4},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:330.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:163.4},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:51.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:201.65},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:381.9},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:51.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:77.9},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:97.33},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:84.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:120.26},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:381.9},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:51.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:155.0},
+  {month:"Sep '25",grant:"Startup",status:"complete",price:30.0},
+  {month:"Oct '25",grant:"Startup",status:"complete",price:96.0},
+  {month:"Oct '25",grant:"Startup",status:"complete",price:35.0},
+  {month:"Oct '25",grant:"Startup",status:"complete",price:394.61},
+  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:756.8},
+  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:706.79},
+  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:89.37},
+  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:51.21},
+  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:109.5},
+  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:163.62},
+  {month:"Oct '25",grant:"Startup",status:"complete",price:158.65},
+  {month:"Oct '25",grant:"Startup",status:"complete",price:51.0},
+  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:86.4},
+  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:85.5},
+  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:35.0},
+  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:3.1},
+  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:2.95},
+  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:340.0},
+  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:36.58},
+  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:565.0},
+  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:120.1},
+  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:6.45},
+  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:14.0},
+  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:9.5},
+  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
+  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:24.02},
+  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:2.8},
+  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
+  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:24.02},
+  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:2.8},
+  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
+  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:24.02},
+  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:2.8},
+  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:266.0},
+  {month:"Oct '25",grant:"Startup",status:"complete",price:150.0},
+  {month:"Oct '25",grant:"Startup",status:"complete",price:70.0},
+  {month:"Oct '25",grant:"Startup",status:"complete",price:35.0},
+  {month:"Oct '25",grant:"TOV A3 Inhibitors",status:"complete",price:1587.0},
+  {month:"Oct '25",grant:"TOV A3 Inhibitors",status:"complete",price:1542.0},
+  {month:"Oct '25",grant:"TOV A3 Inhibitors",status:"complete",price:130.0},
+  {month:"Oct '25",grant:"TOV A3 Inhibitors",status:"complete",price:140.8},
+  {month:"Oct '25",grant:"TOV A3 Inhibitors",status:"complete",price:85.6},
+  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:12688.0},
+  {month:"Nov '25",grant:"TOV A3 Inhibitors",status:"complete",price:35.0},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:24.02},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:2.8},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:26.43},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:9.5},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:24.02},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:2.8},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:24.02},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:2.8},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:9.5},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:6.45},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:36.0},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:30.0},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:153.52},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:376.74},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:6.23},
+  {month:"Nov '25",grant:"Startup",status:"complete",price:91.2},
+  {month:"Nov '25",grant:"Startup",status:"complete",price:48.8},
+  {month:"Nov '25",grant:"Startup",status:"complete",price:59.2},
+  {month:"Nov '25",grant:"Startup",status:"complete",price:338.4},
+  {month:"Nov '25",grant:"Startup",status:"complete",price:23.2},
+  {month:"Nov '25",grant:"Startup",status:"complete",price:30.4},
+  {month:"Nov '25",grant:"Startup",status:"complete",price:89.6},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:769.5},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:755.25},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:769.5},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:1550.0},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:140.0},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:280.0},
+  {month:"Nov '25",grant:"TOV A3 Inhibitors",status:"complete",price:119.66},
+  {month:"Nov '25",grant:"TOV A3 Inhibitors",status:"complete",price:194.86},
+  {month:"Nov '25",grant:"TOV A3 Inhibitors",status:"complete",price:246.06},
+  {month:"Nov '25",grant:"TOV A3 Inhibitors",status:"complete",price:8.41},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:166.5},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:174.6},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:3780.0},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:172.0},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:172.0},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:114.0},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:67.44},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:44.4},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:70.51},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:11.95},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:96.33},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:28.86},
+  {month:"Nov '25",grant:"Startup",status:"complete",price:241.15},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:46.41},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:91.65},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:253.5},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:72.6},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:72.6},
+  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:224.7},
+  {month:"Nov '25",grant:"TRP Breast Specimens IHC/WGS",status:"complete",price:190.0},
+  {month:"Nov '25",grant:"TRP Breast Specimens IHC/WGS",status:"complete",price:12.0},
+  {month:"Nov '25",grant:"TRP Breast Specimens IHC/WGS",status:"complete",price:1040.0},
+  {month:"Nov '25",grant:"TRP Breast Specimens IHC/WGS",status:"complete",price:1154.34},
+  {month:"Nov '25",grant:"TRP Breast Specimens IHC/WGS",status:"complete",price:252.04},
+  {month:"Nov '25",grant:"TRP Breast Specimens IHC/WGS",status:"complete",price:155.0},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:24.02},
+  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:2.8},
+  {month:"Nov '25",grant:"Startup",status:"complete",price:600.0},
+  {month:"Nov '25",grant:"Startup",status:"complete",price:276.6},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:35.16},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:35.48},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:19.98},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:15.6},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:9.18},
+  {month:"Dec '25",grant:"Startup",status:"complete",price:37.9},
+  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:30.0},
+  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:35.0},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:115.44},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:34.5},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:163.2},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:35.0},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:171.5},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:35.0},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:331.08},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:622.25},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:244.15},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:85.0},
+  {month:"Dec '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
+  {month:"Dec '25",grant:"TRP Colon WGS",status:"complete",price:24.02},
+  {month:"Dec '25",grant:"TRP Colon WGS",status:"complete",price:2.8},
+  {month:"Dec '25",grant:"TRP Colon WGS",status:"complete",price:6.45},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:389.5},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:51.0},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:192.38},
+  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:92.8},
+  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:35.0},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:67.07},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:73.02},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:63.75},
+  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:2922.0},
+  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:771.0},
+  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:175.0},
+  {month:"Dec '25",grant:"Startup",status:"complete",price:174.06},
+  {month:"Dec '25",grant:"Startup",status:"complete",price:142.73},
+  {month:"Dec '25",grant:"Startup",status:"complete",price:59.69},
+  {month:"Dec '25",grant:"Startup",status:"complete",price:1484.0},
+  {month:"Dec '25",grant:"Startup",status:"complete",price:84.0},
+  {month:"Dec '25",grant:"Startup",status:"complete",price:167.2},
+  {month:"Dec '25",grant:"Startup",status:"complete",price:55.2},
+  {month:"Dec '25",grant:"Startup",status:"complete",price:50.4},
+  {month:"Dec '25",grant:"Startup",status:"complete",price:41.6},
+  {month:"Dec '25",grant:"Startup",status:"complete",price:230.4},
+  {month:"Dec '25",grant:"Startup",status:"complete",price:41.6},
+  {month:"Dec '25",grant:"Startup",status:"complete",price:69.6},
+  {month:"Dec '25",grant:"Startup",status:"complete",price:69.6},
+  {month:"Dec '25",grant:"Startup",status:"complete",price:20.0},
+  {month:"Dec '25",grant:"Startup",status:"complete",price:46.4},
+  {month:"Dec '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
+  {month:"Dec '25",grant:"TRP Colon WGS",status:"complete",price:80.08},
+  {month:"Dec '25",grant:"TRP Colon WGS",status:"complete",price:2.8},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:317.1},
+  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:385.6},
+  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:281.6},
+  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:33.46},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:211.11},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:15.71},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:747.0},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:86.63},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:57.33},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:179.2},
+  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:35.0},
+  {month:"Jan '26",grant:"Startup",status:"complete",price:1003.05},
+  {month:"Jan '26",grant:"Startup",status:"complete",price:1455.93},
+  {month:"Jan '26",grant:"Startup",status:"complete",price:464.0},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.6},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.02},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:4.6},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.02},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.6},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.31},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.6},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.02},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.6},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.45},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.6},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.02},
+  {month:"Jan '26",grant:"Startup",status:"complete",price:329.0},
+  {month:"Jan '26",grant:"Startup",status:"complete",price:39.0},
+  {month:"Jan '26",grant:"TOV A3 Inhibitors",status:"complete",price:192.93},
+  {month:"Jan '26",grant:"TOV A3 Inhibitors",status:"complete",price:347.8},
+  {month:"Jan '26",grant:"Packard",status:"complete",price:19.99},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:25.58},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:16.87},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:8.95},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:192.0},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:190.0},
+  {month:"Jan '26",grant:"Startup",status:"complete",price:156.0},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:35.0},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:317.1},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:107.86},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:37.6},
+  {month:"Jan '26",grant:"Startup",status:"complete",price:74.39},
+  {month:"Jan '26",grant:"Startup",status:"complete",price:112.65},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:137.32},
+  {month:"Jan '26",grant:"Startup",status:"complete",price:354.0},
+  {month:"Jan '26",grant:"Startup",status:"complete",price:105.19},
+  {month:"Jan '26",grant:"Startup",status:"complete",price:462.48},
+  {month:"Jan '26",grant:"Startup",status:"complete",price:3933.9},
+  {month:"Jan '26",grant:"Startup",status:"complete",price:977.07},
+  {month:"Jan '26",grant:"Startup",status:"complete",price:130.0},
+  {month:"Jan '26",grant:"Startup",status:"complete",price:15.19},
+  {month:"Jan '26",grant:"Startup",status:"complete",price:33.12},
+  {month:"Jan '26",grant:"Startup",status:"complete",price:42.84},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:184.2},
+  {month:"Jan '26",grant:"Startup",status:"complete",price:79.99},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:250.0},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:320.0},
+  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:35.0},
+  {month:"Jan '26",grant:"TRP Colon WGS",status:"complete",price:113.0},
+  {month:"Jan '26",grant:"TRP Colon WGS",status:"complete",price:24.02},
+  {month:"Jan '26",grant:"TRP Colon WGS",status:"complete",price:2.8},
+  {month:"Jan '26",grant:"TRP Colon WGS",status:"complete",price:6.45},
+  {month:"Feb '26",grant:"TRP Colon WGS",status:"complete",price:6.45},
+  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:218.4},
+  {month:"Feb '26",grant:"Startup",status:"complete",price:240.0},
+  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:193.83},
+  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:41.77},
+  {month:"Feb '26",grant:"Startup",status:"complete",price:125.49},
+  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:30.4},
+  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:68.3},
+  {month:"Feb '26",grant:"Startup",status:"complete",price:1194.0},
+  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:69.0},
+  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:165.0},
+  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:34.5},
+  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:176.0},
+  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:28.52},
+  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:82.98},
+  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:82.98},
+  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:82.98},
+  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:43.5},
+  {month:"Feb '26",grant:"TOV A3 Inhibitors",status:"complete",price:60.08},
+  {month:"Feb '26",grant:"TOV A3 Inhibitors",status:"complete",price:48.8},
+  {month:"Feb '26",grant:"Startup",status:"processing",price:30000.0},
+  {month:"Feb '26",grant:"DOD Benzene",status:"processing",price:70000.0},
+  {month:"Mar '26",grant:"Packard",status:"complete",price:96.46},
+  {month:"Mar '26",grant:"Packard",status:"complete",price:16.73},
+  {month:"Mar '26",grant:"Packard",status:"complete",price:13.28},
+  {month:"Mar '26",grant:"Packard",status:"complete",price:8.99},
+  {month:"Mar '26",grant:"Packard",status:"complete",price:5.49},
+  {month:"Mar '26",grant:"Packard",status:"complete",price:17.27},
+  {month:"Mar '26",grant:"Packard",status:"complete",price:2.98},
+  {month:"Mar '26",grant:"Packard",status:"complete",price:15.99},
+  {month:"Mar '26",grant:"Packard",status:"complete",price:18.51},
+  {month:"Mar '26",grant:"Packard",status:"complete",price:28.99},
+  {month:"Mar '26",grant:"Startup",status:"complete",price:418.4},
+  {month:"Mar '26",grant:"Startup",status:"complete",price:535.98},
+  {month:"Mar '26",grant:"Startup",status:"complete",price:327.9},
+  {month:"Mar '26",grant:"Startup",status:"complete",price:95.65},
+  {month:"Mar '26",grant:"Startup",status:"complete",price:48.08},
+  {month:"Mar '26",grant:"Startup",status:"complete",price:171.3},
+  {month:"Mar '26",grant:"Packard",status:"complete",price:502.2},
+  {month:"Mar '26",grant:"Packard",status:"complete",price:110.0},
+  {month:"Mar '26",grant:"Startup",status:"complete",price:38.0},
+  {month:"Mar '26",grant:"Startup",status:"complete",price:174.77},
+  {month:"Mar '26",grant:"Startup",status:"complete",price:180.8},
+  {month:"Mar '26",grant:"Startup",status:"complete",price:61.6},
+  {month:"Mar '26",grant:"Startup",status:"complete",price:24.8},
+  {month:"Mar '26",grant:"Startup",status:"complete",price:95.04},
+  {month:"Mar '26",grant:"Startup",status:"complete",price:53.6},
+  {month:"Mar '26",grant:"Startup",status:"complete",price:1180.0},
+  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:113.0},
+  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:24.02},
+  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:2.8},
+  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:2.8},
+  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:24.02},
+  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:113.0},
+  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:24.02},
+  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:113.0},
+  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:2.8},
+  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:113.0},
+  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:2.8},
+  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:113.0},
+  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:2.8},
+  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:113.0},
+  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:2.8},
+  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:6.45},
+  {month:"Mar '26",grant:"Startup",status:"complete",price:107.86},
+  {month:"Mar '26",grant:"Startup",status:"complete",price:200.0},
+  {month:"Mar '26",grant:"Startup",status:"complete",price:13.2},
+  {month:"Mar '26",grant:"Startup",status:"complete",price:225.0},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:30.23},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:93.44},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:208.0},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:78.5},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:44.53},
+  {month:"Apr '26",grant:"Startup",status:"processing",price:89.0},
+  {month:"Apr '26",grant:"Startup",status:"processing",price:34.0},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:142.99},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:535.33},
+  {month:"Apr '26",grant:"Packard",status:"complete",price:77.9},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:1470.5},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:29.41},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:456.0},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:2916.8},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:31.0},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:37.0},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:35.92},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:1590.0},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:77.77},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:278.5},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:1241.0},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:53.3},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:155.0},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:163.96},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:96.9},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:95.41},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:102.41},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:85.88},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:179.06},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:111.0},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:696.15},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:121.54},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:522.6},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:765.0},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:624.63},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:106.11},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:269.8},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:106.11},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:778.4},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:753.75},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:261.0},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:277.88},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:217.18},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:489.72},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:42.95},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:111.3},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:176.65},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:34.5},
+  {month:"Apr '26",grant:"DOD Benzene",status:"processing",price:96.0},
+  {month:"Apr '26",grant:"DOD Benzene",status:"processing",price:170.0},
+  {month:"Apr '26",grant:"DOD Benzene",status:"processing",price:35.0},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:184.8},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:271.2},
+  {month:"Apr '26",grant:"DOD Benzene",status:"processing",price:50.4},
+  {month:"Apr '26",grant:"Startup",status:"processing",price:49.18},
+  {month:"Apr '26",grant:"Startup",status:"processing",price:49.18},
+  {month:"Apr '26",grant:"Startup",status:"processing",price:350.45},
+  {month:"Apr '26",grant:"Startup",status:"processing",price:171.75},
+  {month:"Apr '26",grant:"DOD Benzene",status:"processing",price:136.46},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:37.6},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:303.68},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:192.92},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:178.12},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:474.5},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:102.13},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:102.13},
+  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:118.4},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:279.22},
+  {month:"Apr '26",grant:"Startup",status:"processing",price:39.1},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:250.2},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:30.0},
+  {month:"Apr '26",grant:"Startup",status:"processing",price:345.87},
+  {month:"Apr '26",grant:"DOD Benzene",status:"processing",price:914.95},
+  {month:"Apr '26",grant:"Startup",status:"processing",price:622.25},
+  {month:"Apr '26",grant:"Startup",status:"processing",price:244.15},
+  {month:"Apr '26",grant:"TRP Breast Specimens IHC/WGS",status:"processing",price:357.2},
+  {month:"Apr '26",grant:"TRP Breast Specimens IHC/WGS",status:"processing",price:10.0},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:225.0},
+  {month:"Apr '26",grant:"Startup",status:"complete",price:225.0},
+  {month:"Apr '26",grant:"TRP Colon WGS",status:"complete",price:113.0},
+  {month:"Apr '26",grant:"TRP Colon WGS",status:"complete",price:24.02},
+  {month:"Apr '26",grant:"TRP Colon WGS",status:"complete",price:6.45},
+  {month:"Apr '26",grant:"TRP Breast Specimens IHC/WGS",status:"complete",price:330.0},
+  {month:"Apr '26",grant:"TRP Breast Specimens IHC/WGS",status:"processing",price:603.44},
+  {month:"Apr '26",grant:"TRP Breast Specimens IHC/WGS",status:"processing",price:20.0},
+  {month:"May '26",grant:"Startup",status:"complete",price:330.0},
+  {month:"May '26",grant:"Startup",status:"complete",price:603.44},
+  {month:"May '26",grant:"Startup",status:"complete",price:20.0},
+  {month:"May '26",grant:"Packard",status:"complete",price:389.61},
+  {month:"May '26",grant:"DOD Benzene",status:"complete",price:193.83},
+  {month:"May '26",grant:"DOD Benzene",status:"complete",price:317.1},
+  {month:"May '26",grant:"DOD Benzene",status:"complete",price:41.77},
+  {month:"Jun '26",grant:"DOD Benzene",status:"complete",price:62.3},
+  {month:"Jun '26",grant:"DOD Benzene",status:"complete",price:71.4},
+  {month:"Jun '26",grant:"DOD Benzene",status:"complete",price:70.7},
+  {month:"Jun '26",grant:"DOD Benzene",status:"complete",price:18.27},
+  {month:"Jun '26",grant:"Emergency Relief Packard Fund",status:"complete",price:350.4},
+  {month:"Jun '26",grant:"Emergency Relief Packard Fund",status:"processing",price:229.68},
+  {month:"Jun '26",grant:"Emergency Relief Packard Fund",status:"complete",price:60.0},
+  {month:"Jun '26",grant:"Emergency Relief Packard Fund",status:"complete",price:90.0},
+  {month:"Jun '26",grant:"Emergency Relief Packard Fund",status:"processing",price:856.0},
+  {month:"Jun '26",grant:"Emergency Relief Packard Fund",status:"processing",price:39.0},
+  {month:"Jun '26",grant:"Emergency Relief Packard Fund",status:"processing",price:46.04},
+  {month:"Jun '26",grant:"2026 Perlmutter Cancer Center Shared Resource Initiative Grant",status:"processing",price:156.65},
+  {month:"Jun '26",grant:"2026 Perlmutter Cancer Center Shared Resource Initiative Grant",status:"processing",price:34.5},
+  {month:"Jun '26",grant:"2026 Perlmutter Cancer Center Shared Resource Initiative Grant",status:"processing",price:27.12},
+  {month:"Jun '26",grant:"DOD Benzene",status:"processing",price:204.4},
+  {month:"Jun '26",grant:"DOD Benzene",status:"processing",price:204.4}
+];
+
 const STATUS_STYLES = {
   complete: { bg: '#EAF7F0', text: '#27AE60', label: 'Complete' },
   pending: { bg: '#FEF9E7', text: '#F39C12', label: 'Pending' },
@@ -153,6 +772,10 @@ export default function Finance({ userRole }) {
     requisition_id: '', unit_description: '', unit_price: '', units: '',
     order_date: '', requestor: '', status: 'pending', notes: ''
   });
+  const [selectedGrants, setSelectedGrants] = useState([]);
+  const [grantFilterOpen, setGrantFilterOpen] = useState(false);
+  const [draftGrants, setDraftGrants] = useState([]);
+  const [grantSearch, setGrantSearch] = useState('');
 
   const canManage = userRole === 'admin' || userRole === 'pm';
 
@@ -237,9 +860,26 @@ export default function Finance({ userRole }) {
     { name: 'Processing', value: totalProcessing, fill: CHART_RED  },
   ];
 
+  const activeGrants = selectedGrants.length === 0 ? GRANT_NAMES : selectedGrants;
+  const grantChartData = MONTHS.map(m => {
+    const complete   = activeGrants.reduce((sum, g) => sum + (ORDERS_DATA[g]?.[m]?.complete   || 0), 0);
+    const processing = activeGrants.reduce((sum, g) => sum + (ORDERS_DATA[g]?.[m]?.processing || 0), 0);
+    return { month: m, complete, processing };
+  });
+  const filteredGrantOptions = GRANT_NAMES.filter(g => g.toLowerCase().includes(grantSearch.toLowerCase()));
+  const tableMonthRows = MONTHS.map(m => {
+    const monthRows = ORDER_ROWS.filter(r => activeGrants.includes(r.grant) && r.month === m);
+    const complete   = monthRows.reduce((s, r) => s + (r.status === 'complete'   ? r.price : 0), 0);
+    const processing = monthRows.reduce((s, r) => s + (r.status === 'processing' ? r.price : 0), 0);
+    return { month: m, complete, processing };
+  }).filter(r => r.complete > 0 || r.processing > 0);
+  const tableTotalComplete   = tableMonthRows.reduce((s, r) => s + r.complete,   0);
+  const tableTotalProcessing = tableMonthRows.reduce((s, r) => s + r.processing, 0);
+
   const filteredOrders = orders.filter(o => searchQuery === '' || o.item?.toLowerCase().includes(searchQuery.toLowerCase()) || o.vendor?.toLowerCase().includes(searchQuery.toLowerCase()) || o.requisition_id?.toLowerCase().includes(searchQuery.toLowerCase()));
   const totalSpend = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
   const alertGrants = grants.filter(g => { const pct = g.total_amount && g.remaining_balance ? (g.remaining_balance / g.total_amount) * 100 : null; const daysLeft = g.end_date ? Math.ceil((new Date(g.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null; return (pct !== null && pct < 25) || (daysLeft !== null && daysLeft <= 90); });
+
 
   return (
     <div>
@@ -462,6 +1102,112 @@ export default function Finance({ userRole }) {
 
           {activeTab === 'charts' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+
+              {/* Status by Month — filterable */}
+              <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
+                {/* Header row: title + filter button */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Status, Complete and Processing</h3>
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      onClick={() => { setDraftGrants(selectedGrants); setGrantSearch(''); setGrantFilterOpen(v => !v); }}
+                      style={{ padding: '8px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      {selectedGrants.length === 0 ? 'All Grants' : `${selectedGrants.length} Grant${selectedGrants.length > 1 ? 's' : ''} Selected`}
+                      <span style={{ fontSize: '10px' }}>▼</span>
+                    </button>
+                    {grantFilterOpen && (
+                      <div style={{ position: 'absolute', zIndex: 200, top: 'calc(100% + 4px)', right: 0, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px', width: '340px', boxShadow: 'var(--shadow-lg)' }}>
+                        <input
+                          value={grantSearch}
+                          onChange={e => setGrantSearch(e.target.value)}
+                          placeholder="Search grants…"
+                          style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box', marginBottom: '8px' }}
+                        />
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                          <button onClick={() => setDraftGrants([...GRANT_NAMES])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Select All</button>
+                          <button onClick={() => setDraftGrants([])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Clear</button>
+                        </div>
+                        <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          {filteredGrantOptions.map(g => (
+                            <label key={g} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px' }}>
+                              <input
+                                type="checkbox"
+                                checked={draftGrants.includes(g)}
+                                onChange={e => setDraftGrants(prev => e.target.checked ? [...prev, g] : prev.filter(x => x !== g))}
+                              />
+                              <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{g}</span>
+                            </label>
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                          <button onClick={() => setGrantFilterOpen(false)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                          <button onClick={() => { setSelectedGrants(draftGrants); setGrantFilterOpen(false); }} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>OK</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Chart + table side by side */}
+                <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                  {/* Chart */}
+                  <div style={{ flex: '1 1 480px', minWidth: 0 }}>
+                    <ResponsiveContainer width="100%" height={340}>
+                      <BarChart data={grantChartData} margin={{ top: 24, right: 16, left: 8, bottom: 20 }} barCategoryGap="35%">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" vertical={false} />
+                        <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#555' }} />
+                        <YAxis tickFormatter={v => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} tick={{ fontSize: 10, fill: '#555' }} width={90} />
+                        <Tooltip formatter={(v, name) => [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name === 'complete' ? 'Complete' : 'Processing']} />
+                        <Legend verticalAlign="top" height={32} formatter={v => v === 'complete' ? 'complete' : 'processing'} />
+                        <Bar dataKey="complete" name="complete" stackId="a" fill="#CC4125">
+                          <LabelList dataKey="complete" position="insideTop" formatter={v => v > 0 ? `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''} style={{ fontSize: 9, fill: '#CC4125' }} />
+                        </Bar>
+                        <Bar dataKey="processing" name="processing" stackId="a" fill="#E9A918" radius={[2, 2, 0, 0]}>
+                          <LabelList dataKey="processing" position="top" formatter={v => v > 0 ? `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''} style={{ fontSize: 9, fill: '#E9A918' }} />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Pivot table */}
+                  <div style={{ flex: '0 1 340px', minWidth: '280px', maxHeight: '380px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                        <tr style={{ background: '#9DA9C7' }}>
+                          <th style={{ padding: '7px 10px', textAlign: 'left', color: 'white', fontWeight: 600, whiteSpace: 'nowrap' }}>Date</th>
+                          <th style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>Complete</th>
+                          <th style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>Processing</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tableMonthRows.map((r, i) => (
+                          <tr key={r.month} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white', borderTop: '1px solid var(--border)' }}>
+                            <td style={{ padding: '5px 10px', color: '#1A1A2E', whiteSpace: 'nowrap' }}>{r.month}</td>
+                            <td style={{ padding: '5px 10px', textAlign: 'right', color: '#CC4125' }}>
+                              {r.complete > 0 ? `$${r.complete.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
+                            </td>
+                            <td style={{ padding: '5px 10px', textAlign: 'right', color: '#C99000' }}>
+                              {r.processing > 0 ? `$${r.processing.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ background: '#9DA9C7', borderTop: '2px solid #7A8AB5', fontWeight: 700 }}>
+                          <td style={{ padding: '7px 10px', color: 'white' }}>Grand Total</td>
+                          <td style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066' }}>
+                            ${tableTotalComplete.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066' }}>
+                            {tableTotalProcessing > 0 ? `$${tableTotalProcessing.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              </div>
 
               {/* Complete and Processing */}
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
