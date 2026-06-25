@@ -44,6 +44,363 @@ function getCycleEnd(start, frequency) {
   return d.toISOString().split('T')[0];
 }
 
+// ── Equipment Maintenance ────────────────────────────────────────────────
+
+function getMaintCycleKey(resetFreq) {
+  const n = new Date();
+  const pad = v => String(v).padStart(2, '0');
+  if (resetFreq === 'daily') return `${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())}`;
+  if (resetFreq === 'weekly') {
+    const day = n.getDay(); const diff = day === 0 ? -6 : 1 - day;
+    const m = new Date(n); m.setDate(n.getDate() + diff);
+    return `${m.getFullYear()}-${pad(m.getMonth()+1)}-${pad(m.getDate())}`;
+  }
+  if (resetFreq === 'monthly') return `${n.getFullYear()}-${pad(n.getMonth()+1)}`;
+  if (resetFreq === 'yearly') return `${n.getFullYear()}`;
+  if (resetFreq === 'every5') {
+    const base = 2025; return `${Math.floor((n.getFullYear()-base)/5)*5+base}`;
+  }
+  return `${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())}`;
+}
+
+function getMaintNextDue(resetFreq) {
+  const n = new Date();
+  if (resetFreq === 'daily') {
+    const t = new Date(n); t.setDate(t.getDate()+1);
+    return t.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  if (resetFreq === 'weekly') {
+    const day = n.getDay(); const diff = day === 0 ? 1 : 8 - day;
+    const m = new Date(n); m.setDate(n.getDate()+diff);
+    return m.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+  if (resetFreq === 'monthly') {
+    const m = new Date(n.getFullYear(), n.getMonth()+1, 1);
+    return m.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  if (resetFreq === 'yearly') return `Jan 1, ${n.getFullYear()+1}`;
+  if (resetFreq === 'every5') {
+    const base = 2025; const cy = Math.floor((n.getFullYear()-base)/5)*5+base;
+    return `Jan 1, ${cy+5}`;
+  }
+  return '';
+}
+
+function getMaintKey(equipId, freqId, resetFreq, parentId, subId) {
+  return `${equipId}|${freqId}|${parentId}|${subId}|${getMaintCycleKey(resetFreq)}`;
+}
+function isMaintSubDone(checks, equipId, freqId, resetFreq, parentId, sub) {
+  const val = checks[getMaintKey(equipId, freqId, resetFreq, parentId, sub.id)];
+  return sub.type === 'yn' ? val === 'Y' : val === 'done';
+}
+function isMaintParentDone(checks, equip, freq, parent) {
+  return parent.subItems.every(s => isMaintSubDone(checks, equip.id, freq.id, freq.resetFreq, parent.id, s));
+}
+function isMaintFreqDone(checks, equip, freq) {
+  return freq.parents.every(p => isMaintParentDone(checks, equip, freq, p));
+}
+
+const EQUIPMENT_MAINTENANCE = [
+  {
+    id: 'cryo', name: 'Cryo Freezer',
+    note: 'Wait until breaks or has issues — can be filled manually (like a dewar), so monitoring is fine; no regular maintenance required.',
+    frequencies: [
+      {
+        id: 'weekly', label: 'Weekly', subtitle: 'Catch immediate risks', resetFreq: 'weekly',
+        parents: [
+          {
+            id: 'p1', label: 'Confirm freezer is operating normally:',
+            subItems: [
+              { id: 's1', label: 'Temperature stable (top & bottom probes)', type: 'yn' },
+              { id: 's2', label: 'LN₂ level within operating range', type: 'yn' },
+              { id: 's3', label: 'Supply pressure ~20 PSI (verify via gauge)', type: 'yn' },
+            ],
+          },
+          {
+            id: 'p2', label: 'Visual inspection (alarm-independent):',
+            subItems: [
+              { id: 's1', label: 'No abnormal frost or condensation on lid, body, or vents', type: 'yn' },
+              { id: 's2', label: 'No ice buildup or leaks at LN₂ connections', type: 'yn' },
+            ],
+            warning: 'If any N: contact manufacturer directly (phone or live support) same day and coordinate resolution.',
+          },
+        ],
+      },
+      {
+        id: 'monthly', label: 'Monthly', subtitle: 'Catch silent or slow failures', resetFreq: 'monthly',
+        parents: [
+          {
+            id: 'p1', label: 'Alarm pathway test:',
+            subItems: [
+              { id: 's1', label: 'Remote alarms (email/text) trigger correctly', type: 'yn' },
+            ],
+            warning: 'Contact: Brian Imperiale',
+          },
+          {
+            id: 'p2', label: 'Event & usage review (from log files):',
+            subItems: [
+              { id: 's1', label: 'LN₂ consumption vs baseline — no sustained increase ≥2 consecutive months (unless explained by inventory or door use)', type: 'yn' },
+              { id: 's2', label: 'No repeated or time-patterned alarms, even if self-resolving', type: 'yn' },
+              { id: 's3', label: 'Auto-fill not happening more often, taking longer, or struggling to complete', type: 'yn' },
+            ],
+            warning: 'Check LED display for LN₂ consumption. If any N: contact manufacturer directly and coordinate resolution.',
+          },
+        ],
+      },
+      {
+        id: 'yearly', label: 'Yearly', resetFreq: 'yearly',
+        parents: [
+          {
+            id: 'p1', label: 'Confirm manufacturer completed and documented:',
+            subItems: [
+              { id: 's1', label: 'Annual functional testing', type: 'yn' },
+              { id: 's2', label: 'Real-time clock battery replacement (within last 12 months)', type: 'yn' },
+            ],
+          },
+          {
+            id: 'p2', label: 'Service documentation:',
+            subItems: [
+              { id: 's1', label: 'Service documentation saved in equipment records', type: 'yn' },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'every5', label: 'Every 5 Years', resetFreq: 'every5',
+        parents: [
+          {
+            id: 'p1', label: 'Confirm manufacturer completed:',
+            subItems: [
+              { id: 's1', label: 'Solenoid valve replacement', type: 'yn' },
+              { id: 's2', label: 'Relief valve replacement', type: 'yn' },
+              { id: 's3', label: 'Battery backup replacement', type: 'yn' },
+              { id: 's4', label: 'Temperature sensor replacement', type: 'yn' },
+              { id: 's5', label: 'Lid gasket replacement', type: 'yn' },
+              { id: 's6', label: 'Full thaw, decontaminate, and dry freezer', type: 'yn' },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'co2', name: 'CO₂ Incubators',
+    frequencies: [
+      {
+        id: 'daily', label: 'Daily', resetFreq: 'daily',
+        parents: [
+          {
+            id: 'p1', label: 'Check incubator status:',
+            subItems: [
+              { id: 's1', label: 'Temperature & CO₂ within set range', type: 'yn', warning: 'If not within set range, system will alarm' },
+              { id: 's2', label: 'No active alarms: temp, CO₂, door, water level (RH PAN on big incubator)', type: 'yn' },
+              { id: 's3', label: 'Inner doors closed before outer doors', type: 'yn' },
+            ],
+            warning: 'If any N: fix immediately, or contact manufacturer/service if needed.',
+          },
+        ],
+      },
+      {
+        id: 'weekly', label: 'Weekly', subtitle: "Alarms don't cover these", resetFreq: 'weekly',
+        parents: [
+          {
+            id: 'p1', label: 'CO₂ supply system:',
+            subItems: [
+              { id: 's1', label: 'Cylinder regulator gauge — pressure normal, no rapid drop', type: 'yn' },
+              { id: 's2', label: 'Tubing intact — no kinks, cracks, leaks, or stiffness', type: 'yn' },
+            ],
+          },
+          {
+            id: 'p2', label: 'Incubator integrity:',
+            subItems: [
+              { id: 's1', label: 'No persistent door condensation', type: 'yn' },
+              { id: 's2', label: 'Door seals/gaskets intact and sealing fully', type: 'yn' },
+              { id: 's3', label: 'Interior free of contamination: no spills, debris, residue, mold, fingerprints', type: 'yn' },
+              { id: 's4', label: 'Humidifying pan checked/filled with sufficient sterile distilled water (enough until next weekly check)', type: 'yn' },
+            ],
+            warning: 'If any N: fix or contact manufacturer/service. If contamination found: contact PI immediately.',
+          },
+        ],
+      },
+      {
+        id: 'monthly', label: 'Monthly', resetFreq: 'monthly',
+        parents: [
+          {
+            id: 'p1', label: 'Airflow components (accessible fans, ducts):',
+            subItems: [
+              { id: 's1', label: 'No contamination or repair needed — no cleaning required this month', type: 'yn' },
+            ],
+          },
+          {
+            id: 'p2', label: 'Humidification system — perform full clean:',
+            subItems: [
+              { id: 's1', label: 'Drain reservoir', type: 'action' },
+              { id: 's2', label: 'Clean with neutral detergent', type: 'action' },
+              { id: 's3', label: 'Rinse with sterile distilled water (SDW)', type: 'action' },
+              { id: 's4', label: 'Alcohol disinfect', type: 'action' },
+              { id: 's5', label: 'Refill with SDW pre-warmed to 37°C', type: 'action', note: 'Room temp is fine' },
+            ],
+          },
+          {
+            id: 'p3', label: 'Internal surfaces:',
+            subItems: [
+              { id: 's1', label: 'Wipe down all internal surfaces with alcohol', type: 'action' },
+            ],
+          },
+          {
+            id: 'p4', label: 'System review (alarm & operation logs):',
+            subItems: [
+              { id: 's1', label: 'No abnormal patterns in temperature, CO₂, or door openings', type: 'yn' },
+              { id: 's2', label: 'Logging interval unchanged (logs every ~6 minutes)', type: 'yn' },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'annually', label: 'Annually', resetFreq: 'yearly',
+        parents: [
+          {
+            id: 'p1', label: 'Vendor service:',
+            subItems: [{ id: 's1', label: 'Vendor service completed, including CO₂ sensor calibration', type: 'yn' }],
+          },
+          {
+            id: 'p2', label: 'Multi-year maintenance:',
+            subItems: [{ id: 's1', label: 'Multi-year maintenance items tracked and scheduled if needed', type: 'yn' }],
+          },
+        ],
+      },
+      {
+        id: 'every56', label: 'Every 5–6 Years', resetFreq: 'every5',
+        parents: [
+          {
+            id: 'p1', label: 'Humidity control:',
+            subItems: [{ id: 's1', label: 'Humidity control bar replaced', type: 'action' }],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'celldrop', name: 'Cell Drop',
+    frequencies: [
+      {
+        id: 'weekly', label: 'Weekly', resetFreq: 'weekly',
+        parents: [
+          {
+            id: 'p1', label: 'Clean device:',
+            subItems: [{ id: 's1', label: 'Clean sample and external surfaces with 70% ethanol on a cloth (do not spray directly on device)', type: 'action' }],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'evos', name: 'EVOS',
+    frequencies: [
+      {
+        id: 'monthly', label: 'Monthly', resetFreq: 'monthly',
+        parents: [
+          {
+            id: 'p1', label: 'Clean device:',
+            subItems: [{ id: 's1', label: 'Clean sample and external surfaces with 70% ethanol on a cloth (do not spray directly on device)', type: 'action' }],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'thermomixer', name: 'Thermomixer',
+    frequencies: [
+      {
+        id: 'monthly', label: 'Monthly', resetFreq: 'monthly',
+        parents: [
+          {
+            id: 'p1', label: 'Clean device (full procedure):',
+            subItems: [
+              { id: 's1', label: 'Power off and disconnect from mains', type: 'action' },
+              { id: 's2', label: 'Allow to cool down completely', type: 'action' },
+              { id: 's3', label: 'Clean with mild soap-based detergent', type: 'action' },
+              { id: 's4', label: 'Rinse with distilled water and dry fully', type: 'action' },
+              { id: 's5', label: 'Wipe with 70% ethanol on a cloth (do not spray directly on device)', type: 'action' },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'centrifuge', name: 'Large Centrifuges',
+    frequencies: [
+      {
+        id: 'as-needed', label: 'As Needed', resetFreq: 'monthly',
+        parents: [
+          {
+            id: 'p1', label: 'Lid gas springs:',
+            subItems: [
+              { id: 's1', label: 'Lid gas springs functioning — no replacement needed', type: 'yn' },
+              { id: 's2', label: 'If replaced: replacement date recorded in equipment maintenance log', type: 'action' },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'monthly', label: 'Monthly', resetFreq: 'monthly',
+        parents: [
+          {
+            id: 'p1', label: 'Lid inspection:',
+            subItems: [
+              { id: 's1', label: 'Lid opens smoothly and remains fully open without drifting or falling', type: 'yn' },
+              { id: 's2', label: 'No unusual resistance, noise, or asymmetry', type: 'yn' },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'pipettes', name: 'Pipettes',
+    frequencies: [
+      {
+        id: 'annually', label: 'Annually', resetFreq: 'yearly',
+        parents: [
+          {
+            id: 'p1', label: 'Calibration:',
+            subItems: [{ id: 's1', label: 'Calibration completed for all single and multichannel pipettes', type: 'action' }],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'confocal', name: 'Confocal Microscope',
+    frequencies: [
+      {
+        id: 'annually', label: 'Annually', resetFreq: 'yearly',
+        parents: [
+          {
+            id: 'p1', label: 'Preventative maintenance:',
+            subItems: [{ id: 's1', label: 'Annual preventative maintenance of system completed', type: 'yn' }],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'freezers', name: 'Freezers',
+    frequencies: [
+      {
+        id: 'annually', label: 'Annually', resetFreq: 'yearly',
+        parents: [
+          {
+            id: 'p1', label: 'Defrost:',
+            subItems: [{ id: 's1', label: 'Annual defrost performed to remove snow/ice buildup', type: 'action' }],
+          },
+        ],
+      },
+    ],
+  },
+];
+
 export default function Tasks({ userRole, userId, profile }) {
   const canManage = userRole === 'admin' || userRole === 'pm';
 
@@ -84,6 +441,22 @@ export default function Tasks({ userRole, userId, profile }) {
   const [showSporForm, setShowSporForm] = useState(false);
   const [newSpor, setNewSpor] = useState(EMPTY_SPORADIC);
   const [labContacts, setLabContacts] = useState([]);
+
+  // equipment maintenance
+  const [maintChecks, setMaintChecks] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('lab_maint_checks') || '{}'); }
+    catch { return {}; }
+  });
+  const [maintCompleted, setMaintCompleted] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('lab_maint_completed') || '{}'); }
+    catch { return {}; }
+  });
+  const [expandedEquip, setExpandedEquip] = useState(
+    () => new Set(EQUIPMENT_MAINTENANCE.map(e => e.id))
+  );
+  const [expandedFreq, setExpandedFreq] = useState(
+    () => new Set(EQUIPMENT_MAINTENANCE.flatMap(e => e.frequencies.map(f => `${e.id}|${f.id}`)))
+  );
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -127,6 +500,33 @@ export default function Tasks({ userRole, userId, profile }) {
   }, [userId, canManage]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  useEffect(() => {
+    localStorage.setItem('lab_maint_checks', JSON.stringify(maintChecks));
+    // auto-record completions
+    const updated = { ...maintCompleted };
+    let changed = false;
+    EQUIPMENT_MAINTENANCE.forEach(equip => {
+      equip.frequencies.forEach(freq => {
+        const key = `${equip.id}|${freq.id}`;
+        const cycleKey = getMaintCycleKey(freq.resetFreq);
+        if (updated[key]?.cycleKey === cycleKey) return;
+        if (isMaintFreqDone(maintChecks, equip, freq)) {
+          updated[key] = { cycleKey, completedAt: new Date().toISOString() };
+          changed = true;
+        }
+      });
+    });
+    if (changed) {
+      setMaintCompleted(updated);
+      localStorage.setItem('lab_maint_completed', JSON.stringify(updated));
+    }
+  }, [maintChecks]); // eslint-disable-line
+
+  function toggleMaintCheck(equipId, freqId, resetFreq, parentId, subId, value) {
+    const key = getMaintKey(equipId, freqId, resetFreq, parentId, subId);
+    setMaintChecks(p => ({ ...p, [key]: p[key] === value ? null : value }));
+  }
 
   // ── Recurring helpers ──────────────────────────────────────────────
 
@@ -449,7 +849,7 @@ export default function Tasks({ userRole, userId, profile }) {
               <Database size={14} /> {seeding ? 'Seeding…' : 'Seed Tasks'}
             </button>
           )}
-          {canManage && (
+          {canManage && tab !== 'equipment' && (
             <button onClick={() => tab === 'recurring' ? setShowRecurForm(true) : setShowSporForm(true)}
               style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px' }}>
               <Plus size={16} /> {tab === 'recurring' ? 'Add Task' : 'New One-off'}
@@ -466,7 +866,7 @@ export default function Tasks({ userRole, userId, profile }) {
 
       {/* Tab bar */}
       <div style={{ display: 'flex', gap: '2px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '3px', marginBottom: '20px', width: 'fit-content' }}>
-        {[{ id: 'recurring', label: 'Recurring' }, { id: 'one-off', label: 'One-off Tasks' }].map(t => (
+        {[{ id: 'recurring', label: 'Recurring' }, { id: 'one-off', label: 'One-off Tasks' }, { id: 'equipment', label: 'Equipment' }].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             padding: '7px 18px', borderRadius: 'var(--radius-sm)', border: 'none', fontSize: '13px', fontWeight: tab === t.id ? 600 : 400,
             background: tab === t.id ? 'var(--purple-primary)' : 'transparent',
@@ -901,6 +1301,143 @@ export default function Tasks({ userRole, userId, profile }) {
             );
           })}
         </>
+      )}
+
+      {/* ─── EQUIPMENT MAINTENANCE TAB ──────────────────────────────── */}
+      {tab === 'equipment' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {EQUIPMENT_MAINTENANCE.map(equip => {
+            const equipOpen = expandedEquip.has(equip.id);
+            const allFreqDone = equip.frequencies.every(f => isMaintFreqDone(maintChecks, equip, f));
+            return (
+              <div key={equip.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                {/* Equipment header */}
+                <button
+                  onClick={() => setExpandedEquip(p => { const n = new Set(p); n.has(equip.id) ? n.delete(equip.id) : n.add(equip.id); return n; })}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: allFreqDone ? '#EAF7F0' : 'var(--bg-secondary)', border: 'none', cursor: 'pointer', borderBottom: equipOpen ? '1px solid var(--border)' : 'none', textAlign: 'left' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '15px', fontWeight: 700, color: allFreqDone ? '#27AE60' : 'var(--text-primary)' }}>{equip.name}</span>
+                    {allFreqDone && <span style={{ fontSize: '11px', fontWeight: 600, color: '#27AE60', background: '#D5F5E3', padding: '2px 8px', borderRadius: '10px' }}>All complete</span>}
+                  </div>
+                  <ChevronDown size={16} style={{ transform: equipOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'var(--text-muted)', flexShrink: 0 }} />
+                </button>
+
+                {equipOpen && (
+                  <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {/* Equipment-level note */}
+                    {equip.note && (
+                      <div style={{ padding: '10px 12px', background: '#F8F9FA', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: 1.5 }}>
+                        {equip.note}
+                      </div>
+                    )}
+
+                    {/* Frequency groups */}
+                    {equip.frequencies.map(freq => {
+                      const freqKey = `${equip.id}|${freq.id}`;
+                      const freqOpen = expandedFreq.has(freqKey);
+                      const freqDone = isMaintFreqDone(maintChecks, equip, freq);
+                      const doneParents = freq.parents.filter(p => isMaintParentDone(maintChecks, equip, freq, p)).length;
+                      const nextDue = getMaintNextDue(freq.resetFreq);
+                      const completedRec = maintCompleted[freqKey];
+                      const currentCycle = getMaintCycleKey(freq.resetFreq);
+                      const lastDone = completedRec && completedRec.cycleKey !== currentCycle
+                        ? new Date(completedRec.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                        : null;
+
+                      return (
+                        <div key={freq.id} style={{ border: `1px solid ${freqDone ? '#A9DFBF' : 'var(--border)'}`, borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+                          {/* Frequency header */}
+                          <button
+                            onClick={() => setExpandedFreq(p => { const n = new Set(p); n.has(freqKey) ? n.delete(freqKey) : n.add(freqKey); return n; })}
+                            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: freqDone ? '#EAF7F0' : 'var(--bg-secondary)', border: 'none', cursor: 'pointer', borderBottom: freqOpen ? `1px solid ${freqDone ? '#A9DFBF' : 'var(--border)'}` : 'none', textAlign: 'left', gap: '10px' }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                              <span style={{ fontSize: '11px', fontWeight: 700, color: freqDone ? '#27AE60' : 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>{freq.label}</span>
+                              {freq.subtitle && <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>— {freq.subtitle}</span>}
+                              {freqDone
+                                ? <span style={{ fontSize: '11px', color: '#27AE60', fontWeight: 600, whiteSpace: 'nowrap' }}>✓ Complete this cycle</span>
+                                : <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{doneParents}/{freq.parents.length} tasks</span>
+                              }
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+                              <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                                {lastDone && `Last: ${lastDone} · `}Next due: {nextDue}
+                              </span>
+                              <ChevronDown size={13} style={{ transform: freqOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'var(--text-muted)' }} />
+                            </div>
+                          </button>
+
+                          {freqOpen && (
+                            <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                              {freq.parents.map(parent => {
+                                const parentDone = isMaintParentDone(maintChecks, equip, freq, parent);
+                                return (
+                                  <div key={parent.id}>
+                                    {/* Parent task row */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                                      <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: `2px solid ${parentDone ? '#27AE60' : 'var(--border)'}`, background: parentDone ? '#27AE60' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        {parentDone && <CheckCircle size={11} color="white" />}
+                                      </div>
+                                      <span style={{ fontSize: '13px', fontWeight: 600, color: parentDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: parentDone ? 'line-through' : 'none', lineHeight: 1.4 }}>{parent.label}</span>
+                                    </div>
+
+                                    {/* Sub-items */}
+                                    <div style={{ marginLeft: '26px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                      {parent.subItems.map(sub => {
+                                        const key = getMaintKey(equip.id, freq.id, freq.resetFreq, parent.id, sub.id);
+                                        const val = maintChecks[key] || null;
+                                        const subDone = sub.type === 'yn' ? val === 'Y' : val === 'done';
+                                        return (
+                                          <div key={sub.id}>
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                              {sub.type === 'yn' ? (
+                                                <div style={{ display: 'flex', gap: '3px', flexShrink: 0, marginTop: '1px' }}>
+                                                  <button
+                                                    onClick={() => toggleMaintCheck(equip.id, freq.id, freq.resetFreq, parent.id, sub.id, 'Y')}
+                                                    style={{ padding: '2px 9px', borderRadius: '4px', border: `1.5px solid ${val === 'Y' ? '#27AE60' : 'var(--border)'}`, background: val === 'Y' ? '#27AE60' : 'transparent', color: val === 'Y' ? 'white' : 'var(--text-muted)', fontSize: '11px', fontWeight: 700, cursor: 'pointer', lineHeight: 1.4 }}>Y</button>
+                                                  <button
+                                                    onClick={() => toggleMaintCheck(equip.id, freq.id, freq.resetFreq, parent.id, sub.id, 'N')}
+                                                    style={{ padding: '2px 9px', borderRadius: '4px', border: `1.5px solid ${val === 'N' ? '#E74C3C' : 'var(--border)'}`, background: val === 'N' ? '#E74C3C' : 'transparent', color: val === 'N' ? 'white' : 'var(--text-muted)', fontSize: '11px', fontWeight: 700, cursor: 'pointer', lineHeight: 1.4 }}>N</button>
+                                                </div>
+                                              ) : (
+                                                <button
+                                                  onClick={() => toggleMaintCheck(equip.id, freq.id, freq.resetFreq, parent.id, sub.id, 'done')}
+                                                  style={{ width: '22px', height: '22px', borderRadius: 'var(--radius-sm)', border: `1.5px solid ${val === 'done' ? 'var(--purple-primary)' : 'var(--border)'}`, background: val === 'done' ? 'var(--purple-primary)' : 'transparent', color: val === 'done' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, marginTop: '1px' }}>
+                                                  {val === 'done' && <CheckCircle size={12} />}
+                                                </button>
+                                              )}
+                                              <div style={{ minWidth: 0 }}>
+                                                <span style={{ fontSize: '13px', color: subDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: subDone ? 'line-through' : 'none', lineHeight: 1.5 }}>{sub.label}</span>
+                                                {sub.note && <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', margin: '2px 0 0', lineHeight: 1.4 }}>{sub.note}</p>}
+                                                {sub.warning && <p style={{ fontSize: '11px', color: '#E67E22', margin: '2px 0 0', lineHeight: 1.4 }}>{sub.warning}</p>}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+
+                                    {/* Parent-level warning */}
+                                    {parent.warning && (
+                                      <div style={{ marginLeft: '26px', marginTop: '8px', padding: '8px 12px', background: '#FFF8F0', border: '1px solid #FAD7A0', borderRadius: 'var(--radius-sm)', fontSize: '12px', color: '#C0392B', lineHeight: 1.5 }}>
+                                        {parent.warning}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {/* ─── ADD RECURRING MODAL ────────────────────────────────────── */}

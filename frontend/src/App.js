@@ -13,7 +13,7 @@ import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState('responsibilities');
+  const [currentPage, setCurrentPage] = useState('dashboard');
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
