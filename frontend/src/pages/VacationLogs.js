@@ -7,26 +7,18 @@ import {
 
 const NO_APPROVAL_REQUIRED = new Set([
   'Sick Leave',
-  'Family & Medical Leave',
-  'Jury Duty',
-  'Voting',
-  'Military Leave',
+  'Medical Leave',
+  'Jury Duty/Voting',
 ]);
 
 const LEAVE_TYPES = [
   'Vacation',
   'Sick Leave',
-  'Personal Days',
-  'Holidays',
   'Parental Leave',
   'Bereavement',
-  'Family & Medical Leave',
-  'Sabbatical',
-  'Jury Duty',
-  'Voting',
-  'Military Leave',
+  'Medical Leave',
+  'Jury Duty/Voting',
   'Volunteer/Community Service',
-  'Other',
 ];
 
 const STATUS_STYLES = {
@@ -38,17 +30,11 @@ const STATUS_STYLES = {
 const LEAVE_COLORS = {
   'Vacation':                  { bg: '#EBF5FB', text: '#2980B9' },
   'Sick Leave':                { bg: '#FDEDEC', text: '#E74C3C' },
-  'Personal Days':             { bg: '#F5EEF8', text: '#7B3FA0' },
-  'Holidays':                  { bg: '#EBF5FB', text: '#1A5276' },
   'Parental Leave':            { bg: '#FDF2F8', text: '#A93226' },
   'Bereavement':               { bg: '#F2F3F4', text: '#626567' },
-  'Family & Medical Leave':    { bg: '#FDEDEC', text: '#C0392B' },
-  'Sabbatical':                { bg: '#EAF7F0', text: '#1E8449' },
-  'Jury Duty':                 { bg: '#EAF7F0', text: '#27AE60' },
-  'Voting':                    { bg: '#EAF7F0', text: '#27AE60' },
-  'Military Leave':            { bg: '#EBF5FB', text: '#2471A3' },
+  'Medical Leave':             { bg: '#FDEDEC', text: '#C0392B' },
+  'Jury Duty/Voting':          { bg: '#EAF7F0', text: '#27AE60' },
   'Volunteer/Community Service': { bg: '#EAFAF1', text: '#1E8449' },
-  'Other':                     { bg: '#F2F3F4', text: '#626567' },
 };
 
 const EMPTY_FORM = {
@@ -104,9 +90,7 @@ export default function VacationLogs({ userRole, userId, profile }) {
   async function handleSubmitRequest(e) {
     e.preventDefault();
     const autoApprove = NO_APPROVAL_REQUIRED.has(form.leave_type);
-    const leaveTypeLabel = form.leave_type === 'Other' && form.other_reason
-      ? `Other: ${form.other_reason}`
-      : form.leave_type;
+    const leaveTypeLabel = form.leave_type;
 
     const payload = {
       requested_by: userId,
@@ -432,19 +416,6 @@ export default function VacationLogs({ userRole, userId, profile }) {
               )}
             </div>
 
-            {form.leave_type === 'Other' && (
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Please specify</label>
-                <input
-                  type="text"
-                  value={form.other_reason}
-                  onChange={e => setForm(p => ({ ...p, other_reason: e.target.value }))}
-                  placeholder="Describe your reason..."
-                  style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
-                />
-              </div>
-            )}
-
             <div style={{ marginBottom: '24px' }}>
               <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Comments <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
               <textarea value={form.comments} onChange={e => setForm(p => ({ ...p, comments: e.target.value }))}
@@ -456,11 +427,11 @@ export default function VacationLogs({ userRole, userId, profile }) {
               <button onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500 }}>Cancel</button>
               <button
                 onClick={handleSubmitRequest}
-                disabled={!form.start_date || !form.end_date || (form.leave_type === 'Other' && !form.other_reason)}
+                disabled={!form.start_date || !form.end_date}
                 style={{
                   padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none',
-                  background: (!form.start_date || !form.end_date || (form.leave_type === 'Other' && !form.other_reason)) ? 'var(--border)' : 'var(--purple-primary)',
-                  color: (!form.start_date || !form.end_date || (form.leave_type === 'Other' && !form.other_reason)) ? 'var(--text-muted)' : 'white',
+                  background: (!form.start_date || !form.end_date) ? 'var(--border)' : 'var(--purple-primary)',
+                  color: (!form.start_date || !form.end_date) ? 'var(--text-muted)' : 'white',
                   fontWeight: 600,
                 }}
               >

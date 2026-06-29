@@ -392,10 +392,10 @@ export default function LabMeetings({ userRole, userId, profile }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '0', alignItems: 'flex-start' }}>
-        {renderPanel('lab', labFilter, setLabFilter)}
-        <div style={{ width: '1px', background: 'var(--border)', alignSelf: 'stretch', margin: '0 20px', flexShrink: 0 }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         {renderPanel('adhoc', adhocFilter, setAdhocFilter)}
+        <div style={{ height: '1px', background: 'var(--border)' }} />
+        {renderPanel('lab', labFilter, setLabFilter)}
       </div>
 
       {/* Add Meeting Modal */}

@@ -10,6 +10,7 @@ import SampleInventory from './pages/SampleInventory';
 import LabContacts from './pages/LabContacts';
 import Compliance from './pages/Compliance';
 import Dashboard from './pages/Dashboard';
+import Vendors from './pages/Vendors';
 import Login from './pages/Login';
 
 export default function App() {
@@ -102,7 +103,8 @@ export default function App() {
             You don't have permission to view the contact directory.
           </div>
         )}
-        {!['dashboard', 'tasks', 'vacation', 'meetings', 'finance', 'inventory', 'compliance', 'contacts'].includes(currentPage) && (
+        {currentPage === 'vendors' && <Vendors userRole={userRole} />}
+        {!['dashboard', 'tasks', 'vacation', 'meetings', 'finance', 'inventory', 'compliance', 'contacts', 'vendors'].includes(currentPage) && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--text-muted)', fontSize: '15px' }}>
             This system is coming soon.
           </div>

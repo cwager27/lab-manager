@@ -1,7 +1,7 @@
 import {
   ClipboardList, Calendar, FlaskConical,
   Users, ShieldCheck, Palmtree,
-  LayoutDashboard, LogOut, DollarSign,
+  LayoutDashboard, LogOut, DollarSign, Store,
 } from 'lucide-react';
 
 const ROLE_LABELS = {
@@ -21,6 +21,7 @@ export default function Navigation({ currentPage, setCurrentPage, userRole, prof
     { id: 'inventory', label: 'Sample Inventory', icon: FlaskConical, always: true },
     { id: 'compliance', label: 'Compliance', icon: ShieldCheck, always: true },
     { id: 'contacts', label: 'Lab Contacts', icon: Users, contactsOnly: true },
+    { id: 'vendors', label: 'Vendor List', icon: Store, always: true },
   ].filter(item => item.always || (item.managerOnly && canManage) || (item.contactsOnly && (permissions?.can_view_contacts || canManage)));
 
   return (

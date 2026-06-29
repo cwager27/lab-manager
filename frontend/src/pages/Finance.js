@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { AlertTriangle, Upload, Plus, Search, CheckCircle } from 'lucide-react';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList, Legend, Cell } from 'recharts';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
 
 const CHART_BLUE = '#4472C4';
 const CHART_RED  = '#CC4125';
@@ -34,675 +34,16 @@ const CATEGORY_COLORS = {
   'Travel & Conferences': '#C4A265',
 };
 
-const MONTHS = ["Aug '25","Sep '25","Oct '25","Nov '25","Dec '25","Jan '26","Feb '26","Mar '26","Apr '26","May '26","Jun '26"];
-
-function getCatMonthlyData(cat) {
-  return MONTHS.map(m => {
-    const row = perCategoryData.find(r => r.month === m);
-    const val = row != null ? row[cat] : undefined;
-    return { month: m, value: val != null ? val : null };
-  });
+const MON_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function orderDateToMonth(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + 'T00:00:00Z');
+  return `${MON_ABBR[d.getUTCMonth()]} '${String(d.getUTCFullYear()).slice(2)}`;
 }
 
-const perCategoryData = [
-  { month: "Aug '25", 'Disposable Supplies': 11046.81, 'General Lab Chemicals': 661.65, Shipping: 128.30, 'Specialized Reagents, Kits, Supplies': 11311.50, Subcapital: 915.77, 'Tissue Culture Reagents': 990.17 },
-  { month: "Sep '25", Antibodies: 1340.60, 'Biological materials/specimens': 1.00, Capital: 1.00, 'Cell Line': 1.00, Cores: 1.00, 'CR/CO': 1.00, 'Disposable Supplies': 512.33, 'General Lab Chemicals': 1.00, 'Meals and fun': 1.00, 'Proteins and enzymes': 1.00, 'Sequence-Based Reagents': 18.57, Shipping: 254.00, 'Specialized Reagents, Kits, Supplies': 1959.80, Subcapital: 1.00, Subscriptions: 1.00, 'Tissue Culture Reagents': 1.00, 'Travel & Conferences': 1.00 },
-  { month: "Oct '25", Antibodies: 158.65, Cores: 13822.51, 'General Lab Chemicals': 661.90, 'Proteins and enzymes': 3406.61, 'Sequence-Based Reagents': 6.05, Shipping: 322.58, 'Specialized Reagents, Kits, Supplies': 2652.69 },
-  { month: "Nov '25", Antibodies: 685.10, 'Biological materials/specimens': 125.19, Cores: 5497.54, 'Disposable Supplies': 634.82, 'General Lab Chemicals': 144.40, 'Meals and fun': 241.15, 'Proteins and enzymes': 108.00, 'Sequence-Based Reagents': 560.58, Shipping: 49.64, 'Specialized Reagents, Kits, Supplies': 3686.41, 'Tissue Culture Reagents': 3847.44, 'Travel & Conferences': 876.60 },
-  { month: "Dec '25", Antibodies: 389.50, 'Biological materials/specimens': 115.44, Cores: 342.15, 'CR/CO': 1484.00, 'Disposable Supplies': 334.95, 'General Lab Chemicals': 398.16, 'Meals and fun': 376.48, 'Proteins and enzymes': 4552.58, 'Sequence-Based Reagents': 331.08, Shipping: 520.50, 'Specialized Reagents, Kits, Supplies': 2331.50, Subcapital: 1102.07, 'Travel & Conferences': 37.90 },
-  { month: "Jan '26", Cores: 146.27, 'CR/CO': 130.00, 'Disposable Supplies': 662.38, 'General Lab Chemicals': 1352.32, 'Meals and fun': 464.00, 'Sequence-Based Reagents': 911.17, Shipping: 109.00, 'Specialized Reagents, Kits, Supplies': 424.96, Subcapital: 4990.96, 'Tissue Culture Reagents': 156.00, 'Travel & Conferences': 3026.65 },
-  { month: "Feb '26", Antibodies: 176.00, Cores: 6.45, 'CR/CO': 101194.00, 'Disposable Supplies': 292.44, 'General Lab Chemicals': 512.48, Shipping: 63.02, 'Specialized Reagents, Kits, Supplies': 383.10, Subscriptions: 125.49, 'Tissue Culture Reagents': 240.00 },
-  { month: "Mar '26", Cores: 1011.51, 'CR/CO': 1380.00, 'Disposable Supplies': 245.97, 'General Lab Chemicals': 17.27, 'Meals and fun': 197.33, Shipping: 110.00, 'Specialized Reagents, Kits, Supplies': 915.26, Subcapital: 56.49, 'Travel & Conferences': 1628.35 },
-  { month: "Apr '26", Antibodies: 528.95, 'Biological materials/specimens': 200.30, Cores: 593.47, 'Disposable Supplies': 10667.63, 'General Lab Chemicals': 512.12, 'Meals and fun': 295.08, 'Proteins and enzymes': 456.00, 'Sequence-Based Reagents': 1073.90, Shipping: 273.36, 'Specialized Reagents, Kits, Supplies': 6760.64, Subcapital: 603.44, 'Tissue Culture Reagents': 1394.78, 'Travel & Conferences': 1250.09 },
-  { month: "May '26", 'Disposable Supplies': 330.00, Shipping: 20.00, 'Specialized Reagents, Kits, Supplies': 942.31, Subcapital: 603.44 },
-  { month: "Jun '26", Antibodies: 408.80, 'Biological materials/specimens': 856.00, 'Disposable Supplies': 247.95, 'Meals and fun': 27.12, 'Proteins and enzymes': 60.00, 'Sequence-Based Reagents': 46.04, Shipping: 73.50, 'Specialized Reagents, Kits, Supplies': 801.45 },
-];
-
-const labReagentsMonthlyData = [
-  { month: "Aug '25", value: 11973.15 },
-  { month: "Sep '25", value: 1363.17 },
-  { month: "Oct '25", value: 826.60 },
-  { month: "Nov '25", value: 1756.42 },
-  { month: "Dec '25", value: 3094.66 },
-  { month: "Jan '26", value: null },
-  { month: "Feb '26", value: null },
-  { month: "Mar '26", value: null },
-  { month: "Apr '26", value: null },
-  { month: "May '26", value: null },
-  { month: "Jun '26", value: null },
-];
-
-
-const SUB_CHARTS = [
-  { title: 'Subcapital',              data: getCatMonthlyData('Subcapital') },
-  { title: 'Travel & Conferences',   data: getCatMonthlyData('Travel & Conferences') },
-  { title: 'Capital',                data: getCatMonthlyData('Capital') },
-  { title: 'Meals and fun',          data: getCatMonthlyData('Meals and fun') },
-  { title: 'Subscriptions',          data: getCatMonthlyData('Subscriptions') },
-  { title: 'Disposable Supplies',    data: getCatMonthlyData('Disposable Supplies') },
-  { title: 'Tissue Culture Reagents',data: getCatMonthlyData('Tissue Culture Reagents') },
-  { title: 'Shipping',               data: getCatMonthlyData('Shipping') },
-  { title: 'CR/CO',                  data: getCatMonthlyData('CR/CO') },
-  { title: 'Cores',                  data: getCatMonthlyData('Cores') },
-  { title: 'Lab reagents',           data: labReagentsMonthlyData },
-];
-
-const GRANT_NAMES = [
-  'Startup', 'Packard', 'DOD Benzene', 'Emergency Relief Packard Fund',
-  'TOV A3 Inhibitors', 'TRP Breast Specimens IHC/WGS', 'TRP Colon WGS',
-  '2026 Perlmutter Cancer Center Shared Resource Initiative Grant',
-];
-
-const ORDERS_DATA = {
-  'Startup': {
-    "Aug '25": { complete: 25054.20, processing: 0 },
-    "Sep '25": { complete: 4096.30,  processing: 0 },
-    "Oct '25": { complete: 990.26,   processing: 0 },
-    "Nov '25": { complete: 1798.55,  processing: 0 },
-    "Dec '25": { complete: 2774.38,  processing: 0 },
-    "Jan '26": { complete: 9767.80,  processing: 0 },
-    "Feb '26": { complete: 1559.49,  processing: 30000.00 },
-    "Mar '26": { complete: 3951.98,  processing: 0 },
-    "Apr '26": { complete: 8796.65,  processing: 1994.93 },
-    "May '26": { complete: 953.44,   processing: 0 },
-    "Jun '26": { complete: 0,        processing: 0 },
-  },
-  'DOD Benzene': {
-    "Aug '25": { complete: 0,        processing: 0 },
-    "Sep '25": { complete: 0,        processing: 0 },
-    "Oct '25": { complete: 2732.82,  processing: 0 },
-    "Nov '25": { complete: 8556.79,  processing: 0 },
-    "Dec '25": { complete: 4438.32,  processing: 0 },
-    "Jan '26": { complete: 1898.92,  processing: 0 },
-    "Feb '26": { complete: 1318.16,  processing: 70000.00 },
-    "Mar '26": { complete: 0,        processing: 0 },
-    "Apr '26": { complete: 10873.36, processing: 1402.81 },
-    "May '26": { complete: 552.70,   processing: 0 },
-    "Jun '26": { complete: 222.67,   processing: 408.80 },
-  },
-  'Packard': {
-    "Aug '25": { complete: 0,      processing: 0 },
-    "Sep '25": { complete: 0,      processing: 0 },
-    "Oct '25": { complete: 0,      processing: 0 },
-    "Nov '25": { complete: 0,      processing: 0 },
-    "Dec '25": { complete: 0,      processing: 0 },
-    "Jan '26": { complete: 19.99,  processing: 0 },
-    "Feb '26": { complete: 0,      processing: 0 },
-    "Mar '26": { complete: 836.89, processing: 0 },
-    "Apr '26": { complete: 77.90,  processing: 0 },
-    "May '26": { complete: 389.61, processing: 0 },
-    "Jun '26": { complete: 0,      processing: 0 },
-  },
-  'TOV A3 Inhibitors': {
-    "Aug '25": { complete: 0,       processing: 0 },
-    "Sep '25": { complete: 0,       processing: 0 },
-    "Oct '25": { complete: 3485.40, processing: 0 },
-    "Nov '25": { complete: 603.99,  processing: 0 },
-    "Dec '25": { complete: 4761.46, processing: 0 },
-    "Jan '26": { complete: 540.73,  processing: 0 },
-    "Feb '26": { complete: 108.88,  processing: 0 },
-    "Mar '26": { complete: 0,       processing: 0 },
-    "Apr '26": { complete: 0,       processing: 0 },
-    "May '26": { complete: 0,       processing: 0 },
-    "Jun '26": { complete: 0,       processing: 0 },
-  },
-  'TRP Breast Specimens IHC/WGS': {
-    "Aug '25": { complete: 0,       processing: 0 },
-    "Sep '25": { complete: 0,       processing: 0 },
-    "Oct '25": { complete: 0,       processing: 0 },
-    "Nov '25": { complete: 2803.38, processing: 0 },
-    "Dec '25": { complete: 0,       processing: 0 },
-    "Jan '26": { complete: 0,       processing: 0 },
-    "Feb '26": { complete: 0,       processing: 0 },
-    "Mar '26": { complete: 0,       processing: 0 },
-    "Apr '26": { complete: 330.00,  processing: 990.64 },
-    "May '26": { complete: 0,       processing: 0 },
-    "Jun '26": { complete: 0,       processing: 0 },
-  },
-  'TRP Colon WGS': {
-    "Aug '25": { complete: 0,        processing: 0 },
-    "Sep '25": { complete: 0,        processing: 0 },
-    "Oct '25": { complete: 13822.51, processing: 0 },
-    "Nov '25": { complete: 2694.16,  processing: 0 },
-    "Dec '25": { complete: 342.15,   processing: 0 },
-    "Jan '26": { complete: 146.27,   processing: 0 },
-    "Feb '26": { complete: 6.45,     processing: 0 },
-    "Mar '26": { complete: 773.31,   processing: 0 },
-    "Apr '26": { complete: 143.47,   processing: 0 },
-    "May '26": { complete: 0,        processing: 0 },
-    "Jun '26": { complete: 0,        processing: 0 },
-  },
-  'Emergency Relief Packard Fund': {
-    "Aug '25": { complete: 0,      processing: 0 },
-    "Sep '25": { complete: 0,      processing: 0 },
-    "Oct '25": { complete: 0,      processing: 0 },
-    "Nov '25": { complete: 0,      processing: 0 },
-    "Dec '25": { complete: 0,      processing: 0 },
-    "Jan '26": { complete: 0,      processing: 0 },
-    "Feb '26": { complete: 0,      processing: 0 },
-    "Mar '26": { complete: 0,      processing: 0 },
-    "Apr '26": { complete: 0,      processing: 0 },
-    "May '26": { complete: 0,      processing: 0 },
-    "Jun '26": { complete: 500.40, processing: 1170.72 },
-  },
-  '2026 Perlmutter Cancer Center Shared Resource Initiative Grant': {
-    "Aug '25": { complete: 0, processing: 0 },
-    "Sep '25": { complete: 0, processing: 0 },
-    "Oct '25": { complete: 0, processing: 0 },
-    "Nov '25": { complete: 0, processing: 0 },
-    "Dec '25": { complete: 0, processing: 0 },
-    "Jan '26": { complete: 0, processing: 0 },
-    "Feb '26": { complete: 0, processing: 0 },
-    "Mar '26": { complete: 0, processing: 0 },
-    "Apr '26": { complete: 0, processing: 0 },
-    "May '26": { complete: 0, processing: 0 },
-    "Jun '26": { complete: 0, processing: 218.27 },
-  },
-};
-
-const ORDER_ROWS = [
-  {month:"Aug '25",grant:"Startup",status:"complete",price:193.82},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:83.53},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:338.4},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:1088.8},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:352.0},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:1408.8},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:1322.4},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:177.28},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:118.88},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:164.4},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:98.22},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:559.41},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:277.88},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:54.79},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:309.06},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:410.29},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:58.78},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:442.56},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:345.18},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:91.67},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:151.0},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:1272.0},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:208.21},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:272.1},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:358.96},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:426.86},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:210.64},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:169.5},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:250.5},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:148.92},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:496.4},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:216.32},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:716.22},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:58.08},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:58.08},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:417.06},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:532.2},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:100.31},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:301.6},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:513.16},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:98.82},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:94.83},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:2857.6},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:157.17},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:327.5},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:915.77},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:56.32},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:273.05},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:309.06},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:87.0},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:147.96},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:2059.2},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:75.5},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:96.03},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:857.5},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:1264.92},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:25.3},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:473.4},
-  {month:"Aug '25",grant:"Startup",status:"complete",price:103.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:1.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:706.79},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:79.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:35.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:2.95},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:2.81},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:2.95},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:3.1},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:2.81},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:2.95},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:88.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:130.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:35.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:555.2},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:257.4},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:330.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:163.4},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:51.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:201.65},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:381.9},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:51.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:77.9},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:97.33},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:84.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:120.26},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:381.9},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:51.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:155.0},
-  {month:"Sep '25",grant:"Startup",status:"complete",price:30.0},
-  {month:"Oct '25",grant:"Startup",status:"complete",price:96.0},
-  {month:"Oct '25",grant:"Startup",status:"complete",price:35.0},
-  {month:"Oct '25",grant:"Startup",status:"complete",price:394.61},
-  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:756.8},
-  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:706.79},
-  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:89.37},
-  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:51.21},
-  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:109.5},
-  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:163.62},
-  {month:"Oct '25",grant:"Startup",status:"complete",price:158.65},
-  {month:"Oct '25",grant:"Startup",status:"complete",price:51.0},
-  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:86.4},
-  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:85.5},
-  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:35.0},
-  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:3.1},
-  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:2.95},
-  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:340.0},
-  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:36.58},
-  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:565.0},
-  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:120.1},
-  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:6.45},
-  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:14.0},
-  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:9.5},
-  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
-  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:24.02},
-  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:2.8},
-  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
-  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:24.02},
-  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:2.8},
-  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
-  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:24.02},
-  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:2.8},
-  {month:"Oct '25",grant:"DOD Benzene",status:"complete",price:266.0},
-  {month:"Oct '25",grant:"Startup",status:"complete",price:150.0},
-  {month:"Oct '25",grant:"Startup",status:"complete",price:70.0},
-  {month:"Oct '25",grant:"Startup",status:"complete",price:35.0},
-  {month:"Oct '25",grant:"TOV A3 Inhibitors",status:"complete",price:1587.0},
-  {month:"Oct '25",grant:"TOV A3 Inhibitors",status:"complete",price:1542.0},
-  {month:"Oct '25",grant:"TOV A3 Inhibitors",status:"complete",price:130.0},
-  {month:"Oct '25",grant:"TOV A3 Inhibitors",status:"complete",price:140.8},
-  {month:"Oct '25",grant:"TOV A3 Inhibitors",status:"complete",price:85.6},
-  {month:"Oct '25",grant:"TRP Colon WGS",status:"complete",price:12688.0},
-  {month:"Nov '25",grant:"TOV A3 Inhibitors",status:"complete",price:35.0},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:24.02},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:2.8},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:26.43},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:9.5},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:24.02},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:2.8},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:24.02},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:2.8},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:9.5},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:6.45},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:36.0},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:30.0},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:153.52},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:376.74},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:6.23},
-  {month:"Nov '25",grant:"Startup",status:"complete",price:91.2},
-  {month:"Nov '25",grant:"Startup",status:"complete",price:48.8},
-  {month:"Nov '25",grant:"Startup",status:"complete",price:59.2},
-  {month:"Nov '25",grant:"Startup",status:"complete",price:338.4},
-  {month:"Nov '25",grant:"Startup",status:"complete",price:23.2},
-  {month:"Nov '25",grant:"Startup",status:"complete",price:30.4},
-  {month:"Nov '25",grant:"Startup",status:"complete",price:89.6},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:769.5},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:755.25},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:769.5},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:1550.0},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:140.0},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:280.0},
-  {month:"Nov '25",grant:"TOV A3 Inhibitors",status:"complete",price:119.66},
-  {month:"Nov '25",grant:"TOV A3 Inhibitors",status:"complete",price:194.86},
-  {month:"Nov '25",grant:"TOV A3 Inhibitors",status:"complete",price:246.06},
-  {month:"Nov '25",grant:"TOV A3 Inhibitors",status:"complete",price:8.41},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:166.5},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:174.6},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:3780.0},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:172.0},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:172.0},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:114.0},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:67.44},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:44.4},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:70.51},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:11.95},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:96.33},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:28.86},
-  {month:"Nov '25",grant:"Startup",status:"complete",price:241.15},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:46.41},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:91.65},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:253.5},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:72.6},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:72.6},
-  {month:"Nov '25",grant:"DOD Benzene",status:"complete",price:224.7},
-  {month:"Nov '25",grant:"TRP Breast Specimens IHC/WGS",status:"complete",price:190.0},
-  {month:"Nov '25",grant:"TRP Breast Specimens IHC/WGS",status:"complete",price:12.0},
-  {month:"Nov '25",grant:"TRP Breast Specimens IHC/WGS",status:"complete",price:1040.0},
-  {month:"Nov '25",grant:"TRP Breast Specimens IHC/WGS",status:"complete",price:1154.34},
-  {month:"Nov '25",grant:"TRP Breast Specimens IHC/WGS",status:"complete",price:252.04},
-  {month:"Nov '25",grant:"TRP Breast Specimens IHC/WGS",status:"complete",price:155.0},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:24.02},
-  {month:"Nov '25",grant:"TRP Colon WGS",status:"complete",price:2.8},
-  {month:"Nov '25",grant:"Startup",status:"complete",price:600.0},
-  {month:"Nov '25",grant:"Startup",status:"complete",price:276.6},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:35.16},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:35.48},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:19.98},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:15.6},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:9.18},
-  {month:"Dec '25",grant:"Startup",status:"complete",price:37.9},
-  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:30.0},
-  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:35.0},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:115.44},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:34.5},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:163.2},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:35.0},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:171.5},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:35.0},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:331.08},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:622.25},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:244.15},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:85.0},
-  {month:"Dec '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
-  {month:"Dec '25",grant:"TRP Colon WGS",status:"complete",price:24.02},
-  {month:"Dec '25",grant:"TRP Colon WGS",status:"complete",price:2.8},
-  {month:"Dec '25",grant:"TRP Colon WGS",status:"complete",price:6.45},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:389.5},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:51.0},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:192.38},
-  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:92.8},
-  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:35.0},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:67.07},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:73.02},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:63.75},
-  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:2922.0},
-  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:771.0},
-  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:175.0},
-  {month:"Dec '25",grant:"Startup",status:"complete",price:174.06},
-  {month:"Dec '25",grant:"Startup",status:"complete",price:142.73},
-  {month:"Dec '25",grant:"Startup",status:"complete",price:59.69},
-  {month:"Dec '25",grant:"Startup",status:"complete",price:1484.0},
-  {month:"Dec '25",grant:"Startup",status:"complete",price:84.0},
-  {month:"Dec '25",grant:"Startup",status:"complete",price:167.2},
-  {month:"Dec '25",grant:"Startup",status:"complete",price:55.2},
-  {month:"Dec '25",grant:"Startup",status:"complete",price:50.4},
-  {month:"Dec '25",grant:"Startup",status:"complete",price:41.6},
-  {month:"Dec '25",grant:"Startup",status:"complete",price:230.4},
-  {month:"Dec '25",grant:"Startup",status:"complete",price:41.6},
-  {month:"Dec '25",grant:"Startup",status:"complete",price:69.6},
-  {month:"Dec '25",grant:"Startup",status:"complete",price:69.6},
-  {month:"Dec '25",grant:"Startup",status:"complete",price:20.0},
-  {month:"Dec '25",grant:"Startup",status:"complete",price:46.4},
-  {month:"Dec '25",grant:"TRP Colon WGS",status:"complete",price:113.0},
-  {month:"Dec '25",grant:"TRP Colon WGS",status:"complete",price:80.08},
-  {month:"Dec '25",grant:"TRP Colon WGS",status:"complete",price:2.8},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:317.1},
-  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:385.6},
-  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:281.6},
-  {month:"Dec '25",grant:"TOV A3 Inhibitors",status:"complete",price:33.46},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:211.11},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:15.71},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:747.0},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:86.63},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:57.33},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:179.2},
-  {month:"Dec '25",grant:"DOD Benzene",status:"complete",price:35.0},
-  {month:"Jan '26",grant:"Startup",status:"complete",price:1003.05},
-  {month:"Jan '26",grant:"Startup",status:"complete",price:1455.93},
-  {month:"Jan '26",grant:"Startup",status:"complete",price:464.0},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.6},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.02},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:4.6},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.02},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.6},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.31},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.6},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.02},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.6},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.45},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.6},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:3.02},
-  {month:"Jan '26",grant:"Startup",status:"complete",price:329.0},
-  {month:"Jan '26",grant:"Startup",status:"complete",price:39.0},
-  {month:"Jan '26",grant:"TOV A3 Inhibitors",status:"complete",price:192.93},
-  {month:"Jan '26",grant:"TOV A3 Inhibitors",status:"complete",price:347.8},
-  {month:"Jan '26",grant:"Packard",status:"complete",price:19.99},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:25.58},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:16.87},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:8.95},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:192.0},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:190.0},
-  {month:"Jan '26",grant:"Startup",status:"complete",price:156.0},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:35.0},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:317.1},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:107.86},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:37.6},
-  {month:"Jan '26",grant:"Startup",status:"complete",price:74.39},
-  {month:"Jan '26",grant:"Startup",status:"complete",price:112.65},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:137.32},
-  {month:"Jan '26",grant:"Startup",status:"complete",price:354.0},
-  {month:"Jan '26",grant:"Startup",status:"complete",price:105.19},
-  {month:"Jan '26",grant:"Startup",status:"complete",price:462.48},
-  {month:"Jan '26",grant:"Startup",status:"complete",price:3933.9},
-  {month:"Jan '26",grant:"Startup",status:"complete",price:977.07},
-  {month:"Jan '26",grant:"Startup",status:"complete",price:130.0},
-  {month:"Jan '26",grant:"Startup",status:"complete",price:15.19},
-  {month:"Jan '26",grant:"Startup",status:"complete",price:33.12},
-  {month:"Jan '26",grant:"Startup",status:"complete",price:42.84},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:184.2},
-  {month:"Jan '26",grant:"Startup",status:"complete",price:79.99},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:250.0},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:320.0},
-  {month:"Jan '26",grant:"DOD Benzene",status:"complete",price:35.0},
-  {month:"Jan '26",grant:"TRP Colon WGS",status:"complete",price:113.0},
-  {month:"Jan '26",grant:"TRP Colon WGS",status:"complete",price:24.02},
-  {month:"Jan '26",grant:"TRP Colon WGS",status:"complete",price:2.8},
-  {month:"Jan '26",grant:"TRP Colon WGS",status:"complete",price:6.45},
-  {month:"Feb '26",grant:"TRP Colon WGS",status:"complete",price:6.45},
-  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:218.4},
-  {month:"Feb '26",grant:"Startup",status:"complete",price:240.0},
-  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:193.83},
-  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:41.77},
-  {month:"Feb '26",grant:"Startup",status:"complete",price:125.49},
-  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:30.4},
-  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:68.3},
-  {month:"Feb '26",grant:"Startup",status:"complete",price:1194.0},
-  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:69.0},
-  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:165.0},
-  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:34.5},
-  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:176.0},
-  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:28.52},
-  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:82.98},
-  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:82.98},
-  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:82.98},
-  {month:"Feb '26",grant:"DOD Benzene",status:"complete",price:43.5},
-  {month:"Feb '26",grant:"TOV A3 Inhibitors",status:"complete",price:60.08},
-  {month:"Feb '26",grant:"TOV A3 Inhibitors",status:"complete",price:48.8},
-  {month:"Feb '26",grant:"Startup",status:"processing",price:30000.0},
-  {month:"Feb '26",grant:"DOD Benzene",status:"processing",price:70000.0},
-  {month:"Mar '26",grant:"Packard",status:"complete",price:96.46},
-  {month:"Mar '26",grant:"Packard",status:"complete",price:16.73},
-  {month:"Mar '26",grant:"Packard",status:"complete",price:13.28},
-  {month:"Mar '26",grant:"Packard",status:"complete",price:8.99},
-  {month:"Mar '26",grant:"Packard",status:"complete",price:5.49},
-  {month:"Mar '26",grant:"Packard",status:"complete",price:17.27},
-  {month:"Mar '26",grant:"Packard",status:"complete",price:2.98},
-  {month:"Mar '26",grant:"Packard",status:"complete",price:15.99},
-  {month:"Mar '26",grant:"Packard",status:"complete",price:18.51},
-  {month:"Mar '26",grant:"Packard",status:"complete",price:28.99},
-  {month:"Mar '26",grant:"Startup",status:"complete",price:418.4},
-  {month:"Mar '26",grant:"Startup",status:"complete",price:535.98},
-  {month:"Mar '26",grant:"Startup",status:"complete",price:327.9},
-  {month:"Mar '26",grant:"Startup",status:"complete",price:95.65},
-  {month:"Mar '26",grant:"Startup",status:"complete",price:48.08},
-  {month:"Mar '26",grant:"Startup",status:"complete",price:171.3},
-  {month:"Mar '26",grant:"Packard",status:"complete",price:502.2},
-  {month:"Mar '26",grant:"Packard",status:"complete",price:110.0},
-  {month:"Mar '26",grant:"Startup",status:"complete",price:38.0},
-  {month:"Mar '26",grant:"Startup",status:"complete",price:174.77},
-  {month:"Mar '26",grant:"Startup",status:"complete",price:180.8},
-  {month:"Mar '26",grant:"Startup",status:"complete",price:61.6},
-  {month:"Mar '26",grant:"Startup",status:"complete",price:24.8},
-  {month:"Mar '26",grant:"Startup",status:"complete",price:95.04},
-  {month:"Mar '26",grant:"Startup",status:"complete",price:53.6},
-  {month:"Mar '26",grant:"Startup",status:"complete",price:1180.0},
-  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:113.0},
-  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:24.02},
-  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:2.8},
-  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:2.8},
-  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:24.02},
-  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:113.0},
-  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:24.02},
-  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:113.0},
-  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:2.8},
-  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:113.0},
-  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:2.8},
-  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:113.0},
-  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:2.8},
-  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:113.0},
-  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:2.8},
-  {month:"Mar '26",grant:"TRP Colon WGS",status:"complete",price:6.45},
-  {month:"Mar '26",grant:"Startup",status:"complete",price:107.86},
-  {month:"Mar '26",grant:"Startup",status:"complete",price:200.0},
-  {month:"Mar '26",grant:"Startup",status:"complete",price:13.2},
-  {month:"Mar '26",grant:"Startup",status:"complete",price:225.0},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:30.23},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:93.44},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:208.0},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:78.5},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:44.53},
-  {month:"Apr '26",grant:"Startup",status:"processing",price:89.0},
-  {month:"Apr '26",grant:"Startup",status:"processing",price:34.0},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:142.99},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:535.33},
-  {month:"Apr '26",grant:"Packard",status:"complete",price:77.9},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:1470.5},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:29.41},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:456.0},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:2916.8},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:31.0},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:37.0},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:35.92},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:1590.0},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:77.77},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:278.5},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:1241.0},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:53.3},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:155.0},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:163.96},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:96.9},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:95.41},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:102.41},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:85.88},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:179.06},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:111.0},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:696.15},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:121.54},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:522.6},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:765.0},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:624.63},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:106.11},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:269.8},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:106.11},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:778.4},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:753.75},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:261.0},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:277.88},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:217.18},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:489.72},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:42.95},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:111.3},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:176.65},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:34.5},
-  {month:"Apr '26",grant:"DOD Benzene",status:"processing",price:96.0},
-  {month:"Apr '26",grant:"DOD Benzene",status:"processing",price:170.0},
-  {month:"Apr '26",grant:"DOD Benzene",status:"processing",price:35.0},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:184.8},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:271.2},
-  {month:"Apr '26",grant:"DOD Benzene",status:"processing",price:50.4},
-  {month:"Apr '26",grant:"Startup",status:"processing",price:49.18},
-  {month:"Apr '26",grant:"Startup",status:"processing",price:49.18},
-  {month:"Apr '26",grant:"Startup",status:"processing",price:350.45},
-  {month:"Apr '26",grant:"Startup",status:"processing",price:171.75},
-  {month:"Apr '26",grant:"DOD Benzene",status:"processing",price:136.46},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:37.6},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:303.68},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:192.92},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:178.12},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:474.5},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:102.13},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:102.13},
-  {month:"Apr '26",grant:"DOD Benzene",status:"complete",price:118.4},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:279.22},
-  {month:"Apr '26",grant:"Startup",status:"processing",price:39.1},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:250.2},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:30.0},
-  {month:"Apr '26",grant:"Startup",status:"processing",price:345.87},
-  {month:"Apr '26",grant:"DOD Benzene",status:"processing",price:914.95},
-  {month:"Apr '26",grant:"Startup",status:"processing",price:622.25},
-  {month:"Apr '26",grant:"Startup",status:"processing",price:244.15},
-  {month:"Apr '26",grant:"TRP Breast Specimens IHC/WGS",status:"processing",price:357.2},
-  {month:"Apr '26",grant:"TRP Breast Specimens IHC/WGS",status:"processing",price:10.0},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:225.0},
-  {month:"Apr '26",grant:"Startup",status:"complete",price:225.0},
-  {month:"Apr '26",grant:"TRP Colon WGS",status:"complete",price:113.0},
-  {month:"Apr '26",grant:"TRP Colon WGS",status:"complete",price:24.02},
-  {month:"Apr '26",grant:"TRP Colon WGS",status:"complete",price:6.45},
-  {month:"Apr '26",grant:"TRP Breast Specimens IHC/WGS",status:"complete",price:330.0},
-  {month:"Apr '26",grant:"TRP Breast Specimens IHC/WGS",status:"processing",price:603.44},
-  {month:"Apr '26",grant:"TRP Breast Specimens IHC/WGS",status:"processing",price:20.0},
-  {month:"May '26",grant:"Startup",status:"complete",price:330.0},
-  {month:"May '26",grant:"Startup",status:"complete",price:603.44},
-  {month:"May '26",grant:"Startup",status:"complete",price:20.0},
-  {month:"May '26",grant:"Packard",status:"complete",price:389.61},
-  {month:"May '26",grant:"DOD Benzene",status:"complete",price:193.83},
-  {month:"May '26",grant:"DOD Benzene",status:"complete",price:317.1},
-  {month:"May '26",grant:"DOD Benzene",status:"complete",price:41.77},
-  {month:"Jun '26",grant:"DOD Benzene",status:"complete",price:62.3},
-  {month:"Jun '26",grant:"DOD Benzene",status:"complete",price:71.4},
-  {month:"Jun '26",grant:"DOD Benzene",status:"complete",price:70.7},
-  {month:"Jun '26",grant:"DOD Benzene",status:"complete",price:18.27},
-  {month:"Jun '26",grant:"Emergency Relief Packard Fund",status:"complete",price:350.4},
-  {month:"Jun '26",grant:"Emergency Relief Packard Fund",status:"processing",price:229.68},
-  {month:"Jun '26",grant:"Emergency Relief Packard Fund",status:"complete",price:60.0},
-  {month:"Jun '26",grant:"Emergency Relief Packard Fund",status:"complete",price:90.0},
-  {month:"Jun '26",grant:"Emergency Relief Packard Fund",status:"processing",price:856.0},
-  {month:"Jun '26",grant:"Emergency Relief Packard Fund",status:"processing",price:39.0},
-  {month:"Jun '26",grant:"Emergency Relief Packard Fund",status:"processing",price:46.04},
-  {month:"Jun '26",grant:"2026 Perlmutter Cancer Center Shared Resource Initiative Grant",status:"processing",price:156.65},
-  {month:"Jun '26",grant:"2026 Perlmutter Cancer Center Shared Resource Initiative Grant",status:"processing",price:34.5},
-  {month:"Jun '26",grant:"2026 Perlmutter Cancer Center Shared Resource Initiative Grant",status:"processing",price:27.12},
-  {month:"Jun '26",grant:"DOD Benzene",status:"processing",price:204.4},
-  {month:"Jun '26",grant:"DOD Benzene",status:"processing",price:204.4}
-];
+function getCatMonthlyData(cat, data) {
+  return data.map(r => ({ month: r.month, value: r[cat] != null ? r[cat] : null }));
+}
 
 const STATUS_STYLES = {
   complete: { bg: '#EAF7F0', text: '#27AE60', label: 'Complete' },
@@ -753,6 +94,7 @@ function GrantCard({ grant }) {
 }
 
 
+
 export default function Finance({ userRole }) {
   const [grants, setGrants] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -761,6 +103,7 @@ export default function Finance({ userRole }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('grants');
   const [reagentTab, setReagentTab] = useState('misc');
+  const [reagentSearch, setReagentSearch] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddOrder, setShowAddOrder] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -776,6 +119,78 @@ export default function Finance({ userRole }) {
   const [grantFilterOpen, setGrantFilterOpen] = useState(false);
   const [draftGrants, setDraftGrants] = useState([]);
   const [grantSearch, setGrantSearch] = useState('');
+  const chartData = useMemo(() => {
+    const LAB_CATS = new Set(['Specialized Reagents, Kits, Supplies','Sequence-Based Reagents','Proteins and enzymes','Antibodies','Biological materials/specimens','General Lab Chemicals','Tissue Culture Reagents']);
+    const real = orders.filter(o => o.item && o.item.trim() !== '');
+
+    // sorted unique months
+    const monthMap = {};
+    real.forEach(o => {
+      const m = orderDateToMonth(o.order_date);
+      if (m) monthMap[m] = o.order_date;
+    });
+    const months = Object.entries(monthMap).sort((a, b) => a[1].localeCompare(b[1])).map(([m]) => m);
+
+    // per-category monthly totals
+    const byMonth = {};
+    months.forEach(m => { byMonth[m] = { month: m }; });
+    real.forEach(o => {
+      const m = orderDateToMonth(o.order_date);
+      if (!m || !o.category || o.total_price == null) return;
+      byMonth[m][o.category] = (byMonth[m][o.category] || 0) + Number(o.total_price);
+    });
+    const catData = months.map(m => byMonth[m]);
+
+    // complete/processing by category
+    const byCat = {};
+    CATEGORIES.forEach(cat => { byCat[cat] = { name: cat, complete: 0, processing: 0 }; });
+    real.forEach(o => {
+      if (!o.category || o.total_price == null) return;
+      if (!byCat[o.category]) byCat[o.category] = { name: o.category, complete: 0, processing: 0 };
+      const s = (o.status || '').trim().toLowerCase();
+      if (s === 'complete') byCat[o.category].complete += Number(o.total_price);
+      else if (s === 'processing') byCat[o.category].processing += Number(o.total_price);
+    });
+    const catStatusData = CATEGORIES.map(cat => byCat[cat]);
+
+    // lab reagents monthly
+    const labByMonth = {};
+    real.forEach(o => {
+      if (!o.category || !LAB_CATS.has(o.category) || o.total_price == null) return;
+      const m = orderDateToMonth(o.order_date);
+      if (!m) return;
+      labByMonth[m] = (labByMonth[m] || 0) + Number(o.total_price);
+    });
+    const labReagentsMonthlyData = months.map(m => ({ month: m, value: labByMonth[m] ?? null }));
+
+    // grant names
+    const grantSet = new Set();
+    real.forEach(o => { if (o.grant_name) grantSet.add(o.grant_name); });
+    const grantNames = [...grantSet].sort();
+
+    // by grant × month × status
+    const byGrant = {};
+    real.forEach(o => {
+      if (!o.grant_name || o.total_price == null) return;
+      const m = orderDateToMonth(o.order_date);
+      if (!m) return;
+      if (!byGrant[o.grant_name]) byGrant[o.grant_name] = {};
+      if (!byGrant[o.grant_name][m]) byGrant[o.grant_name][m] = { complete: 0, processing: 0 };
+      const s = (o.status || '').trim().toLowerCase();
+      if (s === 'complete') byGrant[o.grant_name][m].complete += Number(o.total_price);
+      else if (s === 'processing') byGrant[o.grant_name][m].processing += Number(o.total_price);
+    });
+
+    return { months, catData, catStatusData, labReagentsMonthlyData, grantNames, byGrant };
+  }, [orders]);
+
+  const { months: MONTHS, catData, catStatusData, labReagentsMonthlyData, grantNames: GRANT_NAMES, byGrant: ordersDataByGrant } = chartData;
+
+  const catCats = CATEGORIES;
+  const [editCell, setEditCell] = useState(null);
+  const [editVal, setEditVal] = useState('');
+  const [selectedSubChart, setSelectedSubChart] = useState('Subcapital');
+  const [vendors, setVendors] = useState([]);
 
   const canManage = userRole === 'admin' || userRole === 'pm';
 
@@ -783,16 +198,18 @@ export default function Finance({ userRole }) {
 
   async function fetchData() {
     setLoading(true);
-    const [{ data: grantData }, { data: orderData }, { data: reagentData }, { data: nanoseqData }] = await Promise.all([
+    const [{ data: grantData }, { data: orderData }, { data: reagentData }, { data: nanoseqData }, { data: vendorData }] = await Promise.all([
       supabase.from('grants').select('*').order('name'),
       supabase.from('orders').select('*').order('order_date', { ascending: false }),
       supabase.from('reagents').select('*').order('category').order('name'),
-      supabase.from('nanoseq_reagents').select('*').order('protocol').order('name')
+      supabase.from('nanoseq_reagents').select('*').order('protocol').order('name'),
+      supabase.from('vendors').select('*').order('name')
     ]);
     setGrants(grantData || []);
     setOrders(orderData || []);
     setReagents(reagentData || []);
     setNanoseq(nanoseqData || []);
+    setVendors(vendorData || []);
     setLoading(false);
   }
 
@@ -833,28 +250,42 @@ export default function Finance({ userRole }) {
     if (data.success) { setPreviewNanoseq(null); fetchData(); }
   }
 
-  // Charts data — FY2026 Google Sheets export
-  const categoryChartData = [
-    { name: 'Antibodies',                          complete: 2749.85,  processing: 937.75    },
-    { name: 'Biological materials/specimens',       complete: 352.93,   processing: 945.00    },
-    { name: 'Capital',                              complete: 1.00,     processing: 0         },
-    { name: 'Cell Line',                            complete: 1.00,     processing: 0         },
-    { name: 'Cores',                                complete: 21420.90, processing: 0         },
-    { name: 'CR/CO',                                complete: 4189.00,  processing: 100000.00 },
-    { name: 'Disposable Supplies',                  complete: 23643.79, processing: 1331.49   },
-    { name: 'General Lab Chemicals',                complete: 3995.30,  processing: 293.12    },
-    { name: 'Meals and fun',                        complete: 1575.04,  processing: 0         },
-    { name: 'Proteins and enzymes',                 complete: 8584.19,  processing: 0         },
-    { name: 'Sequence-Based Reagents',              complete: 2106.67,  processing: 840.72    },
-    { name: 'Shipping',                             complete: 1751.40,  processing: 172.50    },
-    { name: 'Specialized Reagents, Kits, Supplies', complete: 31146.57, processing: 1023.05   },
-    { name: 'Subcapital',                           complete: 7669.73,  processing: 603.44    },
-    { name: 'Subscriptions',                        complete: 126.49,   processing: 0         },
-    { name: 'Tissue Culture Reagents',              complete: 6629.39,  processing: 0         },
-    { name: 'Travel & Conferences',                 complete: 6781.49,  processing: 39.10     },
+  // Chart editing helpers
+  const catMonths = catData.map(r => r.month);
+  const subCharts = [
+    { title: 'Subcapital',               data: getCatMonthlyData('Subcapital', catData) },
+    { title: 'Travel & Conferences',    data: getCatMonthlyData('Travel & Conferences', catData) },
+    { title: 'Capital',                 data: getCatMonthlyData('Capital', catData) },
+    { title: 'Meals and fun',           data: getCatMonthlyData('Meals and fun', catData) },
+    { title: 'Subscriptions',           data: getCatMonthlyData('Subscriptions', catData) },
+    { title: 'Disposable Supplies',     data: getCatMonthlyData('Disposable Supplies', catData) },
+    { title: 'Tissue Culture Reagents', data: getCatMonthlyData('Tissue Culture Reagents', catData) },
+    { title: 'Shipping',                data: getCatMonthlyData('Shipping', catData) },
+    { title: 'CR/CO',                   data: getCatMonthlyData('CR/CO', catData) },
+    { title: 'Cores',                   data: getCatMonthlyData('Cores', catData) },
+    { title: 'Lab reagents',            data: labReagentsMonthlyData },
   ];
-  const totalComplete   = 122724.74;
-  const totalProcessing = 106186.17;
+
+  async function commitReagentEdit() {
+    if (!editCell || editCell.tbl !== 'reagent') return;
+    const { id, col } = editCell;
+    const numericFields = ['quantity_in_lab', 'fy24_purchases', 'fy25_purchases', 'fy26_purchases'];
+    const numVal = parseFloat(editVal);
+    const value = numericFields.includes(col) ? (isNaN(numVal) ? null : numVal) : editVal;
+    setReagents(prev => prev.map(r => r.id === id ? { ...r, [col]: value } : r));
+    await supabase.from('reagents').update({ [col]: value }).eq('id', id);
+    setEditCell(null);
+    setEditVal('');
+  }
+
+  async function addReagentRow() {
+    const { data } = await supabase.from('reagents').insert([{ name: 'New Reagent', vendor: '', catalog_number: '', category: '' }]).select().single();
+    if (data) setReagents(prev => [...prev, data]);
+  }
+
+
+  const totalComplete = catStatusData.reduce((s, r) => s + (r.complete || 0), 0);
+  const totalProcessing = catStatusData.reduce((s, r) => s + (r.processing || 0), 0);
   const totalsChartData = [
     { name: 'Complete',   value: totalComplete,   fill: CHART_BLUE },
     { name: 'Processing', value: totalProcessing, fill: CHART_RED  },
@@ -862,15 +293,14 @@ export default function Finance({ userRole }) {
 
   const activeGrants = selectedGrants.length === 0 ? GRANT_NAMES : selectedGrants;
   const grantChartData = MONTHS.map(m => {
-    const complete   = activeGrants.reduce((sum, g) => sum + (ORDERS_DATA[g]?.[m]?.complete   || 0), 0);
-    const processing = activeGrants.reduce((sum, g) => sum + (ORDERS_DATA[g]?.[m]?.processing || 0), 0);
+    const complete   = activeGrants.reduce((sum, g) => sum + (ordersDataByGrant[g]?.[m]?.complete   || 0), 0);
+    const processing = activeGrants.reduce((sum, g) => sum + (ordersDataByGrant[g]?.[m]?.processing || 0), 0);
     return { month: m, complete, processing };
   });
   const filteredGrantOptions = GRANT_NAMES.filter(g => g.toLowerCase().includes(grantSearch.toLowerCase()));
   const tableMonthRows = MONTHS.map(m => {
-    const monthRows = ORDER_ROWS.filter(r => activeGrants.includes(r.grant) && r.month === m);
-    const complete   = monthRows.reduce((s, r) => s + (r.status === 'complete'   ? r.price : 0), 0);
-    const processing = monthRows.reduce((s, r) => s + (r.status === 'processing' ? r.price : 0), 0);
+    const complete   = activeGrants.reduce((sum, g) => sum + (ordersDataByGrant[g]?.[m]?.complete   || 0), 0);
+    const processing = activeGrants.reduce((sum, g) => sum + (ordersDataByGrant[g]?.[m]?.processing || 0), 0);
     return { month: m, complete, processing };
   }).filter(r => r.complete > 0 || r.processing > 0);
   const tableTotalComplete   = tableMonthRows.reduce((s, r) => s + r.complete,   0);
@@ -889,54 +319,19 @@ export default function Finance({ userRole }) {
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>Grants, orders, and reagent tracking</p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
-          {canManage && (activeTab === 'orders' || activeTab === 'reagents') && (
-            <>
-              {activeTab === 'orders' && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
-                  <Upload size={16} /> {uploadingFile ? 'Processing...' : 'Import File'}
-                  <input type="file" accept=".xlsx,.csv" style={{ display: 'none' }} onChange={async (e) => {
-                    const file = e.target.files[0]; if (!file) return;
-                    setUploadingFile(true);
-                    const formData = new FormData(); formData.append('file', file);
-                    const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/preview-orders`, { method: 'POST', body: formData });
-                    const data = await res.json();
-                    if (data.newOrders) setPreviewData(data.newOrders);
-                    setUploadingFile(false);
-                  }} />
-                </label>
-              )}
-              {activeTab === 'reagents' && reagentTab === 'misc' && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
-                  <Upload size={16} /> {uploadingFile ? 'Processing...' : 'Import Misc'}
-                  <input type="file" accept=".xlsx,.csv" style={{ display: 'none' }} onChange={async (e) => {
-                    const file = e.target.files[0]; if (!file) return;
-                    setUploadingFile(true);
-                    const formData = new FormData(); formData.append('file', file);
-                    const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/preview-reagents`, { method: 'POST', body: formData });
-                    const data = await res.json();
-                    if (data.newReagents) setPreviewReagents(data.newReagents);
-                    setUploadingFile(false);
-                  }} />
-                </label>
-              )}
-              {activeTab === 'reagents' && reagentTab === 'nanoseq' && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
-                  <Upload size={16} /> {uploadingFile ? 'Processing...' : 'Import Nanoseq'}
-                  <input type="file" accept=".xlsx,.csv" style={{ display: 'none' }} onChange={async (e) => {
-                    const file = e.target.files[0]; if (!file) return;
-                    setUploadingFile(true);
-                    const formData = new FormData(); formData.append('file', file);
-                    const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/preview-nanoseq`, { method: 'POST', body: formData });
-                    const data = await res.json();
-                    if (data.newNanoseq) setPreviewNanoseq(data.newNanoseq);
-                    setUploadingFile(false);
-                  }} />
-                </label>
-              )}
-              {activeTab === 'orders' && (
-                <button onClick={() => setShowAddOrder(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px' }}><Plus size={16} /> Add Order</button>
-              )}
-            </>
+          {canManage && activeTab === 'reagents' && reagentTab === 'nanoseq' && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
+              <Upload size={16} /> {uploadingFile ? 'Processing...' : 'Import Nanoseq'}
+              <input type="file" accept=".xlsx,.csv" style={{ display: 'none' }} onChange={async (e) => {
+                const file = e.target.files[0]; if (!file) return;
+                setUploadingFile(true);
+                const formData = new FormData(); formData.append('file', file);
+                const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/preview-nanoseq`, { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.newNanoseq) setPreviewNanoseq(data.newNanoseq);
+                setUploadingFile(false);
+              }} />
+            </label>
           )}
         </div>
       </div>
@@ -962,10 +357,18 @@ export default function Finance({ userRole }) {
         ))}
       </div>
 
-      <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: '20px', width: 'fit-content' }}>
-        {['grants', 'orders', 'reagents', 'charts'].map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', background: activeTab === tab ? 'var(--purple-primary)' : 'transparent', color: activeTab === tab ? 'white' : 'var(--text-secondary)', border: 'none', fontWeight: activeTab === tab ? 600 : 400, fontSize: '13px', textTransform: 'capitalize' }}>{tab}</button>
-        ))}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content' }}>
+          {['grants', 'orders', 'reagents', 'charts'].map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', background: activeTab === tab ? 'var(--purple-primary)' : 'transparent', color: activeTab === tab ? 'white' : 'var(--text-secondary)', border: 'none', fontWeight: activeTab === tab ? 600 : 400, fontSize: '13px', textTransform: 'capitalize' }}>{tab}</button>
+          ))}
+        </div>
+        {canManage && activeTab === 'orders' && (
+          <button onClick={() => setShowAddOrder(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Order</button>
+        )}
+        {canManage && activeTab === 'reagents' && (
+          <button onClick={addReagentRow} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Reagent</button>
+        )}
       </div>
 
       {previewData && (
@@ -1030,7 +433,7 @@ export default function Finance({ userRole }) {
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{filteredOrders.length} orders</span>
               </div>
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <table style={{ width: '100%', minWidth: '1000px', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: 'var(--bg-secondary)' }}>
                       {['Item','Vendor','Category','Grant','Req ID','Price','Date','Requestor','Status'].map(h => (
@@ -1039,7 +442,7 @@ export default function Finance({ userRole }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredOrders.slice(0, 100).map(order => {
+                    {filteredOrders.map(order => {
                       const statusStyle = STATUS_STYLES[order.status] || STATUS_STYLES.pending;
                       return (
                         <tr key={order.id} style={{ borderTop: '1px solid var(--border)' }}>
@@ -1059,44 +462,111 @@ export default function Finance({ userRole }) {
                     })}
                   </tbody>
                 </table>
-                {filteredOrders.length > 100 && <p style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', margin: 0 }}>Showing 100 of {filteredOrders.length} orders. Use search to filter.</p>}
               </div>
             </>
           )}
 
           {activeTab === 'reagents' && (
             <div>
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                {['misc', 'nanoseq'].map(rt => (
-                  <button key={rt} onClick={() => setReagentTab(rt)} style={{ padding: '7px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: reagentTab === rt ? 'var(--purple-primary)' : 'var(--bg-primary)', color: reagentTab === rt ? 'white' : 'var(--text-secondary)', fontWeight: reagentTab === rt ? 600 : 400, fontSize: '12px' }}>{rt === 'misc' ? 'Misc' : 'Nanoseq'}</button>
-                ))}
-              </div>
-
-              {reagentTab === 'misc' && (
-                <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-                  {reagents.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>No reagents loaded yet. Click Import Misc to upload.</div>
-                  ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead><tr style={{ background: 'var(--bg-secondary)' }}>{['Name','Vendor','Cat #','Category','In Lab','FY24','FY25','FY26'].map(h => <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
-                      <tbody>{reagents.map(r => <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}><td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-primary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.vendor}</td><td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{r.catalog_number}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.category}</td><td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center' }}>{r.quantity_in_lab ?? '—'}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.fy24_purchases ?? '—'}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.fy25_purchases ?? '—'}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.fy26_purchases ?? '—'}</td></tr>)}</tbody>
-                    </table>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {['misc', 'nanoseq'].map(rt => (
+                    <button key={rt} onClick={() => { setReagentTab(rt); setReagentSearch(''); }} style={{ padding: '7px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: reagentTab === rt ? 'var(--purple-primary)' : 'var(--bg-primary)', color: reagentTab === rt ? 'white' : 'var(--text-secondary)', fontWeight: reagentTab === rt ? 600 : 400, fontSize: '12px' }}>{rt === 'misc' ? 'Misc' : 'Nanoseq'}</button>
+                  ))}
+                </div>
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '7px 12px' }}>
+                  <Search size={13} color="var(--text-muted)" />
+                  <input
+                    value={reagentSearch}
+                    onChange={e => setReagentSearch(e.target.value)}
+                    placeholder="Search reagents..."
+                    style={{ border: 'none', outline: 'none', flex: 1, fontSize: '13px', background: 'transparent', color: 'var(--text-primary)' }}
+                  />
+                  {reagentSearch && (
+                    <button onClick={() => setReagentSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '16px', lineHeight: 1, padding: 0 }}>×</button>
                   )}
                 </div>
-              )}
+              </div>
 
-              {reagentTab === 'nanoseq' && (
+              {reagentTab === 'misc' && (() => {
+                const q = reagentSearch.toLowerCase();
+                const filteredReagents = q
+                  ? reagents.filter(r => ['name','vendor','catalog_number','category','quantity_in_lab','fy24_purchases','fy25_purchases','fy26_purchases'].some(k => r[k] != null && String(r[k]).toLowerCase().includes(q)))
+                  : reagents;
+                return (
+                <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--bg-secondary)' }}>
+                        {['Name','Vendor','Cat #','Category','In Lab','FY24','FY25','FY26'].map(h => (
+                          <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredReagents.length === 0 && (
+                        <tr><td colSpan={8} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No reagents match "{reagentSearch}"</td></tr>
+                      )}
+                      {filteredReagents.map(r => {
+                        function rCell(col, style, display) {
+                          const isEd = editCell?.tbl === 'reagent' && editCell?.id === r.id && editCell?.col === col;
+                          return isEd ? (
+                            <td key={col} style={{ padding: 0, background: '#FFF9C4' }}>
+                              <input autoFocus value={editVal} onChange={e => setEditVal(e.target.value)} onBlur={commitReagentEdit} onKeyDown={e => { if (e.key === 'Enter') commitReagentEdit(); if (e.key === 'Escape') setEditCell(null); }} style={{ width: '100%', border: 'none', padding: '10px 12px', outline: 'none', fontSize: '13px', background: 'transparent', textAlign: style.textAlign || 'left', boxSizing: 'border-box' }} />
+                            </td>
+                          ) : (
+                            <td key={col} onClick={() => { setEditCell({ tbl: 'reagent', id: r.id, col }); setEditVal(r[col] != null ? String(r[col]) : ''); }} style={{ padding: '10px 12px', cursor: 'pointer', ...style }} title="Click to edit">
+                              {display}
+                            </td>
+                          );
+                        }
+                        return (
+                          <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}>
+                            {rCell('name',            { fontSize: '13px', color: 'var(--text-primary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, r.name)}
+                            {rCell('vendor',          { fontSize: '12px', color: 'var(--text-secondary)' }, r.vendor)}
+                            {rCell('catalog_number',  { fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }, r.catalog_number)}
+                            {rCell('category',        { fontSize: '12px', color: 'var(--text-secondary)' }, r.category)}
+                            {rCell('quantity_in_lab', { fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center' }, r.quantity_in_lab ?? '—')}
+                            {rCell('fy24_purchases',  { fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }, r.fy24_purchases ?? '—')}
+                            {rCell('fy25_purchases',  { fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }, r.fy25_purchases ?? '—')}
+                            {rCell('fy26_purchases',  { fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }, r.fy26_purchases ?? '—')}
+                          </tr>
+                        );
+                      })}
+                      <tr>
+                        <td colSpan={8} style={{ padding: '8px 12px', borderTop: '1px solid var(--border)' }}>
+                          <button onClick={addReagentRow} style={{ padding: '5px 12px', border: '1px dashed var(--border)', borderRadius: 'var(--radius-md)', background: 'transparent', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer' }}>+ Add Reagent</button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                );
+              })()}
+
+              {reagentTab === 'nanoseq' && (() => {
+                const q = reagentSearch.toLowerCase();
+                const filteredNanoseq = q
+                  ? nanoseq.filter(r => ['protocol','name','company','code','amount'].some(k => r[k] != null && String(r[k]).toLowerCase().includes(q)))
+                  : nanoseq;
+                return (
                 <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
                   {nanoseq.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>No Nanoseq reagents loaded yet. Click Import Nanoseq to upload.</div>
                   ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead><tr style={{ background: 'var(--bg-secondary)' }}>{['Protocol','Reagent','Company','Code','Cost','Amount','nRxn','Link'].map(h => <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
-                      <tbody>{nanoseq.map(r => <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.protocol}</td><td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-primary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.company}</td><td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{r.code}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-primary)' }}>{r.cost ? `$${r.cost.toLocaleString()}` : '—'}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{r.amount}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.n_reactions ?? '—'}</td><td style={{ padding: '10px 12px', fontSize: '12px' }}>{r.link && <a href={r.link} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--purple-primary)', textDecoration: 'none', fontSize: '11px' }}>View</a>}</td></tr>)}</tbody>
+                      <tbody>
+                        {filteredNanoseq.length === 0 && (
+                          <tr><td colSpan={8} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No reagents match "{reagentSearch}"</td></tr>
+                        )}
+                        {filteredNanoseq.map(r => <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.protocol}</td><td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-primary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.company}</td><td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{r.code}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-primary)' }}>{r.cost ? `$${r.cost.toLocaleString()}` : '—'}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{r.amount}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.n_reactions ?? '—'}</td><td style={{ padding: '10px 12px', fontSize: '12px' }}>{r.link && <a href={r.link} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--purple-primary)', textDecoration: 'none', fontSize: '11px' }}>View</a>}</td></tr>)}
+                      </tbody>
                     </table>
                   )}
                 </div>
-              )}
+                );
+              })()}
             </div>
           )}
 
@@ -1160,12 +630,8 @@ export default function Finance({ userRole }) {
                         <YAxis tickFormatter={v => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} tick={{ fontSize: 10, fill: '#555' }} width={90} />
                         <Tooltip formatter={(v, name) => [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name === 'complete' ? 'Complete' : 'Processing']} />
                         <Legend verticalAlign="top" height={32} formatter={v => v === 'complete' ? 'complete' : 'processing'} />
-                        <Bar dataKey="complete" name="complete" stackId="a" fill="#CC4125">
-                          <LabelList dataKey="complete" position="insideTop" formatter={v => v > 0 ? `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''} style={{ fontSize: 9, fill: '#CC4125' }} />
-                        </Bar>
-                        <Bar dataKey="processing" name="processing" stackId="a" fill="#E9A918" radius={[2, 2, 0, 0]}>
-                          <LabelList dataKey="processing" position="top" formatter={v => v > 0 ? `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''} style={{ fontSize: 9, fill: '#E9A918' }} />
-                        </Bar>
+                        <Bar dataKey="complete" name="complete" stackId="a" fill="#CC4125" />
+                        <Bar dataKey="processing" name="processing" stackId="a" fill="#E9A918" radius={[2, 2, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -1217,18 +683,14 @@ export default function Finance({ userRole }) {
                   {/* Left 70%: category chart then category table */}
                   <div style={{ flex: '0 0 70%', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '20px' }}>
                     <ResponsiveContainer width="100%" height={480}>
-                      <BarChart data={categoryChartData} margin={{ top: 24, right: 16, left: 16, bottom: 100 }} barCategoryGap="30%">
+                      <BarChart data={catStatusData} margin={{ top: 24, right: 16, left: 16, bottom: 100 }} barCategoryGap="30%">
                         <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" vertical={false} />
                         <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#555' }} angle={-45} textAnchor="end" interval={0} />
                         <YAxis tickFormatter={v => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} tick={{ fontSize: 11, fill: '#555' }} />
                         <Tooltip formatter={(v, name) => [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name === 'complete' ? 'Complete' : 'Processing']} />
                         <Legend verticalAlign="top" height={32} formatter={v => v === 'complete' ? 'complete' : 'processing'} />
-                        <Bar dataKey="complete" name="complete" stackId="a" fill={CHART_BLUE}>
-                          <LabelList dataKey="complete" position="insideTop" formatter={v => v > 0 ? `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''} style={{ fontSize: 9, fill: CHART_BLUE }} />
-                        </Bar>
-                        <Bar dataKey="processing" name="processing" stackId="a" fill={CHART_RED} radius={[2,2,0,0]}>
-                          <LabelList dataKey="processing" position="top" formatter={v => v > 0 ? `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''} style={{ fontSize: 9, fill: CHART_RED }} />
-                        </Bar>
+                        <Bar dataKey="complete" name="complete" stackId="a" fill={CHART_BLUE} />
+                        <Bar dataKey="processing" name="processing" stackId="a" fill={CHART_RED} radius={[2,2,0,0]} />
                       </BarChart>
                     </ResponsiveContainer>
 
@@ -1241,11 +703,14 @@ export default function Finance({ userRole }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {categoryChartData.map((row, i) => (
-                          <tr key={row.name} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white' }}>
+                        {catStatusData.map((row, i) => (
+                          <tr key={i} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white' }}>
                             <td style={{ padding: '5px 10px', color: '#1A1A2E' }}>{row.name}</td>
-                            <td style={{ padding: '5px 10px', textAlign: 'right', color: CHART_BLUE }}>{row.complete > 0 ? `$${row.complete.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}</td>
-                            <td style={{ padding: '5px 10px', textAlign: 'right', color: CHART_RED }}>{row.processing > 0 ? `$${row.processing.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}</td>
+                            {['complete', 'processing'].map(col => (
+                              <td key={col} style={{ padding: '5px 10px', textAlign: 'right', color: col === 'complete' ? CHART_BLUE : CHART_RED }}>
+                                {row[col] > 0 ? `$${row[col].toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}
+                              </td>
+                            ))}
                           </tr>
                         ))}
                       </tbody>
@@ -1262,7 +727,6 @@ export default function Finance({ userRole }) {
                         <Tooltip formatter={(v, name) => [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name]} />
                         <Bar dataKey="value" radius={[2,2,0,0]}>
                           {totalsChartData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                          <LabelList dataKey="value" position="top" formatter={v => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} style={{ fontSize: 11, fontWeight: 600 }} />
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
@@ -1294,7 +758,7 @@ export default function Finance({ userRole }) {
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
                 <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '20px' }}>Monthly Spending by Category</h3>
                 <ResponsiveContainer width="100%" height={520}>
-                  <LineChart data={perCategoryData} margin={{ top: 20, right: 40, left: 10, bottom: 20 }}>
+                  <LineChart data={catData} margin={{ top: 20, right: 40, left: 10, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
                     <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#555' }} />
                     <YAxis scale="log" domain={[0.9, 250000]} ticks={[1, 10, 100, 1000, 10000, 100000]}
@@ -1302,14 +766,10 @@ export default function Finance({ userRole }) {
                            tick={{ fontSize: 10, fill: '#555' }} width={55} />
                     <Tooltip formatter={(v, name) => v != null ? [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name] : ['-', name]} />
                     <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '16px' }} />
-                    {CATEGORIES.map(cat => (
-                      <Line key={cat} type="linear" dataKey={cat} stroke={CATEGORY_COLORS[cat]}
-                            dot={{ r: 3, fill: CATEGORY_COLORS[cat], strokeWidth: 0 }}
-                            strokeWidth={1.5} connectNulls={false}>
-                        <LabelList dataKey={cat} position="top"
-                                   formatter={v => v != null ? `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}
-                                   style={{ fontSize: 7, fill: CATEGORY_COLORS[cat] }} />
-                      </Line>
+                    {catCats.map(cat => (
+                      <Line key={cat} type="linear" dataKey={cat} stroke={CATEGORY_COLORS[cat] || '#888888'}
+                            dot={{ r: 3, fill: CATEGORY_COLORS[cat] || '#888888', strokeWidth: 0 }}
+                            strokeWidth={1.5} connectNulls={false} />
                     ))}
                   </LineChart>
                 </ResponsiveContainer>
@@ -1319,57 +779,64 @@ export default function Finance({ userRole }) {
                     <thead>
                       <tr style={{ background: '#9DA9C7' }}>
                         <th style={{ padding: '7px 10px', textAlign: 'left', color: 'white', fontWeight: 600, whiteSpace: 'nowrap' }}>Category</th>
-                        {MONTHS.map(m => <th key={m} style={{ padding: '7px 8px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>{m}</th>)}
+                        {catMonths.map(m => <th key={m} style={{ padding: '7px 8px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>{m}</th>)}
                       </tr>
                     </thead>
                     <tbody>
-                      {CATEGORIES.map((cat, i) => (
-                          <tr key={cat} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white' }}>
-                            <td style={{ padding: '5px 10px', whiteSpace: 'nowrap' }}>
-                              <span style={{ backgroundColor: CATEGORY_COLORS[cat], width: 8, height: 8, borderRadius: '50%', display: 'inline-block', marginRight: 6, verticalAlign: 'middle' }} />
-                              <span style={{ color: '#1A1A2E', verticalAlign: 'middle' }}>{cat}</span>
-                            </td>
-                            {MONTHS.map(m => {
-                              const row = perCategoryData.find(r => r.month === m);
-                              const val = row ? row[cat] : undefined;
-                              return (
-                                <td key={m} style={{ padding: '5px 8px', textAlign: 'right', color: '#1A1A2E' }}>
-                                  {val != null ? `$${val.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
+                      {catCats.map((cat, i) => (
+                        <tr key={cat} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white' }}>
+                          <td style={{ padding: '5px 10px', whiteSpace: 'nowrap' }}>
+                            <span style={{ backgroundColor: CATEGORY_COLORS[cat] || '#888888', width: 8, height: 8, borderRadius: '50%', display: 'inline-block', marginRight: 6, verticalAlign: 'middle' }} />
+                            <span style={{ color: '#1A1A2E', verticalAlign: 'middle' }}>{cat}</span>
+                          </td>
+                          {catMonths.map((m, mi) => {
+                            const val = catData[mi]?.[cat];
+                            return (
+                              <td key={m} style={{ padding: '5px 8px', textAlign: 'right', color: '#1A1A2E' }}>
+                                {val != null ? `$${val.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
               </div>
 
-              {/* Individual Category Bar Charts */}
+              {/* Spending by Category — single chart with dropdown */}
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '24px' }}>Spending by Category</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px 24px' }}>
-                  {SUB_CHARTS.map(({ title, data }) => (
-                    <div key={title}>
-                      <p style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)', margin: '0 0 4px 0' }}>{title}</p>
-                      <ResponsiveContainer width="100%" height={260}>
-                        <BarChart data={data} margin={{ top: 22, right: 8, left: 8, bottom: 64 }} barCategoryGap="30%">
-                          <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" vertical={false} />
-                          <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#555' }} angle={-45} textAnchor="end" interval={0} />
-                          <YAxis tickFormatter={v => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} tick={{ fontSize: 9, fill: '#555' }} width={75} />
-                          <Tooltip formatter={v => v != null ? [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, title] : ['-', title]} />
-                          <Bar dataKey="value" fill={CHART_BLUE} radius={[2,2,0,0]}>
-                            <LabelList dataKey="value" position="top" formatter={v => v != null ? `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''} style={{ fontSize: 9, fill: CHART_BLUE }} />
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ))}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Spending by Category</h3>
+                  <select
+                    value={selectedSubChart}
+                    onChange={e => setSelectedSubChart(e.target.value)}
+                    style={{ padding: '7px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', background: 'var(--bg-secondary)', color: 'var(--text-primary)', cursor: 'pointer' }}
+                  >
+                    {subCharts.map(({ title }) => (
+                      <option key={title} value={title}>{title}</option>
+                    ))}
+                  </select>
                 </div>
+                {(() => {
+                  const chart = subCharts.find(c => c.title === selectedSubChart) || subCharts[0];
+                  return (
+                    <ResponsiveContainer width="100%" height={340}>
+                      <BarChart data={chart.data} margin={{ top: 16, right: 16, left: 8, bottom: 20 }} barCategoryGap="35%">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" vertical={false} />
+                        <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#555' }} />
+                        <YAxis tickFormatter={v => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} tick={{ fontSize: 10, fill: '#555' }} width={80} />
+                        <Tooltip formatter={v => v != null ? [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, chart.title] : ['-', chart.title]} />
+                        <Bar dataKey="value" fill={CHART_BLUE} radius={[2,2,0,0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  );
+                })()}
               </div>
 
             </div>
           )}
+
         </>
       )}
 
@@ -1378,16 +845,30 @@ export default function Finance({ userRole }) {
           <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '580px', maxHeight: '80vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
             <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>Add Order</h2>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-              {[{label:'Item Name',key:'item',full:true},{label:'Vendor',key:'vendor'},{label:'Catalog Number',key:'catalog_number'},{label:'Category',key:'category'},{label:'Grant',key:'grant_name'},{label:'Requisition ID',key:'requisition_id'},{label:'Unit Description',key:'unit_description'},{label:'Unit Price ($)',key:'unit_price',type:'number'},{label:'Units',key:'units',type:'number'},{label:'Order Date',key:'order_date',type:'date'},{label:'Requestor',key:'requestor'}].map(field => (
+              {[{label:'Item Name',key:'item',full:true},{label:'Catalog Number',key:'catalog_number'},{label:'Category',key:'category'},{label:'Requisition ID',key:'requisition_id'},{label:'Unit Description',key:'unit_description'},{label:'Unit Price ($)',key:'unit_price',type:'number'},{label:'Units',key:'units',type:'number'},{label:'Order Date',key:'order_date',type:'date'},{label:'Requestor',key:'requestor'}].map(field => (
                 <div key={field.key} style={{ gridColumn: field.full ? '1 / -1' : 'auto' }}>
                   <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
                   <input type={field.type || 'text'} value={newOrder[field.key]} onChange={e => setNewOrder(p => ({ ...p, [field.key]: e.target.value }))} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
                 </div>
               ))}
               <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Grant</label>
+                <input list="order-grant-list" value={newOrder.grant_name} onChange={e => setNewOrder(p => ({ ...p, grant_name: e.target.value }))} placeholder="Select or type grant..." style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                <datalist id="order-grant-list">
+                  {grants.map(g => <option key={g.id} value={g.name} />)}
+                </datalist>
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Vendor</label>
+                <input list="order-vendor-list" value={newOrder.vendor} onChange={e => setNewOrder(p => ({ ...p, vendor: e.target.value }))} placeholder="Select or type vendor..." style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                <datalist id="order-vendor-list">
+                  {vendors.map(v => <option key={v.id} value={v.name} />)}
+                </datalist>
+              </div>
+              <div>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</label>
                 <select value={newOrder.status} onChange={e => setNewOrder(p => ({ ...p, status: e.target.value }))} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none' }}>
-                  <option value="pending">Pending</option><option value="complete">Complete</option><option value="cancelled">Cancelled</option>
+                  <option value="pending">Pending</option><option value="processing">Processing</option><option value="complete">Complete</option><option value="cancelled">Cancelled</option>
                 </select>
               </div>
             </div>
