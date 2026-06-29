@@ -995,7 +995,7 @@ export default function Tasks({ userRole, userId, profile }) {
               {visibleGroups.map(([groupName, tasks]) => (
                 <div key={groupName || 'ungrouped'} style={{ marginBottom: '4px' }}>
                   {groupName && (
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '10px 2px 5px', borderBottom: '1px solid var(--border)', marginBottom: '6px' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--purple-primary)', padding: '12px 2px 6px', borderBottom: '2px solid var(--purple-primary)', marginBottom: '8px' }}>
                       {groupName}
                     </div>
                   )}

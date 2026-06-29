@@ -51,8 +51,8 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   const [contacts, setContacts] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('admin-contacts');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [adminSearch, setAdminSearch] = useState('');
+  const [labSearch, setLabSearch] = useState('');
   const [expandedId, setExpandedId] = useState(null);
   const [showContactForm, setShowContactForm] = useState(false);
   const [showMemberForm, setShowMemberForm] = useState(false);
@@ -103,14 +103,12 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
     e.preventDefault();
     setSaving(true);
     try {
-      // Create auth user
       const { data: authData } = await supabase.auth.admin?.createUser({
         email: memberForm.email,
         password: memberForm.password,
         email_confirm: true
       });
 
-      // Send welcome email via backend
       await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/welcome-email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -122,7 +120,6 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
         })
       });
 
-      // Insert profile with permissions
       await supabase.from('profiles').insert([{
         id: authData?.user?.id,
         email: memberForm.email,
@@ -148,11 +145,10 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
 
   async function handleUpdatePermissions(memberId, key, value) {
     await supabase.from('profiles').update({ [key]: value }).eq('id', memberId);
-    fetchData();
+    setMembers(prev => prev.map(m => m.id === memberId ? { ...m, [key]: value } : m));
   }
 
   async function handleUpdateRole(memberId, role) {
-    // Set default permissions based on role
     const defaults = {
       admin: { can_assign_tasks: true, can_approve_sporadic: true, can_edit_meetings: true, can_view_finance: true, can_edit_samples: true, can_view_contacts: true, can_add_members: true },
       pm: { can_assign_tasks: true, can_approve_sporadic: true, can_edit_meetings: false, can_view_finance: true, can_edit_samples: true, can_view_contacts: true, can_add_members: true },
@@ -160,27 +156,8 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
       intern: { can_assign_tasks: false, can_approve_sporadic: false, can_edit_meetings: false, can_view_finance: false, can_edit_samples: true, can_view_contacts: false, can_add_members: false },
     };
     await supabase.from('profiles').update({ role, ...defaults[role] }).eq('id', memberId);
-    fetchData();
+    setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role, ...defaults[role] } : m));
   }
-
-  const sortedMembers = [...members].sort((a, b) => (ROLE_ORDER[a.role] || 99) - (ROLE_ORDER[b.role] || 99));
-
-  const memberEmails = new Set(members.map(m => m.email?.toLowerCase()).filter(Boolean));
-
-  const filteredAdminContacts = contacts.filter(c => {
-    if (c.email && memberEmails.has(c.email.toLowerCase())) return false;
-    if (searchQuery === '') return true;
-    const q = searchQuery.toLowerCase();
-    return [getDisplayName(c), c.title, c.email, c.phone, c.notes, c.role, c.address]
-      .some(v => v?.toLowerCase().includes(q));
-  });
-
-  const filteredLabMembers = sortedMembers.filter(m => {
-    if (searchQuery === '') return true;
-    const q = searchQuery.toLowerCase();
-    return [m.full_name, m.email, ROLE_LABELS[m.role]]
-      .some(v => v?.toLowerCase().includes(q));
-  });
 
   function setDefaultPermissions(role) {
     const defaults = {
@@ -192,184 +169,186 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
     setMemberForm(p => ({ ...p, role, ...defaults[role] }));
   }
 
+  const memberEmails = new Set(members.map(m => m.email?.toLowerCase()).filter(Boolean));
+  const sortedMembers = [...members].sort((a, b) => (ROLE_ORDER[a.role] || 99) - (ROLE_ORDER[b.role] || 99));
+
+  const filteredAdminContacts = contacts.filter(c => {
+    if (c.email && memberEmails.has(c.email.toLowerCase())) return false;
+    if (!adminSearch) return true;
+    const q = adminSearch.toLowerCase();
+    return [getDisplayName(c), c.title, c.email, c.phone, c.notes, c.role, c.address]
+      .some(v => v?.toLowerCase().includes(q));
+  });
+
+  const filteredLabMembers = sortedMembers.filter(m => {
+    if (!labSearch) return true;
+    const q = labSearch.toLowerCase();
+    return [m.full_name, m.email, ROLE_LABELS[m.role]].some(v => v?.toLowerCase().includes(q));
+  });
+
+  const colStyle = {
+    flex: 1,
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+  };
+
+  const colHeaderStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: '4px',
+  };
+
   return (
     <div>
+      {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
-          <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Lab Contacts</h1>
+          <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Contacts</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>Team directory and member management</p>
         </div>
         {canManage && (
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button onClick={() => { setContactForm(EMPTY_CONTACT); setShowContactForm(true); }} style={{
-              display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
-              background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px'
-            }}><Plus size={16} /> Add Contact</button>
-            <button onClick={() => { setMemberForm(EMPTY_MEMBER); setShowMemberForm(true); }} style={{
-              display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
-              background: 'var(--purple-primary)', color: 'white', border: 'none',
-              borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px'
-            }}><Plus size={16} /> Add Member</button>
-          </div>
+          <button onClick={() => { setContactForm(EMPTY_CONTACT); setEditingContact(null); setShowContactForm(true); }} style={{
+            display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
+            background: 'var(--purple-primary)', color: 'white', border: 'none',
+            borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer'
+          }}><Plus size={16} /> Add Contact</button>
         )}
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: '20px', width: 'fit-content' }}>
-        {[
-          { id: 'admin-contacts', label: 'Admin Contacts' },
-          { id: 'lab-contacts', label: 'Lab Contacts' },
-        ].map(tab => (
-          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setSearchQuery(''); setExpandedId(null); }} style={{
-            padding: '10px 20px',
-            background: activeTab === tab.id ? 'var(--purple-primary)' : 'transparent',
-            color: activeTab === tab.id ? 'white' : 'var(--text-secondary)',
-            border: 'none', fontWeight: activeTab === tab.id ? 600 : 400, fontSize: '13px'
-          }}>{tab.label}</button>
-        ))}
-      </div>
+      {/* Two-column layout */}
+      <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
 
-      {/* Admin Contacts Tab — lab_contacts table */}
-      {activeTab === 'admin-contacts' && (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
-              <Search size={14} color="var(--text-muted)" />
-              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search admin contacts..."
-                style={{ border: 'none', outline: 'none', flex: 1, fontSize: '13px', background: 'transparent' }} />
-            </div>
+        {/* LEFT — Admin Contacts */}
+        <div style={colStyle}>
+          <div style={colHeaderStyle}>
+            <h2 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Admin Contacts</h2>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
+            <Search size={13} color="var(--text-muted)" />
+            <input value={adminSearch} onChange={e => setAdminSearch(e.target.value)} placeholder="Search admin contacts..."
+              style={{ border: 'none', outline: 'none', flex: 1, fontSize: '13px', background: 'transparent' }} />
           </div>
 
           {loading ? (
             <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading...</div>
           ) : filteredAdminContacts.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
-              No admin contacts yet. Add your first contact!
+              No admin contacts yet.
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {filteredAdminContacts.map(contact => {
-                const roleColors = ROLE_COLORS[contact.role] || ROLE_COLORS.member;
-                const isExpanded = expandedId === contact.id;
-                return (
-                  <div key={contact.id} style={{
-                    background: 'var(--bg-card)', border: '1px solid var(--border)',
-                    borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '16px' }}>
-                      <div style={{
-                        width: '42px', height: '42px', borderRadius: '50%',
-                        background: roleColors.bg, border: `2px solid ${roleColors.border}`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                      }}>
-                        <span style={{ fontSize: '16px', fontWeight: 700, color: roleColors.text }}>
-                          {(contact.first_name || contact.full_name || '?').charAt(0).toUpperCase()}
+            filteredAdminContacts.map(contact => {
+              const roleColors = ROLE_COLORS[contact.role] || ROLE_COLORS.member;
+              const isExpanded = expandedId === contact.id;
+              return (
+                <div key={contact.id} style={{
+                  background: 'var(--bg-card)', border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px' }}>
+                    <div style={{
+                      width: '38px', height: '38px', borderRadius: '50%', flexShrink: 0,
+                      background: roleColors.bg, border: `2px solid ${roleColors.border}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: roleColors.text }}>
+                        {(contact.first_name || contact.full_name || '?').charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{getDisplayName(contact)}</span>
+                        <span style={{ padding: '2px 7px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: roleColors.bg, color: roleColors.text, border: `1px solid ${roleColors.border}`, whiteSpace: 'nowrap' }}>
+                          {ROLE_LABELS[contact.role] || contact.role}
                         </span>
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                          <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>{getDisplayName(contact)}</span>
-                          <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: roleColors.bg, color: roleColors.text, border: `1px solid ${roleColors.border}` }}>
-                            {ROLE_LABELS[contact.role] || contact.role}
-                          </span>
-                          {contact.status === 'alumni' && (
-                            <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#F2F3F4', color: '#9A9AB0' }}>Alumni</span>
-                          )}
-                        </div>
-                        {contact.title && <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>Office: {contact.title}</p>}
-                        {contact.notes && <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>{contact.notes}</p>}
-                        <div style={{ display: 'flex', gap: '16px', marginTop: '4px', flexWrap: 'wrap' }}>
-                          {contact.email && (
-                            <a href={`mailto:${contact.email}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none' }}>
-                              <Mail size={12} /> {contact.email}
-                            </a>
-                          )}
-                          {contact.phone && (
-                            <a href={`tel:${contact.phone}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--text-secondary)', textDecoration: 'none' }}>
-                              <Phone size={12} /> {contact.phone}
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
-                        {canManage && (
-                          <>
-                            <button onClick={() => { setEditingContact(contact); setContactForm(contact); setShowContactForm(true); }} style={{ padding: '6px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>
-                              <Edit2 size={14} />
-                            </button>
-                            <button onClick={() => handleDeleteContact(contact.id)} style={{ padding: '6px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)' }}>
-                              <Trash2 size={14} />
-                            </button>
-                            <button onClick={() => setExpandedId(isExpanded ? null : contact.id)} style={{ padding: '6px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>
-                              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                            </button>
-                          </>
+                      {contact.title && <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>{contact.title}</p>}
+                      {contact.notes && <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>{contact.notes}</p>}
+                      <div style={{ display: 'flex', gap: '12px', marginTop: '4px', flexWrap: 'wrap' }}>
+                        {contact.email && (
+                          <a href={`mailto:${contact.email}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none' }}>
+                            <Mail size={11} /> {contact.email}
+                          </a>
+                        )}
+                        {contact.phone && (
+                          <a href={`tel:${contact.phone}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--text-secondary)', textDecoration: 'none' }}>
+                            <Phone size={11} /> {contact.phone}
+                          </a>
                         )}
                       </div>
                     </div>
-
-                    {isExpanded && canManage && (
-                      <div style={{ padding: '16px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                        {contact.alternative_email && (
-                          <div>
-                            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Alternative Email</p>
-                            <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: 0 }}>{contact.alternative_email}</p>
-                          </div>
-                        )}
-                        {contact.address && (
-                          <div>
-                            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Address</p>
-                            <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: 0 }}>{contact.address}</p>
-                          </div>
-                        )}
-                        {(contact.supervisor || contact.supervisor_email) && (
-                          <div style={{ gridColumn: '1 / -1' }}>
-                            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Supervisor</p>
-                            {contact.supervisor && <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: '0 0 2px', fontWeight: 600 }}>{contact.supervisor}</p>}
-                            {contact.supervisor_email && (
-                              <a href={`mailto:${contact.supervisor_email}`} style={{ fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none' }}>{contact.supervisor_email}</a>
-                            )}
-                          </div>
-                        )}
-                        {canViewEmergency && contact.emergency_contact_name && (
-                          <div style={{ gridColumn: '1 / -1', background: '#FEF9E7', borderRadius: 'var(--radius-sm)', padding: '12px', border: '1px solid #FAD7A0' }}>
-                            <p style={{ fontSize: '11px', color: '#F39C12', margin: '0 0 6px', textTransform: 'uppercase', fontWeight: 600 }}>Emergency Contact</p>
-                            <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: '0 0 2px', fontWeight: 600 }}>{contact.emergency_contact_name}</p>
-                            {contact.emergency_contact_relationship && <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 2px' }}>{contact.emergency_contact_relationship}</p>}
-                            {contact.emergency_contact_phone && (
-                              <a href={`tel:${contact.emergency_contact_phone}`} style={{ display: 'block', fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none', marginBottom: '2px' }}>{contact.emergency_contact_phone}</a>
-                            )}
-                            {contact.emergency_contact_email && (
-                              <a href={`mailto:${contact.emergency_contact_email}`} style={{ fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none' }}>{contact.emergency_contact_email}</a>
-                            )}
-                          </div>
-                        )}
-                        {contact.notes && (
-                          <div style={{ gridColumn: '1 / -1' }}>
-                            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Notes</p>
-                            <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: 0, fontStyle: 'italic' }}>{contact.notes}</p>
-                          </div>
-                        )}
+                    {canManage && (
+                      <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                        <button onClick={() => { setEditingContact(contact); setContactForm(contact); setShowContactForm(true); }} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                          <Edit2 size={13} />
+                        </button>
+                        <button onClick={() => handleDeleteContact(contact.id)} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', cursor: 'pointer' }}>
+                          <Trash2 size={13} />
+                        </button>
+                        <button onClick={() => setExpandedId(isExpanded ? null : contact.id)} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                          {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                        </button>
                       </div>
                     )}
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
 
-      {/* Lab Contacts Tab — profiles/team members */}
-      {activeTab === 'lab-contacts' && (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
-              <Search size={14} color="var(--text-muted)" />
-              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search lab contacts..."
-                style={{ border: 'none', outline: 'none', flex: 1, fontSize: '13px', background: 'transparent' }} />
-            </div>
+                  {isExpanded && canManage && (
+                    <div style={{ padding: '14px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                      {contact.alternative_email && (
+                        <div>
+                          <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Alternative Email</p>
+                          <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: 0 }}>{contact.alternative_email}</p>
+                        </div>
+                      )}
+                      {contact.address && (
+                        <div>
+                          <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Address</p>
+                          <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: 0 }}>{contact.address}</p>
+                        </div>
+                      )}
+                      {(contact.supervisor || contact.supervisor_email) && (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Supervisor</p>
+                          {contact.supervisor && <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: '0 0 2px', fontWeight: 600 }}>{contact.supervisor}</p>}
+                          {contact.supervisor_email && <a href={`mailto:${contact.supervisor_email}`} style={{ fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none' }}>{contact.supervisor_email}</a>}
+                        </div>
+                      )}
+                      {canViewEmergency && contact.emergency_contact_name && (
+                        <div style={{ gridColumn: '1 / -1', background: '#FEF9E7', borderRadius: 'var(--radius-sm)', padding: '12px', border: '1px solid #FAD7A0' }}>
+                          <p style={{ fontSize: '11px', color: '#F39C12', margin: '0 0 6px', textTransform: 'uppercase', fontWeight: 600 }}>Emergency Contact</p>
+                          <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: '0 0 2px', fontWeight: 600 }}>{contact.emergency_contact_name}</p>
+                          {contact.emergency_contact_relationship && <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 2px' }}>{contact.emergency_contact_relationship}</p>}
+                          {contact.emergency_contact_phone && <a href={`tel:${contact.emergency_contact_phone}`} style={{ display: 'block', fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none', marginBottom: '2px' }}>{contact.emergency_contact_phone}</a>}
+                          {contact.emergency_contact_email && <a href={`mailto:${contact.emergency_contact_email}`} style={{ fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none' }}>{contact.emergency_contact_email}</a>}
+                        </div>
+                      )}
+                      {contact.notes && (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Notes</p>
+                          <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: 0, fontStyle: 'italic' }}>{contact.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* RIGHT — Lab Members */}
+        <div style={colStyle}>
+          <div style={colHeaderStyle}>
+            <h2 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Lab Contacts</h2>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
+            <Search size={13} color="var(--text-muted)" />
+            <input value={labSearch} onChange={e => setLabSearch(e.target.value)} placeholder="Search lab contacts..."
+              style={{ border: 'none', outline: 'none', flex: 1, fontSize: '13px', background: 'transparent' }} />
           </div>
 
           {loading ? (
@@ -379,102 +358,96 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
               No lab contacts found.
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {filteredLabMembers.map(member => {
-                const roleColors = ROLE_COLORS[member.role] || ROLE_COLORS.member;
-                const isExpanded = expandedId === member.id;
-                return (
-                  <div key={member.id} style={{
-                    background: 'var(--bg-card)', border: '1px solid var(--border)',
-                    borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '16px' }}>
-                      <div style={{
-                        width: '38px', height: '38px', borderRadius: '50%',
-                        background: roleColors.bg, border: `2px solid ${roleColors.border}`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                      }}>
-                        <span style={{ fontSize: '14px', fontWeight: 700, color: roleColors.text }}>
-                          {member.full_name?.charAt(0).toUpperCase()}
-                        </span>
+            filteredLabMembers.map(member => {
+              const roleColors = ROLE_COLORS[member.role] || ROLE_COLORS.member;
+              const isExpanded = expandedId === member.id;
+              return (
+                <div key={member.id} style={{
+                  background: 'var(--bg-card)', border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px' }}>
+                    <div style={{
+                      width: '38px', height: '38px', borderRadius: '50%', flexShrink: 0,
+                      background: roleColors.bg, border: `2px solid ${roleColors.border}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: roleColors.text }}>
+                        {member.full_name?.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{member.full_name}</span>
+                        {canManage && member.id !== userId ? (
+                          <select value={member.role} onChange={e => handleUpdateRole(member.id, e.target.value)}
+                            style={{ padding: '2px 7px', borderRadius: '12px', border: `1px solid ${roleColors.border}`, background: roleColors.bg, color: roleColors.text, fontSize: '11px', fontWeight: 600, outline: 'none' }}>
+                            <option value="admin">Supervisor</option>
+                            <option value="pm">Program Manager</option>
+                            <option value="member">Lab Member</option>
+                            <option value="intern">Intern</option>
+                          </select>
+                        ) : (
+                          <span style={{ padding: '2px 7px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: roleColors.bg, color: roleColors.text, border: `1px solid ${roleColors.border}` }}>
+                            {ROLE_LABELS[member.role] || member.role}
+                          </span>
+                        )}
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-                          <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{member.full_name}</span>
-                          {canManage && member.id !== userId ? (
-                            <select value={member.role} onChange={e => handleUpdateRole(member.id, e.target.value)}
-                              style={{ padding: '3px 8px', borderRadius: '12px', border: `1px solid ${roleColors.border}`, background: roleColors.bg, color: roleColors.text, fontSize: '11px', fontWeight: 600, outline: 'none' }}>
-                              <option value="admin">Supervisor</option>
-                              <option value="pm">Program Manager</option>
-                              <option value="member">Lab Member</option>
-                              <option value="intern">Intern</option>
-                            </select>
-                          ) : (
-                            <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: roleColors.bg, color: roleColors.text, border: `1px solid ${roleColors.border}` }}>
-                              {ROLE_LABELS[member.role] || member.role}
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                          {member.email && (
-                            <a href={`mailto:${member.email}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none' }}>
-                              <Mail size={12} /> {member.email}
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                      {canManage && member.id !== userId && (
-                        <button onClick={() => setExpandedId(isExpanded ? null : member.id)} style={{
-                          display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px',
-                          borderRadius: 'var(--radius-md)', border: '1px solid var(--border)',
-                          background: 'var(--bg-primary)', color: 'var(--text-secondary)', fontSize: '12px'
-                        }}>
-                          <Shield size={13} /> Permissions {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                        </button>
+                      {member.email && (
+                        <a href={`mailto:${member.email}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none' }}>
+                          <Mail size={11} /> {member.email}
+                        </a>
                       )}
                     </div>
-
-                    {isExpanded && canManage && (
-                      <div style={{ padding: '16px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
-                        <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Permission Toggles</p>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px' }}>
-                          {PERMISSIONS.map(perm => (
-                            <div key={perm.key} style={{
-                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                              padding: '10px 14px', background: 'var(--bg-primary)',
-                              borderRadius: 'var(--radius-md)', border: '1px solid var(--border)'
-                            }}>
-                              <div>
-                                <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{perm.label}</p>
-                                <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>{perm.description}</p>
-                              </div>
-                              <button
-                                onClick={() => handleUpdatePermissions(member.id, perm.key, !member[perm.key])}
-                                style={{
-                                  width: '40px', height: '22px', borderRadius: '11px', border: 'none',
-                                  background: member[perm.key] ? 'var(--purple-primary)' : 'var(--border)',
-                                  cursor: 'pointer', position: 'relative', transition: 'background 0.2s ease', flexShrink: 0
-                                }}
-                              >
-                                <div style={{
-                                  width: '16px', height: '16px', borderRadius: '50%', background: 'white',
-                                  position: 'absolute', top: '3px',
-                                  left: member[perm.key] ? '21px' : '3px',
-                                  transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                                }} />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                    {canManage && member.id !== userId && (
+                      <button onClick={() => setExpandedId(isExpanded ? null : member.id)} style={{
+                        display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 10px',
+                        borderRadius: 'var(--radius-md)', border: '1px solid var(--border)',
+                        background: 'var(--bg-primary)', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer', flexShrink: 0
+                      }}>
+                        <Shield size={12} /> Permissions {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                      </button>
                     )}
                   </div>
-                );
-              })}
-            </div>
+
+                  {isExpanded && canManage && (
+                    <div style={{ padding: '14px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
+                      <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Permission Toggles</p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {PERMISSIONS.map(perm => (
+                          <div key={perm.key} style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '8px 12px', background: 'var(--bg-primary)',
+                            borderRadius: 'var(--radius-md)', border: '1px solid var(--border)'
+                          }}>
+                            <div>
+                              <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{perm.label}</p>
+                              <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>{perm.description}</p>
+                            </div>
+                            <button onClick={() => handleUpdatePermissions(member.id, perm.key, !member[perm.key])}
+                              style={{
+                                width: '40px', height: '22px', borderRadius: '11px', border: 'none',
+                                background: member[perm.key] ? 'var(--purple-primary)' : 'var(--border)',
+                                cursor: 'pointer', position: 'relative', transition: 'background 0.2s ease', flexShrink: 0
+                              }}>
+                              <div style={{
+                                width: '16px', height: '16px', borderRadius: '50%', background: 'white',
+                                position: 'absolute', top: '3px',
+                                left: member[perm.key] ? '21px' : '3px',
+                                transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                              }} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })
           )}
-        </>
-      )}
+        </div>
+      </div>
 
       {/* Add/Edit Contact Modal */}
       {showContactForm && (
@@ -482,11 +455,8 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
           <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '480px', maxHeight: '85vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
             <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>{editingContact ? 'Edit Contact' : 'Add Contact'}</h2>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-              {[
-                { key: 'first_name', label: 'First Name' },
-                { key: 'last_name', label: 'Last Name' },
-              ].map(field => (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+              {[{ key: 'first_name', label: 'First Name' }, { key: 'last_name', label: 'Last Name' }].map(field => (
                 <div key={field.key}>
                   <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
                   <input type="text" value={contactForm[field.key] || ''} onChange={e => setContactForm(p => ({ ...p, [field.key]: e.target.value }))}
@@ -496,18 +466,38 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
             </div>
 
             {[
-              { key: 'title', label: 'Office' },
+              { key: 'title', label: 'Office / Title' },
               { key: 'email', label: 'Email' },
               { key: 'phone', label: 'Phone Number' },
+              { key: 'alternative_email', label: 'Alternative Email' },
+              { key: 'address', label: 'Address' },
+              { key: 'supervisor', label: 'Supervisor Name' },
+              { key: 'supervisor_email', label: 'Supervisor Email' },
             ].map(field => (
-              <div key={field.key} style={{ marginBottom: '16px' }}>
+              <div key={field.key} style={{ marginBottom: '12px' }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
                 <input type="text" value={contactForm[field.key] || ''} onChange={e => setContactForm(p => ({ ...p, [field.key]: e.target.value }))}
                   style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
             ))}
 
-            <div style={{ marginBottom: '24px' }}>
+            <div style={{ background: '#FEF9E7', borderRadius: 'var(--radius-md)', padding: '14px', border: '1px solid #FAD7A0', marginBottom: '12px' }}>
+              <p style={{ fontSize: '11px', fontWeight: 600, color: '#F39C12', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Emergency Contact</p>
+              {[
+                { key: 'emergency_contact_name', label: 'Name' },
+                { key: 'emergency_contact_relationship', label: 'Relationship' },
+                { key: 'emergency_contact_phone', label: 'Phone' },
+                { key: 'emergency_contact_email', label: 'Email' },
+              ].map(field => (
+                <div key={field.key} style={{ marginBottom: '8px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
+                  <input type="text" value={contactForm[field.key] || ''} onChange={e => setContactForm(p => ({ ...p, [field.key]: e.target.value }))}
+                    style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
               <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>What are they helpful for?</label>
               <textarea value={contactForm.notes || ''} onChange={e => setContactForm(p => ({ ...p, notes: e.target.value }))}
                 placeholder="e.g. IRB submissions, grant reporting, equipment repairs..."
@@ -552,7 +542,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                       border: `2px solid ${memberForm.role === role ? (ROLE_COLORS[role]?.border || 'var(--purple-primary)') : 'var(--border)'}`,
                       background: memberForm.role === role ? (ROLE_COLORS[role]?.bg || 'var(--purple-faint)') : 'transparent',
                       color: memberForm.role === role ? (ROLE_COLORS[role]?.text || 'var(--purple-primary)') : 'var(--text-secondary)',
-                      fontWeight: memberForm.role === role ? 600 : 400, fontSize: '12px'
+                      fontWeight: memberForm.role === role ? 600 : 400, fontSize: '12px', cursor: 'pointer'
                     }}>{ROLE_LABELS[role]}</button>
                   ))}
                 </div>
