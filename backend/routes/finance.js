@@ -16,6 +16,8 @@ const transporter = nodemailer.createTransport({
     pass: process.env.GMAIL_APP_PASSWORD
   }
 });
+// EMAILS PAUSED — remove this line to resume
+transporter.sendMail = async () => {};
 
 function excelDateToString(excelDate) {
   if (!excelDate || isNaN(excelDate)) return null;
