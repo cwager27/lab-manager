@@ -20,5 +20,8 @@
       "src": "/(.*)",
       "dest": "frontend/$1"
     }
+  ],
+  "crons": [
+    { "path": "/api/cron-daily", "schedule": "0 8 * * *" }
   ]
 }

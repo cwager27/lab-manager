@@ -13,6 +13,7 @@ const transporter = nodemailer.createTransport({
     pass: process.env.GMAIL_APP_PASSWORD
   }
 });
+transporter.sendMail = async () => {}; // paused
 
 // Check certificate expiries (called from cron)
 async function checkCertificateExpiries() {

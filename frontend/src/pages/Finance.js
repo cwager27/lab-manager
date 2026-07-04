@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { AlertTriangle, Upload, Plus, Search, CheckCircle } from 'lucide-react';
+import Vendors from './Vendors';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
 
 const CHART_BLUE = '#4472C4';
@@ -41,9 +42,6 @@ function orderDateToMonth(dateStr) {
   return `${MON_ABBR[d.getUTCMonth()]} '${String(d.getUTCFullYear()).slice(2)}`;
 }
 
-function getCatMonthlyData(cat, data) {
-  return data.map(r => ({ month: r.month, value: r[cat] != null ? r[cat] : null }));
-}
 
 const STATUS_STYLES = {
   complete: { bg: '#EAF7F0', text: '#27AE60', label: 'Complete' },
@@ -119,8 +117,11 @@ export default function Finance({ userRole }) {
   const [grantFilterOpen, setGrantFilterOpen] = useState(false);
   const [draftGrants, setDraftGrants] = useState([]);
   const [grantSearch, setGrantSearch] = useState('');
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [categoryFilterOpen, setCategoryFilterOpen] = useState(false);
+  const [draftCategories, setDraftCategories] = useState([]);
+  const [categorySearch, setCategorySearch] = useState('');
   const chartData = useMemo(() => {
-    const LAB_CATS = new Set(['Specialized Reagents, Kits, Supplies','Sequence-Based Reagents','Proteins and enzymes','Antibodies','Biological materials/specimens','General Lab Chemicals','Tissue Culture Reagents']);
     const real = orders.filter(o => o.item && o.item.trim() !== '');
 
     // sorted unique months
@@ -153,20 +154,14 @@ export default function Finance({ userRole }) {
     });
     const catStatusData = CATEGORIES.map(cat => byCat[cat]);
 
-    // lab reagents monthly
-    const labByMonth = {};
+    // grant names sorted by total spend descending
+    const grantSpend = {};
     real.forEach(o => {
-      if (!o.category || !LAB_CATS.has(o.category) || o.total_price == null) return;
-      const m = orderDateToMonth(o.order_date);
-      if (!m) return;
-      labByMonth[m] = (labByMonth[m] || 0) + Number(o.total_price);
+      if (o.grant_name && o.total_price != null) {
+        grantSpend[o.grant_name] = (grantSpend[o.grant_name] || 0) + Number(o.total_price);
+      }
     });
-    const labReagentsMonthlyData = months.map(m => ({ month: m, value: labByMonth[m] ?? null }));
-
-    // grant names
-    const grantSet = new Set();
-    real.forEach(o => { if (o.grant_name) grantSet.add(o.grant_name); });
-    const grantNames = [...grantSet].sort();
+    const grantNames = Object.keys(grantSpend).sort((a, b) => grantSpend[b] - grantSpend[a]);
 
     // by grant × month × status
     const byGrant = {};
@@ -181,16 +176,16 @@ export default function Finance({ userRole }) {
       else if (s === 'processing') byGrant[o.grant_name][m].processing += Number(o.total_price);
     });
 
-    return { months, catData, catStatusData, labReagentsMonthlyData, grantNames, byGrant };
+    return { months, catData, catStatusData, grantNames, byGrant };
   }, [orders]);
 
-  const { months: MONTHS, catData, catStatusData, labReagentsMonthlyData, grantNames: GRANT_NAMES, byGrant: ordersDataByGrant } = chartData;
+  const { months: MONTHS, catData, catStatusData, grantNames: GRANT_NAMES, byGrant: ordersDataByGrant } = chartData;
 
-  const catCats = CATEGORIES;
   const [editCell, setEditCell] = useState(null);
   const [editVal, setEditVal] = useState('');
-  const [selectedSubChart, setSelectedSubChart] = useState('Subcapital');
   const [vendors, setVendors] = useState([]);
+  const [editingOrder, setEditingOrder] = useState(null);
+  const [editOrderForm, setEditOrderForm] = useState({});
 
   const canManage = userRole === 'admin' || userRole === 'pm';
 
@@ -250,21 +245,55 @@ export default function Finance({ userRole }) {
     if (data.success) { setPreviewNanoseq(null); fetchData(); }
   }
 
-  // Chart editing helpers
   const catMonths = catData.map(r => r.month);
-  const subCharts = [
-    { title: 'Subcapital',               data: getCatMonthlyData('Subcapital', catData) },
-    { title: 'Travel & Conferences',    data: getCatMonthlyData('Travel & Conferences', catData) },
-    { title: 'Capital',                 data: getCatMonthlyData('Capital', catData) },
-    { title: 'Meals and fun',           data: getCatMonthlyData('Meals and fun', catData) },
-    { title: 'Subscriptions',           data: getCatMonthlyData('Subscriptions', catData) },
-    { title: 'Disposable Supplies',     data: getCatMonthlyData('Disposable Supplies', catData) },
-    { title: 'Tissue Culture Reagents', data: getCatMonthlyData('Tissue Culture Reagents', catData) },
-    { title: 'Shipping',                data: getCatMonthlyData('Shipping', catData) },
-    { title: 'CR/CO',                   data: getCatMonthlyData('CR/CO', catData) },
-    { title: 'Cores',                   data: getCatMonthlyData('Cores', catData) },
-    { title: 'Lab reagents',            data: labReagentsMonthlyData },
-  ];
+
+  async function commitOrderSelectEdit(id, col, value) {
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, [col]: value } : o));
+    await supabase.from('orders').update({ [col]: value }).eq('id', id);
+  }
+
+  function openEditOrder(order) {
+    setEditingOrder(order);
+    setEditOrderForm({
+      item: order.item || '',
+      vendor: order.vendor || '',
+      catalog_number: order.catalog_number || '',
+      category: order.category || '',
+      grant_name: order.grant_name || '',
+      requisition_id: order.requisition_id || '',
+      unit_description: order.unit_description || '',
+      unit_price: order.unit_price != null ? String(order.unit_price) : '',
+      units: order.units != null ? String(order.units) : '',
+      total_price: order.total_price != null ? String(order.total_price) : '',
+      order_date: order.order_date || '',
+      requestor: order.requestor || '',
+      status: order.status || 'pending',
+      notes: order.notes || '',
+    });
+  }
+
+  async function saveEditOrder() {
+    if (!editingOrder) return;
+    const updated = {
+      item: editOrderForm.item,
+      vendor: editOrderForm.vendor,
+      catalog_number: editOrderForm.catalog_number,
+      category: editOrderForm.category,
+      grant_name: editOrderForm.grant_name,
+      requisition_id: editOrderForm.requisition_id,
+      unit_description: editOrderForm.unit_description,
+      unit_price: parseFloat(editOrderForm.unit_price) || null,
+      units: parseInt(editOrderForm.units) || null,
+      total_price: parseFloat(editOrderForm.total_price) || null,
+      order_date: editOrderForm.order_date || null,
+      requestor: editOrderForm.requestor,
+      status: editOrderForm.status,
+      notes: editOrderForm.notes,
+    };
+    await supabase.from('orders').update(updated).eq('id', editingOrder.id);
+    setOrders(prev => prev.map(o => o.id === editingOrder.id ? { ...o, ...updated } : o));
+    setEditingOrder(null);
+  }
 
   async function commitReagentEdit() {
     if (!editCell || editCell.tbl !== 'reagent') return;
@@ -297,6 +326,8 @@ export default function Finance({ userRole }) {
     const processing = activeGrants.reduce((sum, g) => sum + (ordersDataByGrant[g]?.[m]?.processing || 0), 0);
     return { month: m, complete, processing };
   });
+  const activeCats = selectedCategories.length === 0 ? CATEGORIES : selectedCategories;
+  const filteredCategoryOptions = CATEGORIES.filter(c => c.toLowerCase().includes(categorySearch.toLowerCase()));
   const filteredGrantOptions = GRANT_NAMES.filter(g => g.toLowerCase().includes(grantSearch.toLowerCase()));
   const tableMonthRows = MONTHS.map(m => {
     const complete   = activeGrants.reduce((sum, g) => sum + (ordersDataByGrant[g]?.[m]?.complete   || 0), 0);
@@ -359,7 +390,7 @@ export default function Finance({ userRole }) {
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
         <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content' }}>
-          {['grants', 'orders', 'reagents', 'charts'].map(tab => (
+          {['grants', 'orders', 'reagents', 'vendors', 'charts'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', background: activeTab === tab ? 'var(--purple-primary)' : 'transparent', color: activeTab === tab ? 'white' : 'var(--text-secondary)', border: 'none', fontWeight: activeTab === tab ? 600 : 400, fontSize: '13px', textTransform: 'capitalize' }}>{tab}</button>
           ))}
         </div>
@@ -445,17 +476,26 @@ export default function Finance({ userRole }) {
                     {filteredOrders.map(order => {
                       const statusStyle = STATUS_STYLES[order.status] || STATUS_STYLES.pending;
                       return (
-                        <tr key={order.id} style={{ borderTop: '1px solid var(--border)' }}>
+                        <tr key={order.id} onClick={() => openEditOrder(order)}
+                          style={{ borderTop: '1px solid var(--border)', cursor: 'pointer' }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                          onMouseLeave={e => e.currentTarget.style.background = ''}>
                           <td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-primary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{order.item}</td>
                           <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{order.vendor}</td>
                           <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{order.category}</td>
                           <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--purple-primary)', whiteSpace: 'nowrap' }}>{order.grant_name}</td>
                           <td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{order.requisition_id}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>${order.total_price?.toLocaleString()}</td>
+                          <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{order.total_price != null ? `$${order.total_price.toLocaleString()}` : ''}</td>
                           <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{order.order_date}</td>
                           <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{order.requestor}</td>
-                          <td style={{ padding: '10px 12px' }}>
-                            <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text, whiteSpace: 'nowrap' }}>{statusStyle.label}</span>
+                          <td style={{ padding: '10px 12px' }} onClick={e => e.stopPropagation()}>
+                            <select value={order.status || 'pending'} onChange={e => commitOrderSelectEdit(order.id, 'status', e.target.value)}
+                              style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text, border: 'none', cursor: 'pointer', outline: 'none' }}>
+                              <option value="pending">Pending</option>
+                              <option value="processing">Processing</option>
+                              <option value="complete">Complete</option>
+                              <option value="cancelled">Cancelled</option>
+                            </select>
                           </td>
                         </tr>
                       );
@@ -569,6 +609,8 @@ export default function Finance({ userRole }) {
               })()}
             </div>
           )}
+
+          {activeTab === 'vendors' && <Vendors userRole={userRole} />}
 
           {activeTab === 'charts' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
@@ -756,7 +798,49 @@ export default function Finance({ userRole }) {
 
               {/* Monthly Spending by Category */}
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '20px' }}>Monthly Spending by Category</h3>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Monthly Spending by Category</h3>
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      onClick={() => { setDraftCategories(selectedCategories); setCategorySearch(''); setCategoryFilterOpen(v => !v); }}
+                      style={{ padding: '8px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      {selectedCategories.length === 0 ? 'All Categories' : `${selectedCategories.length} Categor${selectedCategories.length > 1 ? 'ies' : 'y'} Selected`}
+                      <span style={{ fontSize: '10px' }}>▼</span>
+                    </button>
+                    {categoryFilterOpen && (
+                      <div style={{ position: 'absolute', zIndex: 200, top: 'calc(100% + 4px)', right: 0, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px', width: '320px', boxShadow: 'var(--shadow-lg)' }}>
+                        <input
+                          value={categorySearch}
+                          onChange={e => setCategorySearch(e.target.value)}
+                          placeholder="Search categories…"
+                          style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box', marginBottom: '8px' }}
+                        />
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                          <button onClick={() => setDraftCategories([...CATEGORIES])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Select All</button>
+                          <button onClick={() => setDraftCategories([])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Clear</button>
+                        </div>
+                        <div style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          {filteredCategoryOptions.map(cat => (
+                            <label key={cat} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px' }}>
+                              <input
+                                type="checkbox"
+                                checked={draftCategories.includes(cat)}
+                                onChange={e => setDraftCategories(prev => e.target.checked ? [...prev, cat] : prev.filter(x => x !== cat))}
+                              />
+                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: CATEGORY_COLORS[cat] || '#888888', flexShrink: 0 }} />
+                              <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{cat}</span>
+                            </label>
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                          <button onClick={() => setCategoryFilterOpen(false)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                          <button onClick={() => { setSelectedCategories(draftCategories); setCategoryFilterOpen(false); }} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>OK</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <ResponsiveContainer width="100%" height={520}>
                   <LineChart data={catData} margin={{ top: 20, right: 40, left: 10, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
@@ -766,7 +850,7 @@ export default function Finance({ userRole }) {
                            tick={{ fontSize: 10, fill: '#555' }} width={55} />
                     <Tooltip formatter={(v, name) => v != null ? [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name] : ['-', name]} />
                     <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '16px' }} />
-                    {catCats.map(cat => (
+                    {activeCats.map(cat => (
                       <Line key={cat} type="linear" dataKey={cat} stroke={CATEGORY_COLORS[cat] || '#888888'}
                             dot={{ r: 3, fill: CATEGORY_COLORS[cat] || '#888888', strokeWidth: 0 }}
                             strokeWidth={1.5} connectNulls={false} />
@@ -783,7 +867,7 @@ export default function Finance({ userRole }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {catCats.map((cat, i) => (
+                      {activeCats.map((cat, i) => (
                         <tr key={cat} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white' }}>
                           <td style={{ padding: '5px 10px', whiteSpace: 'nowrap' }}>
                             <span style={{ backgroundColor: CATEGORY_COLORS[cat] || '#888888', width: 8, height: 8, borderRadius: '50%', display: 'inline-block', marginRight: 6, verticalAlign: 'middle' }} />
@@ -802,36 +886,6 @@ export default function Finance({ userRole }) {
                     </tbody>
                   </table>
                 </div>
-              </div>
-
-              {/* Spending by Category — single chart with dropdown */}
-              <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Spending by Category</h3>
-                  <select
-                    value={selectedSubChart}
-                    onChange={e => setSelectedSubChart(e.target.value)}
-                    style={{ padding: '7px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', background: 'var(--bg-secondary)', color: 'var(--text-primary)', cursor: 'pointer' }}
-                  >
-                    {subCharts.map(({ title }) => (
-                      <option key={title} value={title}>{title}</option>
-                    ))}
-                  </select>
-                </div>
-                {(() => {
-                  const chart = subCharts.find(c => c.title === selectedSubChart) || subCharts[0];
-                  return (
-                    <ResponsiveContainer width="100%" height={340}>
-                      <BarChart data={chart.data} margin={{ top: 16, right: 16, left: 8, bottom: 20 }} barCategoryGap="35%">
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" vertical={false} />
-                        <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#555' }} />
-                        <YAxis tickFormatter={v => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} tick={{ fontSize: 10, fill: '#555' }} width={80} />
-                        <Tooltip formatter={v => v != null ? [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, chart.title] : ['-', chart.title]} />
-                        <Bar dataKey="value" fill={CHART_BLUE} radius={[2,2,0,0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  );
-                })()}
               </div>
 
             </div>
@@ -875,6 +929,111 @@ export default function Finance({ userRole }) {
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button onClick={() => setShowAddOrder(false)} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500 }}>Cancel</button>
               <button onClick={handleAddOrder} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600 }}>Add Order</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingOrder && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '600px', maxHeight: '85vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>Edit Order</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Item Name</label>
+                <input value={editOrderForm.item} onChange={e => setEditOrderForm(p => ({ ...p, item: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Vendor</label>
+                <select value={editOrderForm.vendor} onChange={e => setEditOrderForm(p => ({ ...p, vendor: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', background: 'var(--bg-primary)' }}>
+                  <option value="">— Select vendor —</option>
+                  {vendors.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
+                  {editOrderForm.vendor && !vendors.some(v => v.name === editOrderForm.vendor) && (
+                    <option value={editOrderForm.vendor}>{editOrderForm.vendor}</option>
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Category</label>
+                <select value={editOrderForm.category} onChange={e => setEditOrderForm(p => ({ ...p, category: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', background: 'var(--bg-primary)' }}>
+                  <option value="">— Select category —</option>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Grant</label>
+                <select value={editOrderForm.grant_name} onChange={e => setEditOrderForm(p => ({ ...p, grant_name: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', background: 'var(--bg-primary)' }}>
+                  <option value="">— Select grant —</option>
+                  {[...new Set([...grants.map(g => g.name), ...GRANT_NAMES])].sort().map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</label>
+                <select value={editOrderForm.status} onChange={e => setEditOrderForm(p => ({ ...p, status: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', background: 'var(--bg-primary)' }}>
+                  <option value="pending">Pending</option>
+                  <option value="processing">Processing</option>
+                  <option value="complete">Complete</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+
+              {[
+                { key: 'catalog_number', label: 'Catalog Number' },
+                { key: 'requisition_id', label: 'Requisition ID' },
+                { key: 'unit_description', label: 'Unit Description' },
+                { key: 'requestor', label: 'Requestor' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{f.label}</label>
+                  <input value={editOrderForm[f.key]} onChange={e => setEditOrderForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+              ))}
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Unit Price ($)</label>
+                <input type="number" value={editOrderForm.unit_price} onChange={e => setEditOrderForm(p => ({ ...p, unit_price: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Units</label>
+                <input type="number" value={editOrderForm.units} onChange={e => setEditOrderForm(p => ({ ...p, units: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Price ($)</label>
+                <input type="number" value={editOrderForm.total_price} onChange={e => setEditOrderForm(p => ({ ...p, total_price: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Order Date</label>
+                <input type="date" value={editOrderForm.order_date} onChange={e => setEditOrderForm(p => ({ ...p, order_date: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Notes</label>
+                <textarea value={editOrderForm.notes} onChange={e => setEditOrderForm(p => ({ ...p, notes: e.target.value }))}
+                  rows={2} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setEditingOrder(null)} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={saveEditOrder} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Save Changes</button>
             </div>
           </div>
         </div>

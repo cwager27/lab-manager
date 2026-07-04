@@ -31,6 +31,10 @@ const { router: complianceRoutes, checkCertificateExpiries, checkPolicyReminders
 const { router: backupRoutes, runBackup } = require('./routes/backup');
 const { router: financeRoutes, checkGrantAlerts } = require('./routes/finance');
 const memberRoutes = require('./routes/members');
+const authRoutes = require('./routes/auth');
+const taskRoutes = require('./routes/tasks');
+const { generateOccurrences } = require('./lib/occurrenceGenerator');
+const { supabaseAdmin } = require('./lib/supabaseAdmin');
 
 app.use('/api', assignmentRoutes);
 app.use('/api', checklistRoutes);
@@ -41,6 +45,8 @@ app.use('/api', complianceRoutes);
 app.use('/api', backupRoutes);
 app.use('/api', financeRoutes);
 app.use('/api', memberRoutes);
+app.use('/api', authRoutes);
+app.use('/api', taskRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Lab Manager API is running' });
@@ -77,7 +83,8 @@ async function runDailyChecks() {
     });
   }
 
-  await checkGrantAlerts();
+  // await checkGrantAlerts(); // paused
+  await generateOccurrences(supabaseAdmin, { windowDays: 90 });
   await checkPendingConfirmations();
   await checkCertificateExpiries();
   await checkPolicyReminders();

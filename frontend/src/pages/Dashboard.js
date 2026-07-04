@@ -160,7 +160,7 @@ export default function Dashboard({ profile, userRole, userId }) {
 
     // Split contacts: exclude profiles from admin contacts
     const profEmails = new Set((memberData || []).map(m => m.email?.toLowerCase()).filter(Boolean));
-    setAdminContacts((contactData || []).filter(c => !c.email || !profEmails.has(c.email.toLowerCase())));
+    setAdminContacts((contactData || []).filter(c => c.role === 'external'));
     setTeamMembers(memberData || []);
     setMembers(memberData || []);
     setTaskDefs(taskDefData || []);
@@ -602,37 +602,6 @@ export default function Dashboard({ profile, userRole, userId }) {
                 </div>
               ))}
             </div>
-
-            {/* Team Contacts (profiles) */}
-            {teamMembers.length > 0 && (
-              <Card icon={<Users size={13} color="var(--purple-primary)" />} title="Lab Contacts">
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {teamMembers.map((m, i) => {
-                    const colors = ROLE_COLORS[m.role] || ROLE_COLORS.member;
-                    return (
-                      <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
-                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: colors.bg, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <span style={{ fontSize: '12px', fontWeight: 700, color: colors.text }}>{m.full_name?.charAt(0).toUpperCase()}</span>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{m.full_name}</span>
-                            <span style={{ padding: '1px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 600, background: colors.bg, color: colors.text, border: `1px solid ${colors.border}` }}>
-                              {ROLE_LABELS[m.role] || m.role}
-                            </span>
-                          </div>
-                        </div>
-                        {m.email && (
-                          <a href={`mailto:${m.email}`} style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px', color: 'var(--purple-primary)', textDecoration: 'none', flexShrink: 0 }}>
-                            <Mail size={11} /> {m.email}
-                          </a>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
-            )}
 
             {/* Admin Contacts (lab_contacts) */}
             {adminContacts.length > 0 && (

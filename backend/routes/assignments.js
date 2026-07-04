@@ -13,6 +13,7 @@ const transporter = nodemailer.createTransport({
     pass: process.env.GMAIL_APP_PASSWORD
   }
 });
+transporter.sendMail = async () => {}; // paused
 
 router.post('/send-assignments', async (req, res) => {
   const { assignments, cycleStart, cycleEnd } = req.body;

@@ -149,15 +149,23 @@ async function reassignVacationTasks(vacationRequest) {
       .neq('id', vacationRequest.requested_by)
       .in('role', ['admin', 'pm', 'member']);
 
+    // Pre-compute ratios once and mutate in-place each iteration so meetings
+    // distribute across the team rather than all landing on the same person.
+    const now = new Date();
+    const membersWithLiveRatio = (allMembersForMeetings || []).map(m => {
+      const joinedAt = new Date(m.joined_at || m.created_at);
+      const daysAsMember = Math.max(1, Math.ceil((now - joinedAt) / (1000 * 60 * 60 * 24)));
+      return { ...m, daysAsMember, ratio: (m.task_counter || 0) / daysAsMember };
+    });
+
     for (const meeting of affectedMeetings) {
       // Find members not on vacation for this specific meeting date
-      const availableMembers = (allMembersForMeetings || []).filter(m => {
-        const onVacation = (overlappingVacationsForMeetings || []).some(v =>
+      const availableMembers = membersWithLiveRatio.filter(m => {
+        return !(overlappingVacationsForMeetings || []).some(v =>
           v.requested_by === m.id &&
           v.start_date <= meeting.meeting_date &&
           v.end_date >= meeting.meeting_date
         );
-        return !onVacation;
       });
 
       if (availableMembers.length === 0) {
@@ -183,15 +191,14 @@ async function reassignVacationTasks(vacationRequest) {
         continue;
       }
 
-      // Pick member with lowest workload ratio
-      const now = new Date();
-      const membersWithRatio = availableMembers.map(m => {
-        const joinedAt = new Date(m.joined_at || m.created_at);
-        const daysAsMember = Math.max(1, Math.ceil((now - joinedAt) / (1000 * 60 * 60 * 24)));
-        return { ...m, ratio: (m.task_counter || 0) / daysAsMember };
-      }).sort((a, b) => a.ratio - b.ratio);
+      // Sort available members by their current live ratio
+      availableMembers.sort((a, b) => a.ratio - b.ratio);
+      const newPresenter = availableMembers[0];
 
-      const newPresenter = membersWithRatio[0];
+      // Update this member's ratio in the master array so the next meeting
+      // iteration sees the increased load and distributes fairly
+      newPresenter.task_counter = (newPresenter.task_counter || 0) + 1;
+      newPresenter.ratio = newPresenter.task_counter / newPresenter.daysAsMember;
 
       // Generate confirmation token
       const token = require('crypto').randomBytes(16).toString('hex');

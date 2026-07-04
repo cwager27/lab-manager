@@ -914,7 +914,9 @@ export default function Tasks({ userRole, userId, profile }) {
                 <Calendar size={13} color="var(--text-muted)" />
                 <input type="date" value={cycleStart} onChange={e => setCycleStart(e.target.value)} style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', outline: 'none' }} />
               </div>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>Assign all to:</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>
+                Assign all <span style={{ color: 'var(--text-primary)', fontWeight: 600, textTransform: 'capitalize' }}>{recurFreq} — {recurCategory}</span> to:
+              </span>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                 {members.filter(m => !hiddenAssignAll.has(m.id)).map(m => (
                   <div key={m.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '0', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', overflow: 'hidden' }}>
@@ -995,8 +997,8 @@ export default function Tasks({ userRole, userId, profile }) {
               {visibleGroups.map(([groupName, tasks]) => (
                 <div key={groupName || 'ungrouped'} style={{ marginBottom: '4px' }}>
                   {groupName && (
-                    <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--purple-primary)', padding: '12px 2px 6px', borderBottom: '2px solid var(--purple-primary)', marginBottom: '8px' }}>
-                      {groupName}
+                    <div style={{ padding: '12px 2px 6px', borderBottom: '2px solid var(--purple-primary)', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--purple-primary)' }}>{groupName}</span>
                     </div>
                   )}
                   {tasks.map(task => {

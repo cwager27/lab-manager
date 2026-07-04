@@ -34,7 +34,7 @@ const EMPTY_CONTACT = {
 };
 
 const EMPTY_MEMBER = {
-  full_name: '', email: '', role: 'member', password: '',
+  full_name: '', email: '', role: 'member',
   can_assign_tasks: false, can_approve_sporadic: false,
   can_edit_meetings: false, can_view_finance: true,
   can_edit_samples: true, can_view_contacts: false, can_add_members: false
@@ -54,15 +54,28 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   const [adminSearch, setAdminSearch] = useState('');
   const [labSearch, setLabSearch] = useState('');
   const [expandedId, setExpandedId] = useState(null);
+  const [activeTab, setActiveTab] = useState('admin');
   const [showContactForm, setShowContactForm] = useState(false);
   const [showMemberForm, setShowMemberForm] = useState(false);
   const [editingContact, setEditingContact] = useState(null);
   const [contactForm, setContactForm] = useState(EMPTY_CONTACT);
   const [memberForm, setMemberForm] = useState(EMPTY_MEMBER);
   const [saving, setSaving] = useState(false);
+  const [memberError, setMemberError] = useState('');
+  const [confirmDeleteMember, setConfirmDeleteMember] = useState(null);
+  const [editingMemberInfo, setEditingMemberInfo] = useState(null);
+  const [memberInfoForm, setMemberInfoForm] = useState({ phone: '', address: '', emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_email: '', emergency_contact_relationship: '' });
 
   const canManage = userRole === 'admin' || (permissions?.can_add_members);
-  const canViewEmergency = userRole === 'pm' || profile?.full_name?.toLowerCase().startsWith('mia');
+  const canViewPersonalPhone = userRole === 'admin' || userRole === 'pm' || profile?.full_name?.toLowerCase().startsWith('mia');
+
+  function logAuthEvent(event_type, fields = {}) {
+    fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/log-event`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_type, ...fields }),
+    }).catch(() => {});
+  }
 
   useEffect(() => { fetchData(); }, []);
 
@@ -102,43 +115,40 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   async function handleAddMember(e) {
     e.preventDefault();
     setSaving(true);
+    setMemberError('');
     try {
-      const { data: authData } = await supabase.auth.admin?.createUser({
-        email: memberForm.email,
-        password: memberForm.password,
-        email_confirm: true
-      });
-
-      await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/welcome-email`, {
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/members/invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: memberForm.email,
           fullName: memberForm.full_name,
-          password: memberForm.password,
-          role: memberForm.role
+          role: memberForm.role,
+          invitedById: userId,
+          invitedByName: profile?.full_name,
+          permissions: {
+            can_assign_tasks: memberForm.can_assign_tasks,
+            can_approve_sporadic: memberForm.can_approve_sporadic,
+            can_edit_meetings: memberForm.can_edit_meetings,
+            can_view_finance: memberForm.can_view_finance,
+            can_edit_samples: memberForm.can_edit_samples,
+            can_view_contacts: memberForm.can_view_contacts,
+            can_add_members: memberForm.can_add_members,
+          }
         })
       });
-
-      await supabase.from('profiles').insert([{
-        id: authData?.user?.id,
-        email: memberForm.email,
-        full_name: memberForm.full_name,
-        role: memberForm.role,
-        can_assign_tasks: memberForm.can_assign_tasks,
-        can_approve_sporadic: memberForm.can_approve_sporadic,
-        can_edit_meetings: memberForm.can_edit_meetings,
-        can_view_finance: memberForm.can_view_finance,
-        can_edit_samples: memberForm.can_edit_samples,
-        can_view_contacts: memberForm.can_view_contacts,
-        can_add_members: memberForm.can_add_members,
-      }]);
-
+      const result = await res.json();
+      if (!res.ok) {
+        setMemberError(result.error || 'Failed to send invite');
+        setSaving(false);
+        return;
+      }
       setShowMemberForm(false);
       setMemberForm(EMPTY_MEMBER);
       fetchData();
     } catch (err) {
-      console.error('Add member error:', err);
+      setMemberError('Network error — please try again');
+      console.error('Invite error:', err);
     }
     setSaving(false);
   }
@@ -155,8 +165,14 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
       member: { can_assign_tasks: false, can_approve_sporadic: false, can_edit_meetings: false, can_view_finance: true, can_edit_samples: true, can_view_contacts: false, can_add_members: false },
       intern: { can_assign_tasks: false, can_approve_sporadic: false, can_edit_meetings: false, can_view_finance: false, can_edit_samples: true, can_view_contacts: false, can_add_members: false },
     };
+    const oldRole = members.find(m => m.id === memberId)?.role;
     await supabase.from('profiles').update({ role, ...defaults[role] }).eq('id', memberId);
     setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role, ...defaults[role] } : m));
+    logAuthEvent('role_changed', {
+      actor_id: userId, actor_name: profile?.full_name,
+      target_id: memberId,
+      details: { from: oldRole, to: role },
+    });
   }
 
   function setDefaultPermissions(role) {
@@ -170,10 +186,77 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   }
 
   const memberEmails = new Set(members.map(m => m.email?.toLowerCase()).filter(Boolean));
+  const memberNames = new Set(members.map(m => m.full_name?.toLowerCase().trim()).filter(Boolean));
   const sortedMembers = [...members].sort((a, b) => (ROLE_ORDER[a.role] || 99) - (ROLE_ORDER[b.role] || 99));
+  const contactsByEmail = {};
+  contacts.forEach(c => { if (c.email) contactsByEmail[c.email.toLowerCase()] = c; });
+  const contactsByName = {};
+  contacts.forEach(c => {
+    const name = getDisplayName(c).toLowerCase().trim();
+    if (name) contactsByName[name] = c;
+  });
+
+  function openEditMemberInfo(member) {
+    const extra = contactsByEmail[member.email?.toLowerCase()];
+    setEditingMemberInfo({ member, contact: extra || null });
+    setMemberInfoForm({
+      phone: extra?.phone || '',
+      address: extra?.address || '',
+      emergency_contact_name: extra?.emergency_contact_name || '',
+      emergency_contact_phone: extra?.emergency_contact_phone || '',
+      emergency_contact_email: extra?.emergency_contact_email || '',
+      emergency_contact_relationship: extra?.emergency_contact_relationship || '',
+    });
+  }
+
+  async function saveMemberInfo() {
+    const { member, contact } = editingMemberInfo;
+    const payload = {
+      phone: memberInfoForm.phone,
+      address: memberInfoForm.address,
+      emergency_contact_name: memberInfoForm.emergency_contact_name,
+      emergency_contact_phone: memberInfoForm.emergency_contact_phone,
+      emergency_contact_email: memberInfoForm.emergency_contact_email,
+      emergency_contact_relationship: memberInfoForm.emergency_contact_relationship,
+    };
+    if (contact) {
+      await supabase.from('lab_contacts').update(payload).eq('id', contact.id);
+    } else {
+      const nameParts = (member.full_name || '').split(' ');
+      await supabase.from('lab_contacts').insert([{
+        ...payload,
+        email: member.email,
+        full_name: member.full_name,
+        first_name: nameParts[0] || '',
+        last_name: nameParts.slice(1).join(' ') || '',
+        role: 'member',
+        sort_order: 99,
+      }]);
+    }
+    setEditingMemberInfo(null);
+    fetchData();
+  }
+
+  async function handleDeleteMember(member) {
+    setSaving(true);
+    try {
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/members/${member.id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Delete failed');
+      logAuthEvent('member_removed', { actor_id: userId, actor_name: profile?.full_name, target_id: member.id, target_email: member.email, details: { full_name: member.full_name } });
+      fetchData();
+    } catch (err) {
+      console.error('Delete member error:', err);
+      alert('Failed to remove member: ' + err.message);
+    }
+    setSaving(false);
+    setConfirmDeleteMember(null);
+  }
 
   const filteredAdminContacts = contacts.filter(c => {
-    if (c.email && memberEmails.has(c.email.toLowerCase())) return false;
+    if (c.role !== 'external') return false;
     if (!adminSearch) return true;
     const q = adminSearch.toLowerCase();
     return [getDisplayName(c), c.title, c.email, c.phone, c.notes, c.role, c.address]
@@ -183,23 +266,19 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   const filteredLabMembers = sortedMembers.filter(m => {
     if (!labSearch) return true;
     const q = labSearch.toLowerCase();
-    return [m.full_name, m.email, ROLE_LABELS[m.role]].some(v => v?.toLowerCase().includes(q));
+    const extra = contactsByEmail[m.email?.toLowerCase()] || contactsByName[m.full_name?.toLowerCase().trim()];
+    return [m.full_name, m.email, ROLE_LABELS[m.role], extra?.phone, extra?.address, extra?.emergency_contact_name].some(v => v?.toLowerCase().includes(q));
   });
 
-  const colStyle = {
-    flex: 1,
-    minWidth: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '10px',
-  };
-
-  const colHeaderStyle = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: '4px',
-  };
+  // lab_contacts with role='member' who don't have a platform profile yet
+  const pendingLabContacts = contacts.filter(c => {
+    if (c.role === 'external') return false;
+    if (c.email && memberEmails.has(c.email.toLowerCase())) return false;
+    if (memberNames.has(getDisplayName(c).toLowerCase().trim())) return false;
+    if (!labSearch) return true;
+    const q = labSearch.toLowerCase();
+    return [getDisplayName(c), c.email, c.phone, c.address, c.emergency_contact_name].some(v => v?.toLowerCase().includes(q));
+  });
 
   return (
     <div>
@@ -209,245 +288,270 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Contacts</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>Team directory and member management</p>
         </div>
-        {canManage && (
+        {canManage && activeTab === 'admin' && (
           <button onClick={() => { setContactForm(EMPTY_CONTACT); setEditingContact(null); setShowContactForm(true); }} style={{
             display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
             background: 'var(--purple-primary)', color: 'white', border: 'none',
             borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer'
           }}><Plus size={16} /> Add Contact</button>
         )}
+        {canManage && activeTab === 'lab' && (
+          <button onClick={() => { setMemberForm(EMPTY_MEMBER); setShowMemberForm(true); }} style={{
+            display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
+            background: 'var(--purple-primary)', color: 'white', border: 'none',
+            borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer'
+          }}><Plus size={16} /> Add Member</button>
+        )}
       </div>
 
-      {/* Two-column layout */}
-      <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
+      {/* Tab switcher */}
+      <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content', marginBottom: '20px' }}>
+        {[{ id: 'admin', label: 'Admin Contacts' }, { id: 'lab', label: 'Lab Contacts' }].map(tab => (
+          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setExpandedId(null); }}
+            style={{ padding: '10px 20px', background: activeTab === tab.id ? 'var(--purple-primary)' : 'transparent', color: activeTab === tab.id ? 'white' : 'var(--text-secondary)', border: 'none', fontWeight: activeTab === tab.id ? 600 : 400, fontSize: '13px', cursor: 'pointer' }}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-        {/* LEFT — Admin Contacts */}
-        <div style={colStyle}>
-          <div style={colHeaderStyle}>
-            <h2 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Admin Contacts</h2>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
+      {/* Admin Contacts tab */}
+      {activeTab === 'admin' && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px', marginBottom: '16px' }}>
             <Search size={13} color="var(--text-muted)" />
             <input value={adminSearch} onChange={e => setAdminSearch(e.target.value)} placeholder="Search admin contacts..."
               style={{ border: 'none', outline: 'none', flex: 1, fontSize: '13px', background: 'transparent' }} />
           </div>
-
           {loading ? (
             <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading...</div>
-          ) : filteredAdminContacts.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
-              No admin contacts yet.
-            </div>
           ) : (
-            filteredAdminContacts.map(contact => {
-              const roleColors = ROLE_COLORS[contact.role] || ROLE_COLORS.member;
-              const isExpanded = expandedId === contact.id;
-              return (
-                <div key={contact.id} style={{
-                  background: 'var(--bg-card)', border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px' }}>
-                    <div style={{
-                      width: '38px', height: '38px', borderRadius: '50%', flexShrink: 0,
-                      background: roleColors.bg, border: `2px solid ${roleColors.border}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}>
-                      <span style={{ fontSize: '14px', fontWeight: 700, color: roleColors.text }}>
-                        {(contact.first_name || contact.full_name || '?').charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{getDisplayName(contact)}</span>
-                        <span style={{ padding: '2px 7px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: roleColors.bg, color: roleColors.text, border: `1px solid ${roleColors.border}`, whiteSpace: 'nowrap' }}>
-                          {ROLE_LABELS[contact.role] || contact.role}
-                        </span>
-                      </div>
-                      {contact.title && <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>{contact.title}</p>}
-                      {contact.notes && <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>{contact.notes}</p>}
-                      <div style={{ display: 'flex', gap: '12px', marginTop: '4px', flexWrap: 'wrap' }}>
-                        {contact.email && (
-                          <a href={`mailto:${contact.email}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none' }}>
-                            <Mail size={11} /> {contact.email}
-                          </a>
+            <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg-secondary)' }}>
+                    {[
+                      'Name', 'Email', ...(canViewPersonalPhone ? ['Personal Phone'] : []),
+                      'Work Phone', 'Office / Dept', 'Responsibilities',
+                      ...(canManage ? [''] : [])
+                    ].map(h => (
+                      <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', fontWeight: 600 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredAdminContacts.length === 0 ? (
+                    <tr><td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No admin contacts yet.</td></tr>
+                  ) : filteredAdminContacts.map((contact, i) => {
+                    const roleColors = ROLE_COLORS[contact.role] || ROLE_COLORS.external;
+                    return (
+                      <tr key={contact.id} style={{ borderTop: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
+                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0, background: roleColors.bg, border: `2px solid ${roleColors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <span style={{ fontSize: '12px', fontWeight: 700, color: roleColors.text }}>{(contact.first_name || contact.full_name || '?').charAt(0).toUpperCase()}</span>
+                            </div>
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{getDisplayName(contact)}</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: '10px 14px', fontSize: '12px' }}>
+                          {contact.email ? <a href={`mailto:${contact.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{contact.email}</a> : '—'}
+                        </td>
+                        {canViewPersonalPhone && (
+                          <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                            {contact.phone ? <a href={`tel:${contact.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.phone}</a> : '—'}
+                          </td>
                         )}
-                        {contact.phone && (
-                          <a href={`tel:${contact.phone}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--text-secondary)', textDecoration: 'none' }}>
-                            <Phone size={11} /> {contact.phone}
-                          </a>
+                        <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                          {contact.alternative_email ? <a href={`tel:${contact.alternative_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.alternative_email}</a> : '—'}
+                        </td>
+                        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>{contact.address || '—'}</td>
+                        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: '200px' }}>{contact.notes || '—'}</td>
+                        {canManage && (
+                          <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              <button onClick={() => { setEditingContact(contact); setContactForm(contact); setShowContactForm(true); }} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)', cursor: 'pointer' }}><Edit2 size={13} /></button>
+                              <button onClick={() => handleDeleteContact(contact.id)} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', cursor: 'pointer' }}><Trash2 size={13} /></button>
+                            </div>
+                          </td>
                         )}
-                      </div>
-                    </div>
-                    {canManage && (
-                      <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                        <button onClick={() => { setEditingContact(contact); setContactForm(contact); setShowContactForm(true); }} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                          <Edit2 size={13} />
-                        </button>
-                        <button onClick={() => handleDeleteContact(contact.id)} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', cursor: 'pointer' }}>
-                          <Trash2 size={13} />
-                        </button>
-                        <button onClick={() => setExpandedId(isExpanded ? null : contact.id)} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                          {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {isExpanded && canManage && (
-                    <div style={{ padding: '14px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                      {contact.alternative_email && (
-                        <div>
-                          <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Alternative Email</p>
-                          <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: 0 }}>{contact.alternative_email}</p>
-                        </div>
-                      )}
-                      {contact.address && (
-                        <div>
-                          <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Address</p>
-                          <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: 0 }}>{contact.address}</p>
-                        </div>
-                      )}
-                      {(contact.supervisor || contact.supervisor_email) && (
-                        <div style={{ gridColumn: '1 / -1' }}>
-                          <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Supervisor</p>
-                          {contact.supervisor && <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: '0 0 2px', fontWeight: 600 }}>{contact.supervisor}</p>}
-                          {contact.supervisor_email && <a href={`mailto:${contact.supervisor_email}`} style={{ fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none' }}>{contact.supervisor_email}</a>}
-                        </div>
-                      )}
-                      {canViewEmergency && contact.emergency_contact_name && (
-                        <div style={{ gridColumn: '1 / -1', background: '#FEF9E7', borderRadius: 'var(--radius-sm)', padding: '12px', border: '1px solid #FAD7A0' }}>
-                          <p style={{ fontSize: '11px', color: '#F39C12', margin: '0 0 6px', textTransform: 'uppercase', fontWeight: 600 }}>Emergency Contact</p>
-                          <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: '0 0 2px', fontWeight: 600 }}>{contact.emergency_contact_name}</p>
-                          {contact.emergency_contact_relationship && <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 2px' }}>{contact.emergency_contact_relationship}</p>}
-                          {contact.emergency_contact_phone && <a href={`tel:${contact.emergency_contact_phone}`} style={{ display: 'block', fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none', marginBottom: '2px' }}>{contact.emergency_contact_phone}</a>}
-                          {contact.emergency_contact_email && <a href={`mailto:${contact.emergency_contact_email}`} style={{ fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none' }}>{contact.emergency_contact_email}</a>}
-                        </div>
-                      )}
-                      {contact.notes && (
-                        <div style={{ gridColumn: '1 / -1' }}>
-                          <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>Notes</p>
-                          <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: 0, fontStyle: 'italic' }}>{contact.notes}</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
-        </div>
+        </>
+      )}
 
-        {/* RIGHT — Lab Members */}
-        <div style={colStyle}>
-          <div style={colHeaderStyle}>
-            <h2 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Lab Contacts</h2>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
+      {/* Lab Contacts tab */}
+      {activeTab === 'lab' && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px', marginBottom: '16px' }}>
             <Search size={13} color="var(--text-muted)" />
             <input value={labSearch} onChange={e => setLabSearch(e.target.value)} placeholder="Search lab contacts..."
               style={{ border: 'none', outline: 'none', flex: 1, fontSize: '13px', background: 'transparent' }} />
           </div>
-
           {loading ? (
             <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading...</div>
-          ) : filteredLabMembers.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
-              No lab contacts found.
-            </div>
           ) : (
-            filteredLabMembers.map(member => {
-              const roleColors = ROLE_COLORS[member.role] || ROLE_COLORS.member;
-              const isExpanded = expandedId === member.id;
-              return (
-                <div key={member.id} style={{
-                  background: 'var(--bg-card)', border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px' }}>
-                    <div style={{
-                      width: '38px', height: '38px', borderRadius: '50%', flexShrink: 0,
-                      background: roleColors.bg, border: `2px solid ${roleColors.border}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}>
-                      <span style={{ fontSize: '14px', fontWeight: 700, color: roleColors.text }}>
-                        {member.full_name?.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{member.full_name}</span>
-                        {canManage && member.id !== userId ? (
-                          <select value={member.role} onChange={e => handleUpdateRole(member.id, e.target.value)}
-                            style={{ padding: '2px 7px', borderRadius: '12px', border: `1px solid ${roleColors.border}`, background: roleColors.bg, color: roleColors.text, fontSize: '11px', fontWeight: 600, outline: 'none' }}>
-                            <option value="admin">Supervisor</option>
-                            <option value="pm">Program Manager</option>
-                            <option value="member">Lab Member</option>
-                            <option value="intern">Intern</option>
-                          </select>
-                        ) : (
-                          <span style={{ padding: '2px 7px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: roleColors.bg, color: roleColors.text, border: `1px solid ${roleColors.border}` }}>
-                            {ROLE_LABELS[member.role] || member.role}
-                          </span>
-                        )}
-                      </div>
-                      {member.email && (
-                        <a href={`mailto:${member.email}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--purple-primary)', textDecoration: 'none' }}>
-                          <Mail size={11} /> {member.email}
-                        </a>
-                      )}
-                    </div>
-                    {canManage && member.id !== userId && (
-                      <button onClick={() => setExpandedId(isExpanded ? null : member.id)} style={{
-                        display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 10px',
-                        borderRadius: 'var(--radius-md)', border: '1px solid var(--border)',
-                        background: 'var(--bg-primary)', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer', flexShrink: 0
-                      }}>
-                        <Shield size={12} /> Permissions {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                      </button>
-                    )}
-                  </div>
-
-                  {isExpanded && canManage && (
-                    <div style={{ padding: '14px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
-                      <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Permission Toggles</p>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {PERMISSIONS.map(perm => (
-                          <div key={perm.key} style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                            padding: '8px 12px', background: 'var(--bg-primary)',
-                            borderRadius: 'var(--radius-md)', border: '1px solid var(--border)'
-                          }}>
-                            <div>
-                              <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{perm.label}</p>
-                              <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>{perm.description}</p>
+            <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg-secondary)' }}>
+                    {[
+                      'First / Last Name', 'Email', 'Phone Number',
+                      ...(canViewPersonalPhone ? ['Emergency Contact'] : []),
+                      ...(canViewPersonalPhone ? ['Address'] : []),
+                      ...(canManage ? [''] : [])
+                    ].map(h => (
+                      <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', fontWeight: 600 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredLabMembers.length === 0 && pendingLabContacts.length === 0 ? (
+                    <tr><td colSpan={canManage ? 6 : 4} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No lab contacts found.</td></tr>
+                  ) : filteredLabMembers.map((member, i) => {
+                    const roleColors = ROLE_COLORS[member.role] || ROLE_COLORS.member;
+                    const isExpanded = expandedId === member.id;
+                    const extra = contactsByEmail[member.email?.toLowerCase()] || contactsByName[member.full_name?.toLowerCase().trim()];
+                    return (
+                      <>
+                        <tr key={member.id} style={{ borderTop: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
+                          <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0, background: roleColors.bg, border: `2px solid ${roleColors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <span style={{ fontSize: '12px', fontWeight: 700, color: roleColors.text }}>{member.full_name?.charAt(0).toUpperCase()}</span>
+                              </div>
+                              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{member.full_name}</span>
                             </div>
-                            <button onClick={() => handleUpdatePermissions(member.id, perm.key, !member[perm.key])}
-                              style={{
-                                width: '40px', height: '22px', borderRadius: '11px', border: 'none',
-                                background: member[perm.key] ? 'var(--purple-primary)' : 'var(--border)',
-                                cursor: 'pointer', position: 'relative', transition: 'background 0.2s ease', flexShrink: 0
-                              }}>
-                              <div style={{
-                                width: '16px', height: '16px', borderRadius: '50%', background: 'white',
-                                position: 'absolute', top: '3px',
-                                left: member[perm.key] ? '21px' : '3px',
-                                transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                              }} />
-                            </button>
+                          </td>
+                          <td style={{ padding: '10px 14px', fontSize: '12px' }}>
+                            {member.email ? <a href={`mailto:${member.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{member.email}</a> : '—'}
+                          </td>
+                          <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                            {extra?.phone ? <a href={`tel:${extra.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{extra.phone}</a> : '—'}
+                          </td>
+                          {canViewPersonalPhone && (
+                            <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '200px' }}>
+                              {extra?.emergency_contact_name ? (
+                                <div>
+                                  <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{extra.emergency_contact_name}{extra.emergency_contact_relationship ? ` (${extra.emergency_contact_relationship})` : ''}</div>
+                                  {extra.emergency_contact_phone && <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}><Phone size={10} />{extra.emergency_contact_phone}</div>}
+                                  {extra.emergency_contact_email && <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><Mail size={10} />{extra.emergency_contact_email}</div>}
+                                </div>
+                              ) : '—'}
+                            </td>
+                          )}
+                          {canViewPersonalPhone && (
+                            <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                              {extra?.address || '—'}
+                            </td>
+                          )}
+                          {canManage && (
+                            <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                <button onClick={() => openEditMemberInfo(member)} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)', cursor: 'pointer' }} title="Edit contact info"><Edit2 size={13} /></button>
+                                {member.id !== userId && (
+                                  <button onClick={() => setExpandedId(isExpanded ? null : member.id)}
+                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer' }}>
+                                    <Shield size={12} /> {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                  </button>
+                                )}
+                                {member.id !== userId && (
+                                  <button onClick={() => setConfirmDeleteMember(member)} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', cursor: 'pointer' }} title="Remove member"><Trash2 size={13} /></button>
+                                )}
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                        {isExpanded && canManage && (
+                          <tr key={`${member.id}-perms`} style={{ background: 'var(--bg-secondary)' }}>
+                            <td colSpan={canViewPersonalPhone ? 6 : 4} style={{ padding: '16px 20px', borderTop: '1px solid var(--border)' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '8px' }}>
+                                {PERMISSIONS.map(perm => (
+                                  <div key={perm.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                                    <div>
+                                      <p style={{ margin: 0, fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)' }}>{perm.label}</p>
+                                    </div>
+                                    <button onClick={() => handleUpdatePermissions(member.id, perm.key, !member[perm.key])}
+                                      style={{ width: '36px', height: '20px', borderRadius: '10px', border: 'none', background: member[perm.key] ? 'var(--purple-primary)' : 'var(--border)', cursor: 'pointer', position: 'relative', flexShrink: 0 }}>
+                                      <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: 'white', position: 'absolute', top: '3px', left: member[perm.key] ? '19px' : '3px', transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    );
+                  })}
+                  {pendingLabContacts.map((c, i) => (
+                    <tr key={c.id} style={{ borderTop: '1px solid var(--border)', background: (filteredLabMembers.length + i) % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
+                      <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0, background: '#F2F3F4', border: '2px solid #CCD1D1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#5D6D7E' }}>{(c.first_name || '?').charAt(0).toUpperCase()}</span>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{getDisplayName(c)}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '10px 14px', fontSize: '12px' }}>
+                        {c.email ? <a href={`mailto:${c.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{c.email}</a> : '—'}
+                      </td>
+                      <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                        {c.phone ? <a href={`tel:${c.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{c.phone}</a> : '—'}
+                      </td>
+                      {canViewPersonalPhone && (
+                        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '200px' }}>
+                          {c.emergency_contact_name ? (
+                            <div>
+                              <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{c.emergency_contact_name}{c.emergency_contact_relationship ? ` (${c.emergency_contact_relationship})` : ''}</div>
+                              {c.emergency_contact_phone && <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}><Phone size={10} />{c.emergency_contact_phone}</div>}
+                              {c.emergency_contact_email && <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><Mail size={10} />{c.emergency_contact_email}</div>}
+                            </div>
+                          ) : '—'}
+                        </td>
+                      )}
+                      {canViewPersonalPhone && (
+                        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>{c.address || '—'}</td>
+                      )}
+                      {canManage && (
+                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+                          <button onClick={() => { setEditingContact(c); setContactForm(c); setShowContactForm(true); }} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)', cursor: 'pointer' }} title="Edit contact info"><Edit2 size={13} /></button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
+        </>
+      )}
+
+      {/* Confirm Delete Member Modal */}
+      {confirmDeleteMember && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '420px', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px', color: 'var(--danger)' }}>Remove Member</h2>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+              Are you sure you want to remove <strong>{confirmDeleteMember.full_name}</strong> from the platform?
+            </p>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '24px' }}>
+              Their assigned tasks will be unassigned and their scheduled meeting slots will be cleared.
+            </p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setConfirmDeleteMember(null)} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => handleDeleteMember(confirmDeleteMember)} disabled={saving} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--danger)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>
+                {saving ? 'Removing...' : 'Remove Member'}
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Add/Edit Contact Modal */}
       {showContactForm && (
@@ -466,13 +570,11 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
             </div>
 
             {[
-              { key: 'title', label: 'Office / Title' },
               { key: 'email', label: 'Email' },
-              { key: 'phone', label: 'Phone Number' },
-              { key: 'alternative_email', label: 'Alternative Email' },
-              { key: 'address', label: 'Address' },
-              { key: 'supervisor', label: 'Supervisor Name' },
-              { key: 'supervisor_email', label: 'Supervisor Email' },
+              { key: 'phone', label: 'Personal Phone' },
+              { key: 'alternative_email', label: 'Work Phone' },
+              { key: 'address', label: 'Office / Department' },
+              { key: 'title', label: 'Official Title' },
             ].map(field => (
               <div key={field.key} style={{ marginBottom: '12px' }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
@@ -481,24 +583,8 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
               </div>
             ))}
 
-            <div style={{ background: '#FEF9E7', borderRadius: 'var(--radius-md)', padding: '14px', border: '1px solid #FAD7A0', marginBottom: '12px' }}>
-              <p style={{ fontSize: '11px', fontWeight: 600, color: '#F39C12', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Emergency Contact</p>
-              {[
-                { key: 'emergency_contact_name', label: 'Name' },
-                { key: 'emergency_contact_relationship', label: 'Relationship' },
-                { key: 'emergency_contact_phone', label: 'Phone' },
-                { key: 'emergency_contact_email', label: 'Email' },
-              ].map(field => (
-                <div key={field.key} style={{ marginBottom: '8px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
-                  <input type="text" value={contactForm[field.key] || ''} onChange={e => setContactForm(p => ({ ...p, [field.key]: e.target.value }))}
-                    style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
-                </div>
-              ))}
-            </div>
-
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>What are they helpful for?</label>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Responsibilities</label>
               <textarea value={contactForm.notes || ''} onChange={e => setContactForm(p => ({ ...p, notes: e.target.value }))}
                 placeholder="e.g. IRB submissions, grant reporting, equipment repairs..."
                 rows={3} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
@@ -514,17 +600,66 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
         </div>
       )}
 
+      {/* Edit Lab Member Contact Info Modal */}
+      {editingMemberInfo && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '480px', maxHeight: '85vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '4px' }}>Edit Contact Info</h2>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>{editingMemberInfo.member.full_name}</p>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Phone Number</label>
+              <input type="text" value={memberInfoForm.phone} onChange={e => setMemberInfoForm(p => ({ ...p, phone: e.target.value }))}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Address</label>
+              <input type="text" value={memberInfoForm.address} onChange={e => setMemberInfoForm(p => ({ ...p, address: e.target.value }))}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+
+            <div style={{ marginBottom: '4px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+              <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Emergency Contact</p>
+            </div>
+
+            {[
+              { key: 'emergency_contact_name', label: 'Name (First & Last)' },
+              { key: 'emergency_contact_phone', label: 'Phone' },
+              { key: 'emergency_contact_email', label: 'Email' },
+              { key: 'emergency_contact_relationship', label: 'Relationship' },
+            ].map(field => (
+              <div key={field.key} style={{ marginBottom: '12px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
+                <input type="text" value={memberInfoForm[field.key]} onChange={e => setMemberInfoForm(p => ({ ...p, [field.key]: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+            ))}
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
+              <button onClick={() => setEditingMemberInfo(null)} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={saveMemberInfo} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add Member Modal */}
       {showMemberForm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '560px', maxHeight: '85vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
             <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>Add Team Member</h2>
 
+            {memberError && (
+              <div style={{ padding: '10px 14px', background: '#FEF0F0', border: '1px solid #FADBD8', borderRadius: 'var(--radius-md)', color: 'var(--danger)', fontSize: '13px', marginBottom: '16px' }}>
+                {memberError}
+              </div>
+            )}
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
               {[
                 { key: 'full_name', label: 'Full Name', full: true },
                 { key: 'email', label: 'Email', type: 'email' },
-                { key: 'password', label: 'Temporary Password', type: 'password' },
               ].map(field => (
                 <div key={field.key} style={{ gridColumn: field.full ? '1 / -1' : 'auto' }}>
                   <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
@@ -577,13 +712,13 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
             </div>
 
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button onClick={() => { setShowMemberForm(false); setMemberForm(EMPTY_MEMBER); }} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500 }}>Cancel</button>
-              <button onClick={handleAddMember} disabled={saving || !memberForm.full_name || !memberForm.email || !memberForm.password} style={{
+              <button onClick={() => { setShowMemberForm(false); setMemberForm(EMPTY_MEMBER); setMemberError(''); }} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500 }}>Cancel</button>
+              <button onClick={handleAddMember} disabled={saving || !memberForm.full_name || !memberForm.email} style={{
                 padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none',
-                background: saving || !memberForm.full_name || !memberForm.email || !memberForm.password ? 'var(--border)' : 'var(--purple-primary)',
-                color: saving || !memberForm.full_name || !memberForm.email || !memberForm.password ? 'var(--text-muted)' : 'white',
+                background: saving || !memberForm.full_name || !memberForm.email ? 'var(--border)' : 'var(--purple-primary)',
+                color: saving || !memberForm.full_name || !memberForm.email ? 'var(--text-muted)' : 'white',
                 fontWeight: 600
-              }}>{saving ? 'Adding...' : 'Add Member & Send Welcome Email'}</button>
+              }}>{saving ? 'Sending...' : 'Send Invite'}</button>
             </div>
           </div>
         </div>
