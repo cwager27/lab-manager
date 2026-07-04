@@ -1,6 +1,23 @@
 import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
+import { CheckCircle, XCircle, AlertTriangle, Upload, Clock, Search, ChevronDown } from 'lucide-react';
+import {
+  getMaintCycleKey, getMaintNextDue, getMaintKey,
+  isMaintSubDone, isMaintParentDone, isMaintFreqDone,
+  EQUIPMENT_MAINTENANCE,
+} from '../data/equipmentMaintenance';
 
 const API = process.env.REACT_APP_BACKEND_URL;
+
+const FREQ_COLORS = {
+  daily:     { bg: '#EBF5FB', text: '#2980B9', border: '#AED6F1' },
+  weekly:    { bg: '#EAF7F0', text: '#27AE60', border: '#A9DFBF' },
+  biweekly:  { bg: '#FEF9E7', text: '#F39C12', border: '#FAD7A0' },
+  monthly:   { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
+  quarterly: { bg: '#FDEBD0', text: '#D35400', border: '#F0B27A' },
+  yearly:    { bg: '#FDEDEC', text: '#E74C3C', border: '#F1948A' },
+};
+const ALL_FREQS = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'];
 
 const FREQ_ORDER = ['yearly', 'quarterly', 'monthly', 'biweekly', 'weekly', 'daily'];
 const FREQ_LABEL = { yearly: 'Yearly', quarterly: 'Quarterly', monthly: 'Monthly', biweekly: 'Biweekly', weekly: 'Weekly', daily: 'Daily' };
@@ -196,7 +213,7 @@ function pickerFor(freq, value, onChange) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Tasks2({ userRole }) {
-  const [tab, setTab] = useState('assign');
+  const [tab, setTab] = useState('view-all');
 
   // Shared data
   const [tasks, setTasks] = useState([]);
@@ -222,6 +239,28 @@ export default function Tasks2({ userRole }) {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitDone, setSubmitDone] = useState(false);
+
+  // ── View All Tasks state ──────────────────────────────────────────────────
+  const [vatTasks, setVatTasks] = useState([]);
+  const [vatExisting, setVatExisting] = useState({});
+  const [vatResponses, setVatResponses] = useState({});
+  const [vatCategory, setVatCategory] = useState('MISC');
+  const [vatFreq, setVatFreq] = useState('daily');
+  const [vatSearch, setVatSearch] = useState('');
+  const [vatLoading, setVatLoading] = useState(false);
+  const [vatLoaded, setVatLoaded] = useState(false);
+  const [maintChecks, setMaintChecks] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('lab_maint_checks') || '{}'); } catch { return {}; }
+  });
+  const [maintCompleted, setMaintCompleted] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('lab_maint_completed') || '{}'); } catch { return {}; }
+  });
+  const [vatExpandedEquip, setVatExpandedEquip] = useState(
+    () => new Set(EQUIPMENT_MAINTENANCE.map(e => e.id))
+  );
+  const [vatExpandedFreq, setVatExpandedFreq] = useState(
+    () => new Set(EQUIPMENT_MAINTENANCE.flatMap(e => e.frequencies.map(f => `${e.id}|${f.id}`)))
+  );
 
   // ── Calendar state ────────────────────────────────────────────────────────
   const [calYear, setCalYear] = useState(new Date().getFullYear());
@@ -251,6 +290,28 @@ export default function Tasks2({ userRole }) {
 
   useEffect(() => { if (tab === 'calendar') loadCalendar(); }, [tab, calYear, calMonth]);
   useEffect(() => { if (tab === 'unassigned') loadUnassigned(); }, [tab]);
+  useEffect(() => { if (tab === 'view-all' && !vatLoaded) loadVatData(); }, [tab, vatLoaded]); // eslint-disable-line
+
+  useEffect(() => {
+    localStorage.setItem('lab_maint_checks', JSON.stringify(maintChecks));
+    const updated = { ...maintCompleted };
+    let changed = false;
+    EQUIPMENT_MAINTENANCE.forEach(equip => {
+      equip.frequencies.forEach(freq => {
+        const key = `${equip.id}|${freq.id}`;
+        const cycleKey = getMaintCycleKey(freq.resetFreq);
+        if (updated[key]?.cycleKey === cycleKey) return;
+        if (isMaintFreqDone(maintChecks, equip, freq)) {
+          updated[key] = { cycleKey, completedAt: new Date().toISOString() };
+          changed = true;
+        }
+      });
+    });
+    if (changed) {
+      setMaintCompleted(updated);
+      localStorage.setItem('lab_maint_completed', JSON.stringify(updated));
+    }
+  }, [maintChecks]); // eslint-disable-line
 
   function loadCalendar() {
     setCalLoading(true);
@@ -265,6 +326,37 @@ export default function Tasks2({ userRole }) {
     fetch(`${API}/api/tasks2/unassigned`)
       .then(r => r.json()).then(d => { setUnassigned(d); setULoading(false); })
       .catch(() => setULoading(false));
+  }
+
+  // ── View All Tasks helpers ────────────────────────────────────────────────
+
+  async function loadVatData() {
+    setVatLoading(true);
+    const [{ data: taskData }, { data: respData }] = await Promise.all([
+      supabase.from('tasks_definitions').select('*').eq('status', 'published').order('category').order('frequency').order('sort_order'),
+      supabase.from('task_responses').select('*, assignment:task_assignments(assigned_to, profile:profiles(full_name))').order('responded_at', { ascending: false }),
+    ]);
+    const respMap = {};
+    for (const r of (respData || [])) {
+      if (!respMap[r.task_definition_id]) respMap[r.task_definition_id] = r;
+    }
+    setVatTasks(taskData || []);
+    setVatExisting(respMap);
+    setVatLoading(false);
+    setVatLoaded(true);
+  }
+
+  function toggleMaintCheck(equipId, freqId, resetFreq, parentId, subId, value) {
+    const key = getMaintKey(equipId, freqId, resetFreq, parentId, subId);
+    setMaintChecks(p => ({ ...p, [key]: p[key] === value ? null : value }));
+  }
+
+  function handleVatResponse(taskId, value) {
+    setVatResponses(p => ({ ...p, [taskId]: { ...p[taskId], response: value } }));
+  }
+
+  function handleVatNotes(taskId, value) {
+    setVatResponses(p => ({ ...p, [taskId]: { ...p[taskId], notes: value } }));
   }
 
   // ── Wizard helpers ────────────────────────────────────────────────────────
@@ -451,6 +543,250 @@ export default function Tasks2({ userRole }) {
 
   function profileName(id) {
     return profiles.find(p => p.id === id)?.full_name || id;
+  }
+
+  // ── View All Tasks render ─────────────────────────────────────────────────
+
+  function renderViewAll() {
+    if (vatLoading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>;
+
+    const isRecurring = vatCategory === 'MISC' || vatCategory === 'PM';
+
+    const visibleTasks = vatTasks.filter(t =>
+      t.frequency === vatFreq && t.category === vatCategory &&
+      (vatSearch === '' || t.title.toLowerCase().includes(vatSearch.toLowerCase()))
+    );
+
+    const visibleGroups = (() => {
+      const map = new Map();
+      for (const task of visibleTasks) {
+        const key = task.group_name || '';
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(task);
+      }
+      return [...map.entries()];
+    })();
+
+    const completedCount = visibleTasks.filter(t => vatResponses[t.id]?.response).length;
+
+    return (
+      <div>
+        {/* Category selector */}
+        <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '3px', marginBottom: '14px', width: 'fit-content' }}>
+          {['MISC', 'PM', 'Equipment'].map(cat => (
+            <button key={cat} onClick={() => setVatCategory(cat)} style={{ padding: '7px 18px', borderRadius: 'var(--radius-sm)', border: 'none', fontSize: '13px', fontWeight: vatCategory === cat ? 600 : 400, background: vatCategory === cat ? 'var(--purple-primary)' : 'transparent', color: vatCategory === cat ? 'white' : 'var(--text-secondary)' }}>
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {/* ── PM / MISC recurring tasks ── */}
+        {isRecurring && (
+          <>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
+              {ALL_FREQS.map(freq => {
+                const c = FREQ_COLORS[freq];
+                const count = vatTasks.filter(t => t.frequency === freq && t.category === vatCategory).length;
+                if (count === 0) return null;
+                return (
+                  <button key={freq} onClick={() => setVatFreq(freq)} style={{ padding: '7px 14px', borderRadius: 'var(--radius-md)', border: `1px solid ${vatFreq === freq ? c.border : 'var(--border)'}`, background: vatFreq === freq ? c.bg : 'var(--bg-primary)', color: vatFreq === freq ? c.text : 'var(--text-secondary)', fontWeight: vatFreq === freq ? 600 : 400, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Clock size={12} />
+                    {freq.charAt(0).toUpperCase() + freq.slice(1)}
+                    <span style={{ background: vatFreq === freq ? c.text : 'var(--border)', color: vatFreq === freq ? 'white' : 'var(--text-muted)', borderRadius: '10px', padding: '0 6px', fontSize: '10px' }}>{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
+                <Search size={14} color="var(--text-muted)" />
+                <input value={vatSearch} onChange={e => setVatSearch(e.target.value)} placeholder="Search tasks…" style={{ border: 'none', outline: 'none', flex: 1, fontSize: '13px', background: 'transparent' }} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                <CheckCircle size={13} color="var(--success)" />
+                {completedCount} / {visibleTasks.length}
+              </div>
+            </div>
+
+            {visibleTasks.length > 0 && (
+              <div style={{ height: '4px', background: 'var(--border)', borderRadius: '2px', marginBottom: '12px', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${(completedCount / visibleTasks.length) * 100}%`, background: 'var(--purple-primary)', transition: 'width 0.3s' }} />
+              </div>
+            )}
+
+            {visibleTasks.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>No tasks found.</div>
+            ) : visibleGroups.map(([groupName, groupTasks]) => (
+              <div key={groupName || 'ungrouped'} style={{ marginBottom: '4px' }}>
+                {groupName && (
+                  <div style={{ padding: '12px 2px 6px', borderBottom: '2px solid var(--purple-primary)', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--purple-primary)' }}>{groupName}</span>
+                  </div>
+                )}
+                {groupTasks.map(task => {
+                  const resp = vatResponses[task.id];
+                  const done = resp?.response === 'yes' || resp?.response === 'checked';
+                  if (task.response_type === 'placeholder') {
+                    return <div key={task.id} style={{ padding: '8px 14px', color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>Tasks to be defined.</div>;
+                  }
+                  return (
+                    <div key={task.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px' }}>
+                        <div style={{ display: 'flex', gap: '5px', flexShrink: 0, marginTop: '2px' }}>
+                          {(task.response_type === 'yes_no' || task.response_type === 'yes_no_na') ? (
+                            <>
+                              <button onClick={() => handleVatResponse(task.id, resp?.response === 'yes' ? '' : 'yes')} title="Yes" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'yes' ? 'var(--success)' : 'var(--border)', background: resp?.response === 'yes' ? 'var(--success)' : 'transparent', color: resp?.response === 'yes' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
+                              <button onClick={() => handleVatResponse(task.id, resp?.response === 'no' ? '' : 'no')} title="No" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'no' ? 'var(--danger)' : 'var(--border)', background: resp?.response === 'no' ? 'var(--danger)' : 'transparent', color: resp?.response === 'no' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><XCircle size={13} /></button>
+                              {task.response_type === 'yes_no_na' && <button onClick={() => handleVatResponse(task.id, resp?.response === 'na' ? '' : 'na')} style={{ padding: '0 7px', height: '26px', borderRadius: '13px', border: '2px solid', borderColor: resp?.response === 'na' ? 'var(--text-muted)' : 'var(--border)', background: resp?.response === 'na' ? 'var(--text-muted)' : 'transparent', color: resp?.response === 'na' ? 'white' : 'var(--text-muted)', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}>N/A</button>}
+                            </>
+                          ) : task.response_type === 'checkbox' ? (
+                            <button onClick={() => handleVatResponse(task.id, resp?.response === 'checked' ? '' : 'checked')} style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid', borderColor: resp?.response === 'checked' ? 'var(--purple-primary)' : 'var(--border)', background: resp?.response === 'checked' ? 'var(--purple-primary)' : 'transparent', color: resp?.response === 'checked' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
+                          ) : (
+                            <label style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                              <Upload size={13} />
+                              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={() => {}} />
+                            </label>
+                          )}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', lineHeight: 1.5, margin: 0 }}>{task.title}</p>
+                          {task.sop_trigger && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px', padding: '2px 7px', background: '#FEF0F0', color: 'var(--danger)', borderRadius: '12px', fontSize: '10px', fontWeight: 600 }}><AlertTriangle size={9} /> SOP</span>}
+                          {vatExisting[task.id] && (
+                            <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                              <span style={{ color: 'var(--success)' }}>✓</span> Done by {vatExisting[task.id].assignment?.profile?.full_name || '?'} on {new Date(vatExisting[task.id].responded_at).toLocaleDateString()}
+                            </div>
+                          )}
+                          {resp?.response && (
+                            <textarea value={resp?.notes || ''} onChange={e => handleVatNotes(task.id, e.target.value)} placeholder="Notes (optional)" rows={1}
+                              style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </>
+        )}
+
+        {/* ── Equipment checklist ── */}
+        {vatCategory === 'Equipment' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {EQUIPMENT_MAINTENANCE.map(equip => {
+              const equipOpen = vatExpandedEquip.has(equip.id);
+              const allFreqDone = equip.frequencies.every(f => isMaintFreqDone(maintChecks, equip, f));
+              return (
+                <div key={equip.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                  <button onClick={() => setVatExpandedEquip(p => { const n = new Set(p); n.has(equip.id) ? n.delete(equip.id) : n.add(equip.id); return n; })}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: allFreqDone ? '#EAF7F0' : 'var(--bg-secondary)', border: 'none', cursor: 'pointer', borderBottom: equipOpen ? '1px solid var(--border)' : 'none', textAlign: 'left' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '15px', fontWeight: 700, color: allFreqDone ? '#27AE60' : 'var(--text-primary)' }}>{equip.name}</span>
+                      {allFreqDone && <span style={{ fontSize: '11px', fontWeight: 600, color: '#27AE60', background: '#D5F5E3', padding: '2px 8px', borderRadius: '10px' }}>All complete</span>}
+                    </div>
+                    <ChevronDown size={16} style={{ transform: equipOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'var(--text-muted)', flexShrink: 0 }} />
+                  </button>
+
+                  {equipOpen && (
+                    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {equip.note && (
+                        <div style={{ padding: '10px 12px', background: '#F8F9FA', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: 1.5 }}>
+                          {equip.note}
+                        </div>
+                      )}
+                      {equip.frequencies.map(freq => {
+                        const freqKey = `${equip.id}|${freq.id}`;
+                        const freqOpen = vatExpandedFreq.has(freqKey);
+                        const freqDone = isMaintFreqDone(maintChecks, equip, freq);
+                        const doneParents = freq.parents.filter(p => isMaintParentDone(maintChecks, equip, freq, p)).length;
+                        const nextDue = getMaintNextDue(freq.resetFreq);
+                        const completedRec = maintCompleted[freqKey];
+                        const currentCycle = getMaintCycleKey(freq.resetFreq);
+                        const lastDone = completedRec && completedRec.cycleKey !== currentCycle
+                          ? new Date(completedRec.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                          : null;
+                        return (
+                          <div key={freq.id} style={{ border: `1px solid ${freqDone ? '#A9DFBF' : 'var(--border)'}`, borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+                            <button onClick={() => setVatExpandedFreq(p => { const n = new Set(p); n.has(freqKey) ? n.delete(freqKey) : n.add(freqKey); return n; })}
+                              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: freqDone ? '#EAF7F0' : 'var(--bg-secondary)', border: 'none', cursor: 'pointer', borderBottom: freqOpen ? `1px solid ${freqDone ? '#A9DFBF' : 'var(--border)'}` : 'none', textAlign: 'left', gap: '10px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                                <span style={{ fontSize: '11px', fontWeight: 700, color: freqDone ? '#27AE60' : 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>{freq.label}</span>
+                                {freq.subtitle && <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>— {freq.subtitle}</span>}
+                                {freqDone
+                                  ? <span style={{ fontSize: '11px', color: '#27AE60', fontWeight: 600, whiteSpace: 'nowrap' }}>✓ Complete this cycle</span>
+                                  : <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{doneParents}/{freq.parents.length} tasks</span>
+                                }
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                                  {lastDone && `Last: ${lastDone} · `}Next due: {nextDue}
+                                </span>
+                                <ChevronDown size={13} style={{ transform: freqOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'var(--text-muted)' }} />
+                              </div>
+                            </button>
+                            {freqOpen && (
+                              <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                {freq.parents.map(parent => {
+                                  const parentDone = isMaintParentDone(maintChecks, equip, freq, parent);
+                                  return (
+                                    <div key={parent.id}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                                        <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: `2px solid ${parentDone ? '#27AE60' : 'var(--border)'}`, background: parentDone ? '#27AE60' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                          {parentDone && <CheckCircle size={11} color="white" />}
+                                        </div>
+                                        <span style={{ fontSize: '13px', fontWeight: 600, color: parentDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: parentDone ? 'line-through' : 'none', lineHeight: 1.4 }}>{parent.label}</span>
+                                      </div>
+                                      <div style={{ marginLeft: '26px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        {parent.subItems.map(sub => {
+                                          const key = getMaintKey(equip.id, freq.id, freq.resetFreq, parent.id, sub.id);
+                                          const val = maintChecks[key] || null;
+                                          const subDone = sub.type === 'yn' ? val === 'Y' : val === 'done';
+                                          return (
+                                            <div key={sub.id}>
+                                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                                {sub.type === 'yn' ? (
+                                                  <div style={{ display: 'flex', gap: '3px', flexShrink: 0, marginTop: '1px' }}>
+                                                    <button onClick={() => toggleMaintCheck(equip.id, freq.id, freq.resetFreq, parent.id, sub.id, 'Y')} style={{ padding: '2px 9px', borderRadius: '4px', border: `1.5px solid ${val === 'Y' ? '#27AE60' : 'var(--border)'}`, background: val === 'Y' ? '#27AE60' : 'transparent', color: val === 'Y' ? 'white' : 'var(--text-muted)', fontSize: '11px', fontWeight: 700, cursor: 'pointer', lineHeight: 1.4 }}>Y</button>
+                                                    <button onClick={() => toggleMaintCheck(equip.id, freq.id, freq.resetFreq, parent.id, sub.id, 'N')} style={{ padding: '2px 9px', borderRadius: '4px', border: `1.5px solid ${val === 'N' ? '#E74C3C' : 'var(--border)'}`, background: val === 'N' ? '#E74C3C' : 'transparent', color: val === 'N' ? 'white' : 'var(--text-muted)', fontSize: '11px', fontWeight: 700, cursor: 'pointer', lineHeight: 1.4 }}>N</button>
+                                                  </div>
+                                                ) : (
+                                                  <button onClick={() => toggleMaintCheck(equip.id, freq.id, freq.resetFreq, parent.id, sub.id, 'done')} style={{ width: '22px', height: '22px', borderRadius: 'var(--radius-sm)', border: `1.5px solid ${val === 'done' ? 'var(--purple-primary)' : 'var(--border)'}`, background: val === 'done' ? 'var(--purple-primary)' : 'transparent', color: val === 'done' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, marginTop: '1px' }}>
+                                                    {val === 'done' && <CheckCircle size={12} />}
+                                                  </button>
+                                                )}
+                                                <div style={{ minWidth: 0 }}>
+                                                  <span style={{ fontSize: '13px', color: subDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: subDone ? 'line-through' : 'none', lineHeight: 1.5 }}>{sub.label}</span>
+                                                  {sub.note && <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', margin: '2px 0 0', lineHeight: 1.4 }}>{sub.note}</p>}
+                                                  {sub.warning && <p style={{ fontSize: '11px', color: '#E67E22', margin: '2px 0 0', lineHeight: 1.4 }}>{sub.warning}</p>}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                      {parent.warning && (
+                                        <div style={{ marginLeft: '26px', marginTop: '8px', padding: '8px 12px', background: '#FFF8F0', border: '1px solid #FAD7A0', borderRadius: 'var(--radius-sm)', fontSize: '12px', color: '#C0392B', lineHeight: 1.5 }}>
+                                          {parent.warning}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
   }
 
   // ── Step renders ──────────────────────────────────────────────────────────
@@ -1410,6 +1746,7 @@ export default function Tasks2({ userRole }) {
   );
 
   const tabs = [
+    { id: 'view-all', label: 'View All Tasks' },
     { id: 'assign', label: 'Assign tasks' },
     { id: 'calendar', label: 'Calendar' },
     { id: 'unassigned', label: 'Unassigned', badge: unassigned.length || null },
@@ -1442,6 +1779,12 @@ export default function Tasks2({ userRole }) {
       </div>
 
       {/* Tab content */}
+      {tab === 'view-all' && (
+        <div style={card}>
+          {renderViewAll()}
+        </div>
+      )}
+
       {tab === 'assign' && (
         <div style={card}>
           {renderStepIndicator()}
