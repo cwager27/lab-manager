@@ -1746,8 +1746,7 @@ export default function Tasks2({ userRole }) {
   );
 
   const tabs = [
-    { id: 'view-all', label: 'View All Tasks' },
-    { id: 'assign', label: 'Assign tasks' },
+    { id: 'view-all', label: 'Tasks' },
     { id: 'calendar', label: 'Calendar' },
     { id: 'unassigned', label: 'Unassigned', badge: unassigned.length || null },
   ];
@@ -1780,21 +1779,21 @@ export default function Tasks2({ userRole }) {
 
       {/* Tab content */}
       {tab === 'view-all' && (
-        <div style={card}>
-          {renderViewAll()}
-        </div>
-      )}
-
-      {tab === 'assign' && (
-        <div style={card}>
-          {renderStepIndicator()}
-          {step === 1 && renderStep1()}
-          {step === 2 && renderStep2()}
-          {step === 3 && renderStep3()}
-          {step === 4 && renderStep4()}
-          {step === 5 && renderStep5()}
-          {step === 6 && renderStep6()}
-        </div>
+        <>
+          <div style={card}>
+            {renderStepIndicator()}
+            {step === 1 && renderStep1()}
+            {step === 2 && renderStep2()}
+            {step === 3 && renderStep3()}
+            {step === 4 && renderStep4()}
+            {step === 5 && renderStep5()}
+            {step === 6 && renderStep6()}
+          </div>
+          <div style={{ borderTop: '2px solid var(--border)', margin: '28px 0' }} />
+          <div style={card}>
+            {renderViewAll()}
+          </div>
+        </>
       )}
 
       {tab === 'calendar' && (
