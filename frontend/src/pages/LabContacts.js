@@ -61,6 +61,131 @@ function getDisplayName(contact) {
   return contact.full_name || '';
 }
 
+const labelStyle = {
+  fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)',
+  display: 'block', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.05em',
+};
+const inpStyle = {
+  width: '100%', padding: '6px 8px', border: '1px solid var(--border)',
+  borderRadius: 4, fontSize: '12px', outline: 'none', boxSizing: 'border-box', background: 'var(--bg-primary)',
+};
+
+function AdminContactEditPanel({ contact, onSave, onCancel }) {
+  const [form, setForm] = useState(() => ({ ...contact }));
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    await onSave(form);
+  }
+
+  const inp = (key, ph = '') => (
+    <input style={inpStyle} type="text" value={form[key] || ''} placeholder={ph}
+      onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} />
+  );
+  const phoneInp = (key) => (
+    <input style={inpStyle} type="text" value={form[key] || ''} placeholder="(xxx)-xxx-xxxx"
+      onChange={e => setForm(p => ({ ...p, [key]: formatPhone(e.target.value) }))} />
+  );
+
+  return (
+    <tr style={{ background: 'rgba(123,63,160,0.03)' }}>
+      <td colSpan={99} style={{ padding: '16px 20px', borderTop: '2px solid var(--purple-primary)', borderBottom: '2px solid var(--purple-primary)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+          <div><label style={labelStyle}>First Name</label>{inp('first_name')}</div>
+          <div><label style={labelStyle}>Last Name</label>{inp('last_name')}</div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+          <div><label style={labelStyle}>Email</label>{inp('email', 'name@example.com')}</div>
+          <div><label style={labelStyle}>Personal Phone</label>{phoneInp('phone')}</div>
+          <div><label style={labelStyle}>Work Phone</label>{phoneInp('alternative_email')}</div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+          <div><label style={labelStyle}>Title</label>{inp('title', 'e.g. Lab Manager')}</div>
+          <div>
+            <label style={labelStyle}>Office / Dept</label>
+            <input style={inpStyle} type="text" value={form.address || ''} placeholder="Room 123, Science Building..."
+              onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
+              onBlur={e => setForm(p => ({ ...p, address: formatAddress(e.target.value) }))} />
+          </div>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelStyle}>Responsibilities / Notes</label>
+          <textarea value={form.notes || ''} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+            rows={2} style={{ ...inpStyle, resize: 'vertical' }} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={onCancel} style={{ padding: '7px 16px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+          <button onClick={handleSave} disabled={saving} style={{ padding: '7px 16px', borderRadius: 6, border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: saving ? 'wait' : 'pointer' }}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function MemberContactEditPanel({ member, extra, onSave, onCancel }) {
+  const [form, setForm] = useState(() => ({
+    phone: extra?.phone || '',
+    address: extra?.address || '',
+    emergency_contact_name: extra?.emergency_contact_name || '',
+    emergency_contact_phone: extra?.emergency_contact_phone || '',
+    emergency_contact_email: extra?.emergency_contact_email || '',
+    emergency_contact_relationship: extra?.emergency_contact_relationship || '',
+  }));
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    await onSave(form);
+  }
+
+  const inp = (key, ph = '') => (
+    <input style={inpStyle} type="text" value={form[key] || ''} placeholder={ph}
+      onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} />
+  );
+
+  return (
+    <tr style={{ background: 'rgba(123,63,160,0.03)' }}>
+      <td colSpan={99} style={{ padding: '16px 20px', borderTop: '2px solid var(--purple-primary)', borderBottom: '2px solid var(--purple-primary)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+          <div>
+            <label style={labelStyle}>Phone Number</label>
+            <input style={inpStyle} type="text" value={form.phone || ''} placeholder="(xxx)-xxx-xxxx"
+              onChange={e => setForm(p => ({ ...p, phone: formatPhone(e.target.value) }))} />
+          </div>
+          <div>
+            <label style={labelStyle}>Address</label>
+            <input style={inpStyle} type="text" value={form.address || ''} placeholder="123 Main St, Apt 4B..."
+              onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
+              onBlur={e => setForm(p => ({ ...p, address: formatAddress(e.target.value) }))} />
+          </div>
+        </div>
+        <div style={{ marginBottom: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+          <span style={{ ...labelStyle, display: 'inline' }}>Emergency Contact</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
+          <div><label style={labelStyle}>Name</label>{inp('emergency_contact_name', 'Jane Doe')}</div>
+          <div>
+            <label style={labelStyle}>Phone</label>
+            <input style={inpStyle} type="text" value={form.emergency_contact_phone || ''} placeholder="(xxx)-xxx-xxxx"
+              onChange={e => setForm(p => ({ ...p, emergency_contact_phone: formatPhone(e.target.value) }))} />
+          </div>
+          <div><label style={labelStyle}>Email</label>{inp('emergency_contact_email', 'name@example.com')}</div>
+          <div><label style={labelStyle}>Relationship</label>{inp('emergency_contact_relationship', 'e.g. Parent')}</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={onCancel} style={{ padding: '7px 16px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+          <button onClick={handleSave} disabled={saving} style={{ padding: '7px 16px', borderRadius: 6, border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: saving ? 'wait' : 'pointer' }}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 export default function LabContacts({ userRole, userId, profile, permissions }) {
   const [contacts, setContacts] = useState([]);
   const [members, setMembers] = useState([]);
@@ -71,14 +196,13 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   const [activeTab, setActiveTab] = useState('admin');
   const [showContactForm, setShowContactForm] = useState(false);
   const [showMemberForm, setShowMemberForm] = useState(false);
-  const [editingContact, setEditingContact] = useState(null);
   const [contactForm, setContactForm] = useState(EMPTY_CONTACT);
   const [memberForm, setMemberForm] = useState(EMPTY_MEMBER);
   const [saving, setSaving] = useState(false);
   const [memberError, setMemberError] = useState('');
   const [confirmDeleteMember, setConfirmDeleteMember] = useState(null);
-  const [editingMemberInfo, setEditingMemberInfo] = useState(null);
-  const [memberInfoForm, setMemberInfoForm] = useState({ phone: '', address: '', emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_email: '', emergency_contact_relationship: '' });
+  const [expandedAdminEditId, setExpandedAdminEditId] = useState(null);
+  const [memberContactEditId, setMemberContactEditId] = useState(null);
 
   const canManage = userRole === 'admin' || (permissions?.can_add_members);
   const canViewPersonalPhone = userRole === 'admin' || userRole === 'pm' || profile?.full_name?.toLowerCase().startsWith('mia');
@@ -107,11 +231,10 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   async function handleSaveContact(e) {
     e.preventDefault();
     setSaving(true);
-    // Only send editable fields — never send generated columns (full_name), PKs, or timestamps
     const payload = {
       first_name: contactForm.first_name || '',
       last_name: contactForm.last_name || '',
-      role: contactForm.role || 'external',
+      role: 'external',
       title: contactForm.title || '',
       phone: contactForm.phone || '',
       email: contactForm.email || '',
@@ -123,18 +246,13 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
       emergency_contact_phone: contactForm.emergency_contact_phone || '',
       emergency_contact_email: contactForm.emergency_contact_email || '',
       emergency_contact_relationship: contactForm.emergency_contact_relationship || '',
-      status: contactForm.status || 'active',
-      sort_order: contactForm.sort_order ?? 99,
+      status: 'active',
+      sort_order: 99,
       notes: contactForm.notes || '',
     };
-    if (editingContact) {
-      await supabase.from('lab_contacts').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editingContact.id);
-    } else {
-      await supabase.from('lab_contacts').insert([payload]);
-    }
+    await supabase.from('lab_contacts').insert([payload]);
     setSaving(false);
     setShowContactForm(false);
-    setEditingContact(null);
     setContactForm(EMPTY_CONTACT);
     fetchData();
   }
@@ -230,31 +348,42 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
     if (name) contactsByName[name] = c;
   });
 
-  function openEditMemberInfo(member) {
-    const extra = contactsByEmail[member.email?.toLowerCase()];
-    setEditingMemberInfo({ member, contact: extra || null });
-    setMemberInfoForm({
-      phone: extra?.phone || '',
-      address: extra?.address || '',
-      emergency_contact_name: extra?.emergency_contact_name || '',
-      emergency_contact_phone: extra?.emergency_contact_phone || '',
-      emergency_contact_email: extra?.emergency_contact_email || '',
-      emergency_contact_relationship: extra?.emergency_contact_relationship || '',
-    });
+  async function updateAdminContact(contactId, form) {
+    const payload = {
+      first_name: form.first_name || '',
+      last_name: form.last_name || '',
+      role: form.role || 'external',
+      title: form.title || '',
+      phone: form.phone || '',
+      email: form.email || '',
+      alternative_email: form.alternative_email || '',
+      address: form.address || '',
+      supervisor: form.supervisor || '',
+      supervisor_email: form.supervisor_email || '',
+      emergency_contact_name: form.emergency_contact_name || '',
+      emergency_contact_phone: form.emergency_contact_phone || '',
+      emergency_contact_email: form.emergency_contact_email || '',
+      emergency_contact_relationship: form.emergency_contact_relationship || '',
+      status: form.status || 'active',
+      sort_order: form.sort_order ?? 99,
+      notes: form.notes || '',
+    };
+    await supabase.from('lab_contacts').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', contactId);
+    setExpandedAdminEditId(null);
+    fetchData();
   }
 
-  async function saveMemberInfo() {
-    const { member, contact } = editingMemberInfo;
+  async function updateMemberContact(member, extra, form) {
     const payload = {
-      phone: memberInfoForm.phone,
-      address: memberInfoForm.address,
-      emergency_contact_name: memberInfoForm.emergency_contact_name,
-      emergency_contact_phone: memberInfoForm.emergency_contact_phone,
-      emergency_contact_email: memberInfoForm.emergency_contact_email,
-      emergency_contact_relationship: memberInfoForm.emergency_contact_relationship,
+      phone: form.phone || '',
+      address: form.address || '',
+      emergency_contact_name: form.emergency_contact_name || '',
+      emergency_contact_phone: form.emergency_contact_phone || '',
+      emergency_contact_email: form.emergency_contact_email || '',
+      emergency_contact_relationship: form.emergency_contact_relationship || '',
     };
-    if (contact) {
-      await supabase.from('lab_contacts').update(payload).eq('id', contact.id);
+    if (extra) {
+      await supabase.from('lab_contacts').update(payload).eq('id', extra.id);
     } else {
       const nameParts = (member.full_name || '').split(' ');
       await supabase.from('lab_contacts').insert([{
@@ -266,7 +395,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
         sort_order: 99,
       }]);
     }
-    setEditingMemberInfo(null);
+    setMemberContactEditId(null);
     fetchData();
   }
 
@@ -322,7 +451,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>Team directory and member management</p>
         </div>
         {canManage && activeTab === 'admin' && (
-          <button onClick={() => { setContactForm(EMPTY_CONTACT); setEditingContact(null); setShowContactForm(true); }} style={{
+          <button onClick={() => { setContactForm(EMPTY_CONTACT); setShowContactForm(true); }} style={{
             display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
             background: 'var(--purple-primary)', color: 'white', border: 'none',
             borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer'
@@ -376,38 +505,52 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                     <tr><td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No admin contacts yet.</td></tr>
                   ) : filteredAdminContacts.map((contact, i) => {
                     const roleColors = ROLE_COLORS[contact.role] || ROLE_COLORS.external;
+                    const isEditingThis = expandedAdminEditId === contact.id;
                     return (
-                      <tr key={contact.id} style={{ borderTop: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
-                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <div style={{ width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0, background: roleColors.bg, border: `2px solid ${roleColors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <span style={{ fontSize: '12px', fontWeight: 700, color: roleColors.text }}>{(contact.first_name || contact.full_name || '?').charAt(0).toUpperCase()}</span>
-                            </div>
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{getDisplayName(contact)}</span>
-                          </div>
-                        </td>
-                        <td style={{ padding: '10px 14px', fontSize: '12px' }}>
-                          {contact.email ? <a href={`mailto:${contact.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{contact.email}</a> : '—'}
-                        </td>
-                        {canViewPersonalPhone && (
-                          <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                            {contact.phone ? <a href={`tel:${contact.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.phone}</a> : '—'}
-                          </td>
-                        )}
-                        <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                          {contact.alternative_email ? <a href={`tel:${contact.alternative_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.alternative_email}</a> : '—'}
-                        </td>
-                        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>{contact.address || '—'}</td>
-                        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: '200px' }}>{contact.notes || '—'}</td>
-                        {canManage && (
+                      <>
+                        <tr key={contact.id} style={{ borderTop: '1px solid var(--border)', background: isEditingThis ? 'rgba(123,63,160,0.04)' : i % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
                           <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
-                            <div style={{ display: 'flex', gap: '4px' }}>
-                              <button onClick={() => { setEditingContact(contact); setContactForm({ ...contact }); setShowContactForm(true); }} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)', cursor: 'pointer' }}><Edit2 size={13} /></button>
-                              <button onClick={() => handleDeleteContact(contact.id)} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', cursor: 'pointer' }}><Trash2 size={13} /></button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0, background: roleColors.bg, border: `2px solid ${roleColors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <span style={{ fontSize: '12px', fontWeight: 700, color: roleColors.text }}>{(contact.first_name || contact.full_name || '?').charAt(0).toUpperCase()}</span>
+                              </div>
+                              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{getDisplayName(contact)}</span>
                             </div>
                           </td>
+                          <td style={{ padding: '10px 14px', fontSize: '12px' }}>
+                            {contact.email ? <a href={`mailto:${contact.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{contact.email}</a> : '—'}
+                          </td>
+                          {canViewPersonalPhone && (
+                            <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                              {contact.phone ? <a href={`tel:${contact.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.phone}</a> : '—'}
+                            </td>
+                          )}
+                          <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                            {contact.alternative_email ? <a href={`tel:${contact.alternative_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.alternative_email}</a> : '—'}
+                          </td>
+                          <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>{contact.address || '—'}</td>
+                          <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: '200px' }}>{contact.notes || '—'}</td>
+                          {canManage && (
+                            <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                <button onClick={() => setExpandedAdminEditId(isEditingThis ? null : contact.id)}
+                                  style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: `1px solid ${isEditingThis ? 'var(--purple-primary)' : 'var(--border)'}`, background: isEditingThis ? '#F5EEF8' : 'var(--bg-primary)', color: isEditingThis ? 'var(--purple-primary)' : 'var(--text-muted)', cursor: 'pointer' }}>
+                                  <Edit2 size={13} />
+                                </button>
+                                <button onClick={() => handleDeleteContact(contact.id)} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', cursor: 'pointer' }}><Trash2 size={13} /></button>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                        {isEditingThis && (
+                          <AdminContactEditPanel
+                            key={`${contact.id}-edit`}
+                            contact={contact}
+                            onSave={(form) => updateAdminContact(contact.id, form)}
+                            onCancel={() => setExpandedAdminEditId(null)}
+                          />
                         )}
-                      </tr>
+                      </>
                     );
                   })}
                 </tbody>
@@ -485,7 +628,8 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                           {canManage && (
                             <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
                               <div style={{ display: 'flex', gap: '4px' }}>
-                                <button onClick={() => openEditMemberInfo(member)} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)', cursor: 'pointer' }} title="Edit contact info"><Edit2 size={13} /></button>
+                                <button onClick={() => setMemberContactEditId(memberContactEditId === member.id ? null : member.id)}
+                                  style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: `1px solid ${memberContactEditId === member.id ? 'var(--purple-primary)' : 'var(--border)'}`, background: memberContactEditId === member.id ? '#F5EEF8' : 'var(--bg-primary)', color: memberContactEditId === member.id ? 'var(--purple-primary)' : 'var(--text-muted)', cursor: 'pointer' }} title="Edit contact info"><Edit2 size={13} /></button>
                                 {member.id !== userId && (
                                   <button onClick={() => setExpandedId(isExpanded ? null : member.id)}
                                     style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer' }}>
@@ -499,6 +643,15 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                             </td>
                           )}
                         </tr>
+                        {memberContactEditId === member.id && (
+                          <MemberContactEditPanel
+                            key={`${member.id}-contact-edit`}
+                            member={member}
+                            extra={extra}
+                            onSave={(form) => updateMemberContact(member, extra, form)}
+                            onCancel={() => setMemberContactEditId(null)}
+                          />
+                        )}
                         {isExpanded && canManage && (
                           <tr key={`${member.id}-perms`} style={{ background: 'var(--bg-secondary)' }}>
                             <td colSpan={canViewPersonalPhone ? 6 : 4} style={{ padding: '16px 20px', borderTop: '1px solid var(--border)' }}>
@@ -521,43 +674,59 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                       </>
                     );
                   })}
-                  {pendingLabContacts.map((c, i) => (
-                    <tr key={c.id} style={{ borderTop: '1px solid var(--border)', background: (filteredLabMembers.length + i) % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
-                      <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <div style={{ width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0, background: '#F2F3F4', border: '2px solid #CCD1D1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#5D6D7E' }}>{(c.first_name || '?').charAt(0).toUpperCase()}</span>
-                          </div>
-                          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{getDisplayName(c)}</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: '10px 14px', fontSize: '12px' }}>
-                        {c.email ? <a href={`mailto:${c.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{c.email}</a> : '—'}
-                      </td>
-                      <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                        {c.phone ? <a href={`tel:${c.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{c.phone}</a> : '—'}
-                      </td>
-                      {canViewPersonalPhone && (
-                        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '200px' }}>
-                          {c.emergency_contact_name ? (
-                            <div>
-                              <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{c.emergency_contact_name}{c.emergency_contact_relationship ? ` (${c.emergency_contact_relationship})` : ''}</div>
-                              {c.emergency_contact_phone && <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}><Phone size={10} />{c.emergency_contact_phone}</div>}
-                              {c.emergency_contact_email && <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><Mail size={10} />{c.emergency_contact_email}</div>}
+                  {pendingLabContacts.map((c, i) => {
+                    const isPendingEditing = expandedAdminEditId === c.id;
+                    return (
+                      <>
+                        <tr key={c.id} style={{ borderTop: '1px solid var(--border)', background: isPendingEditing ? 'rgba(123,63,160,0.04)' : (filteredLabMembers.length + i) % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
+                          <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0, background: '#F2F3F4', border: '2px solid #CCD1D1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <span style={{ fontSize: '12px', fontWeight: 700, color: '#5D6D7E' }}>{(c.first_name || '?').charAt(0).toUpperCase()}</span>
+                              </div>
+                              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{getDisplayName(c)}</span>
                             </div>
-                          ) : '—'}
-                        </td>
-                      )}
-                      {canViewPersonalPhone && (
-                        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>{c.address || '—'}</td>
-                      )}
-                      {canManage && (
-                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
-                          <button onClick={() => { setEditingContact(c); setContactForm({ ...c }); setShowContactForm(true); }} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)', cursor: 'pointer' }} title="Edit contact info"><Edit2 size={13} /></button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
+                          </td>
+                          <td style={{ padding: '10px 14px', fontSize: '12px' }}>
+                            {c.email ? <a href={`mailto:${c.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{c.email}</a> : '—'}
+                          </td>
+                          <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                            {c.phone ? <a href={`tel:${c.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{c.phone}</a> : '—'}
+                          </td>
+                          {canViewPersonalPhone && (
+                            <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '200px' }}>
+                              {c.emergency_contact_name ? (
+                                <div>
+                                  <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{c.emergency_contact_name}{c.emergency_contact_relationship ? ` (${c.emergency_contact_relationship})` : ''}</div>
+                                  {c.emergency_contact_phone && <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}><Phone size={10} />{c.emergency_contact_phone}</div>}
+                                  {c.emergency_contact_email && <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><Mail size={10} />{c.emergency_contact_email}</div>}
+                                </div>
+                              ) : '—'}
+                            </td>
+                          )}
+                          {canViewPersonalPhone && (
+                            <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>{c.address || '—'}</td>
+                          )}
+                          {canManage && (
+                            <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+                              <button onClick={() => setExpandedAdminEditId(isPendingEditing ? null : c.id)}
+                                style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: `1px solid ${isPendingEditing ? 'var(--purple-primary)' : 'var(--border)'}`, background: isPendingEditing ? '#F5EEF8' : 'var(--bg-primary)', color: isPendingEditing ? 'var(--purple-primary)' : 'var(--text-muted)', cursor: 'pointer' }}>
+                                <Edit2 size={13} />
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                        {isPendingEditing && (
+                          <AdminContactEditPanel
+                            key={`${c.id}-edit`}
+                            contact={c}
+                            onSave={(form) => updateAdminContact(c.id, form)}
+                            onCancel={() => setExpandedAdminEditId(null)}
+                          />
+                        )}
+                      </>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -590,7 +759,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
       {showContactForm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '480px', maxHeight: '85vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>{editingContact ? 'Edit Contact' : 'Add Contact'}</h2>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>Add Contact</h2>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               {[{ key: 'first_name', label: 'First Name' }, { key: 'last_name', label: 'Last Name' }].map(field => (
@@ -625,58 +794,10 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
             </div>
 
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button onClick={() => { setShowContactForm(false); setEditingContact(null); setContactForm(EMPTY_CONTACT); }} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500 }}>Cancel</button>
+              <button onClick={() => { setShowContactForm(false); setContactForm(EMPTY_CONTACT); }} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500 }}>Cancel</button>
               <button onClick={handleSaveContact} disabled={saving} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600 }}>
                 {saving ? 'Saving...' : 'Save Contact'}
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Lab Member Contact Info Modal */}
-      {editingMemberInfo && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
-          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '480px', maxHeight: '85vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '4px' }}>Edit Contact Info</h2>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>{editingMemberInfo.member.full_name}</p>
-
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Phone Number</label>
-              <input type="text" value={memberInfoForm.phone} placeholder="(xxx)-xxx-xxxx"
-                onChange={e => setMemberInfoForm(p => ({ ...p, phone: formatPhone(e.target.value) }))}
-                style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
-            </div>
-
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Address</label>
-              <input type="text" value={memberInfoForm.address} placeholder="123 Main St, Apt 4B, New York, NY 10001"
-                onChange={e => setMemberInfoForm(p => ({ ...p, address: e.target.value }))}
-                onBlur={e => setMemberInfoForm(p => ({ ...p, address: formatAddress(e.target.value) }))}
-                style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
-            </div>
-
-            <div style={{ marginBottom: '4px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
-              <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Emergency Contact</p>
-            </div>
-
-            {[
-              { key: 'emergency_contact_name', label: 'Name (First & Last)', placeholder: 'Jane Doe' },
-              { key: 'emergency_contact_phone', label: 'Phone', placeholder: '(xxx)-xxx-xxxx', format: formatPhone },
-              { key: 'emergency_contact_email', label: 'Email', placeholder: 'name@example.com' },
-              { key: 'emergency_contact_relationship', label: 'Relationship', placeholder: 'e.g. Parent, Spouse' },
-            ].map(field => (
-              <div key={field.key} style={{ marginBottom: '12px' }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
-                <input type="text" value={memberInfoForm[field.key]} placeholder={field.placeholder || ''}
-                  onChange={e => setMemberInfoForm(p => ({ ...p, [field.key]: field.format ? field.format(e.target.value) : e.target.value }))}
-                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
-              </div>
-            ))}
-
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
-              <button onClick={() => setEditingMemberInfo(null)} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
-              <button onClick={saveMemberInfo} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Save</button>
             </div>
           </div>
         </div>
