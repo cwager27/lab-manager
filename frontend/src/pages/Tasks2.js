@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { CheckCircle, XCircle, AlertTriangle, Upload, Clock, Search, ChevronDown } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, Upload, Clock, Search, ChevronDown, Bell } from 'lucide-react';
 import {
   getMaintCycleKey, getMaintNextDue, getMaintKey,
   isMaintSubDone, isMaintParentDone, isMaintFreqDone,
@@ -274,6 +274,8 @@ export default function Tasks2({ userRole }) {
   const [editingOccId, setEditingOccId] = useState(null);
   const [editAssigneeId, setEditAssigneeId] = useState('');
   const [editSaving, setEditSaving] = useState(false);
+  const [remindingId, setRemindingId] = useState(null);
+  const [remindedIds, setRemindedIds] = useState(new Set());
 
   // ── Calendar state ────────────────────────────────────────────────────────
   const [calYear, setCalYear] = useState(new Date().getFullYear());
@@ -592,6 +594,22 @@ export default function Tasks2({ userRole }) {
     setEditSaving(false);
   }
 
+  async function sendReminder(occId) {
+    setRemindingId(occId);
+    try {
+      await fetch(`${API}/tasks2/remind`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ occurrenceId: occId }),
+      });
+      setRemindedIds(p => new Set([...p, occId]));
+      setTimeout(() => setRemindedIds(p => { const n = new Set(p); n.delete(occId); return n; }), 3000);
+    } catch (e) {
+      console.error('Reminder failed', e);
+    }
+    setRemindingId(null);
+  }
+
   function renderAssignedTab() {
     const today = new Date().toISOString().split('T')[0];
     const members = profiles.filter(p => p.role === 'member');
@@ -602,8 +620,8 @@ export default function Tasks2({ userRole }) {
     const overdue        = assignedList.filter(o => o.status !== 'done' && !o.completed_at && o.due_date < today);
     const upcoming       = assignedList.filter(o => o.status !== 'done' && !o.completed_at && o.due_date >= today);
 
-    const tableHeader = (cols) => (
-      <div style={{ display: 'grid', gridTemplateColumns: cols, gap: '0 12px', padding: '8px 14px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', marginBottom: '4px' }}>
+    const tableHeader = () => (
+      <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 160px 100px auto', gap: '0 12px', padding: '8px 14px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', marginBottom: '4px' }}>
         {['Due date', 'Task', 'Assigned to', 'Status', ''].map(h => (
           <span key={h} style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</span>
         ))}
@@ -663,8 +681,11 @@ export default function Tasks2({ userRole }) {
         );
       }
 
+      const isReminding = remindingId === occ.id;
+      const wasReminded = remindedIds.has(occ.id);
+
       return (
-        <div key={occ.id} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 160px 100px 36px', gap: '0 12px', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '4px', boxShadow: 'var(--shadow-sm)', opacity: isDone ? 0.75 : 1 }}>
+        <div key={occ.id} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 160px 100px auto', gap: '0 12px', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '4px', boxShadow: 'var(--shadow-sm)', opacity: isDone ? 0.75 : 1 }}>
           <div>
             <div style={{ fontSize: '13px', fontWeight: 600, color: isOverdue ? '#E74C3C' : 'var(--text-primary)' }}>
               {new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -691,12 +712,19 @@ export default function Tasks2({ userRole }) {
               </div>
             )}
           </div>
-          <div>
+          <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
             <button onClick={() => { setEditingOccId(occ.id); setEditAssigneeId(occ.assigned_to || ''); }}
               style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--text-muted)', fontSize: isUnassignedSection ? '15px' : '13px' }}
               title={isUnassignedSection ? 'Assign' : 'Edit assignee'}>
               {isUnassignedSection ? '+' : '✎'}
             </button>
+            {!isUnassignedSection && (
+              <button onClick={() => sendReminder(occ.id)} disabled={isReminding || wasReminded}
+                title={`Remind ${occ.assignee?.full_name || 'assignee'}`}
+                style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: wasReminded ? '#EAF7F0' : 'transparent', border: `1px solid ${wasReminded ? '#A9DFBF' : 'var(--border)'}`, borderRadius: 'var(--radius-sm)', cursor: isReminding ? 'wait' : 'pointer', color: wasReminded ? '#27AE60' : 'var(--text-muted)', transition: 'all 0.2s' }}>
+                <Bell size={12} />
+              </button>
+            )}
           </div>
         </div>
       );
@@ -742,7 +770,7 @@ export default function Tasks2({ userRole }) {
               <div style={{ padding: '20px', textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: '13px', marginBottom: '24px' }}>No assigned tasks in this date range.</div>
             ) : (
               <div style={{ marginBottom: '28px' }}>
-                {tableHeader('110px 1fr 160px 100px 36px')}
+                {tableHeader()}
                 {assignedList.map(occ => renderOccRow(occ, false))}
               </div>
             )}
@@ -756,7 +784,7 @@ export default function Tasks2({ userRole }) {
               <div style={{ padding: '20px', textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: '13px' }}>All tasks in this range are assigned.</div>
             ) : (
               <div>
-                {tableHeader('110px 1fr 160px 100px 36px')}
+                {tableHeader()}
                 {unassignedList.map(occ => renderOccRow(occ, true))}
               </div>
             )}

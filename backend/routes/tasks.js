@@ -1,7 +1,44 @@
 const express = require('express');
 const router = express.Router();
+const nodemailer = require('nodemailer');
 const { generateOccurrences } = require('../lib/occurrenceGenerator');
 const { supabaseAdmin } = require('../lib/supabaseAdmin');
+
+const mailer = nodemailer.createTransport({
+  service: 'gmail',
+  auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
+});
+// EMAILS PAUSED — remove this line to resume
+mailer.sendMail = async () => {};
+
+function reminderHtml(name, taskName, dueDate, message) {
+  const fmt = new Date(dueDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  return `<div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;padding:32px;background:#fff;">
+    <h1 style="color:#7B3FA0;margin:0 0 24px;font-size:20px;letter-spacing:0.05em;">PETLJAK LAB</h1>
+    <p style="color:#333;font-size:15px;margin:0 0 12px;">Hi ${name},</p>
+    <p style="color:#333;font-size:15px;margin:0 0 20px;">${message}</p>
+    <div style="background:#F5EEF8;border-left:4px solid #7B3FA0;padding:16px 20px;border-radius:0 8px 8px 0;margin:0 0 24px;">
+      <strong style="color:#7B3FA0;font-size:17px;">${taskName}</strong>
+      <p style="color:#555;margin:8px 0 0;font-size:13px;">Due: ${fmt}</p>
+    </div>
+    <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}" style="display:inline-block;padding:12px 24px;background:#7B3FA0;color:white;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Open Lab Manager</a>
+  </div>`;
+}
+
+function overdueNoticeHtml(pmName, assigneeName, taskName, dueDate) {
+  const fmt = new Date(dueDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  return `<div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;padding:32px;background:#fff;">
+    <h1 style="color:#7B3FA0;margin:0 0 24px;font-size:20px;letter-spacing:0.05em;">PETLJAK LAB</h1>
+    <p style="color:#333;font-size:15px;margin:0 0 12px;">Hi ${pmName},</p>
+    <p style="color:#333;font-size:15px;margin:0 0 20px;">The following task was not completed by its due date:</p>
+    <div style="background:#FDEDEC;border-left:4px solid #E74C3C;padding:16px 20px;border-radius:0 8px 8px 0;margin:0 0 24px;">
+      <strong style="color:#C0392B;font-size:17px;">${taskName}</strong>
+      <p style="color:#555;margin:8px 0 0;font-size:13px;">Was due: ${fmt}</p>
+      <p style="color:#555;margin:4px 0 0;font-size:13px;">Assigned to: ${assigneeName}</p>
+    </div>
+    <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}" style="display:inline-block;padding:12px 24px;background:#E74C3C;color:white;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">View in Lab Manager</a>
+  </div>`;
+}
 
 // ── Occurrence generation ─────────────────────────────────────────────────────
 
@@ -272,6 +309,37 @@ router.post('/tasks2/assign', async (req, res) => {
     res.json({ preview: rows, dryRun });
   } catch (err) {
     console.error('tasks2/assign error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Manual reminder ────────────────────────────────────────────────────────────
+
+router.post('/tasks2/remind', async (req, res) => {
+  try {
+    const { occurrenceId } = req.body;
+    if (!occurrenceId) return res.status(400).json({ error: 'occurrenceId required' });
+
+    const { data: occ, error } = await supabaseAdmin
+      .from('task_occurrences')
+      .select('id, due_date, task_def:tasks_definitions(title, group_name), assignee:profiles!assigned_to(email, full_name)')
+      .eq('id', occurrenceId)
+      .single();
+
+    if (error || !occ) return res.status(404).json({ error: 'Occurrence not found' });
+    if (!occ.assignee?.email) return res.status(400).json({ error: 'No assignee email found' });
+
+    const taskName = occ.task_def?.group_name || occ.task_def?.title || 'Task';
+    await mailer.sendMail({
+      from: `"Petljak Lab" <${process.env.GMAIL_USER}>`,
+      to: occ.assignee.email,
+      subject: `Petljak Lab — Reminder: ${taskName}`,
+      html: reminderHtml(occ.assignee.full_name, taskName, occ.due_date, 'You have a task that needs your attention:'),
+    });
+
+    res.json({ success: true, sentTo: occ.assignee.email });
+  } catch (err) {
+    console.error('tasks2/remind error:', err);
     res.status(500).json({ error: err.message });
   }
 });
