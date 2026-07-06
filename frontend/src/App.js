@@ -1,8 +1,7 @@
 import './styles/global.css';
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from './lib/supabase';
+import { supabase, isRecoveryUrl, recoveryTokenHash, recoveryCode } from './lib/supabase';
 import Navigation from './components/Navigation';
-import Tasks from './pages/Tasks';
 import VacationLogs from './pages/VacationLogs';
 import LabMeetings from './pages/LabMeetings';
 import Finance from './pages/Finance';
@@ -19,52 +18,34 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
-  // Detect recovery flow synchronously from the URL before any async work runs.
-  // Supabase can produce three formats depending on the email template in use:
-  //   1. Old template (implicit):   #access_token=...&type=recovery
-  //      Supabase's initialize() auto-processes this and fires PASSWORD_RECOVERY.
-  //   2. New template (token-hash): ?token_hash=...&type=recovery
-  //      Not auto-processed; verifyOtp() must be called manually.
-  //   3. PKCE code (defensive):     ?code=...
-  //      Not auto-processed with implicit client; exchangeCodeForSession() must be called.
-  const _rHash = new URLSearchParams(window.location.hash.slice(1));
-  const _rSearch = new URLSearchParams(window.location.search);
-  const isRecoveryUrl =
-    (_rHash.get('type') === 'recovery' && !!_rHash.get('access_token')) ||
-    (_rSearch.get('type') === 'recovery' && !!_rSearch.get('token_hash')) ||
-    !!_rSearch.get('code');
-
   const [showPasswordReset, setShowPasswordReset] = useState(isRecoveryUrl);
   const [recoveryConfirmed, setRecoveryConfirmed] = useState(false);
   const [recoveryError, setRecoveryError] = useState('');
-  const [loading, setLoading] = useState(!isRecoveryUrl);
+  // Always start loading so we never flash Login before the auth state is known
+  const [loading, setLoading] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const errorTimeoutRef = useRef(null);
+  // Track recovery mode in a ref so the onAuthStateChange closure always has the latest value
+  const inRecoveryRef = useRef(isRecoveryUrl);
 
   useEffect(() => {
     if (isRecoveryUrl) {
-      const sp = new URLSearchParams(window.location.search);
-      const tokenHash = sp.get('token_hash');
-      const code = sp.get('code');
-
-      if (tokenHash) {
-        // New email template: ?token_hash=...&type=recovery
-        // verifyOtp fires PASSWORD_RECOVERY via onAuthStateChange on success.
-        supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }).catch(() => {
+      // Kick off whichever token exchange is needed
+      if (recoveryTokenHash) {
+        supabase.auth.verifyOtp({ token_hash: recoveryTokenHash, type: 'recovery' }).catch(() => {
           setRecoveryError('This reset link has expired or has already been used. Please request a new one.');
+          setLoading(false);
         });
-      } else if (code) {
-        // PKCE: ?code=... — exchangeCodeForSession fires PASSWORD_RECOVERY on success.
-        supabase.auth.exchangeCodeForSession(code).catch(() => {
+      } else if (recoveryCode) {
+        supabase.auth.exchangeCodeForSession(recoveryCode).catch(() => {
           setRecoveryError('This reset link has expired or has already been used. Please request a new one.');
+          setLoading(false);
         });
       } else {
-        // Hash-based implicit: initialize() auto-processes and fires PASSWORD_RECOVERY.
-        // If the token is expired, initialize() returns early without firing any event,
-        // so a fallback timeout surfaces the error after 12s. clearTimeout is called
-        // inside the PASSWORD_RECOVERY handler below if the link is actually valid.
+        // Hash-based: Supabase auto-processes and fires PASSWORD_RECOVERY
         errorTimeoutRef.current = setTimeout(() => {
           setRecoveryError('This reset link has expired or has already been used. Please request a new one.');
+          setLoading(false);
         }, 12000);
       }
     } else {
@@ -83,11 +64,23 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         clearTimeout(errorTimeoutRef.current);
+        inRecoveryRef.current = true;
         setShowPasswordReset(true);
         setRecoveryConfirmed(true);
         setLoading(false);
         return;
       }
+
+      // Supabase sometimes fires SIGNED_IN instead of PASSWORD_RECOVERY for recovery tokens.
+      // If we know we're in a recovery flow, treat it as the confirmation signal.
+      if (inRecoveryRef.current && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+        clearTimeout(errorTimeoutRef.current);
+        setShowPasswordReset(true);
+        setRecoveryConfirmed(true);
+        setLoading(false);
+        return;
+      }
+
       if (session) {
         setUser(session.user);
         const { data: prof } = await supabase
@@ -186,7 +179,7 @@ export default function App() {
       />
       <main style={{ marginLeft: '240px', flex: 1, padding: '32px', maxWidth: 'calc(100vw - 240px)' }}>
         {currentPage === 'dashboard' && <Dashboard profile={profile} userRole={userRole} userId={user.id} />}
-        {currentPage === 'tasks' && <Tasks userRole={userRole} userId={user.id} profile={profile} />}
+        {currentPage === 'tasks2' && <Tasks2 userRole={userRole} userId={user.id} profile={profile} />}
         {currentPage === 'vacation' && <VacationLogs userRole={userRole} userId={user.id} profile={profile} />}
         {currentPage === 'meetings' && <LabMeetings userRole={userRole} userId={user.id} profile={profile} permissions={permissions} />}
         {currentPage === 'finance' && permissions.can_view_finance && <Finance userRole={userRole} />}
@@ -198,8 +191,7 @@ export default function App() {
             You don't have permission to view the contact directory.
           </div>
         )}
-        {currentPage === 'tasks2' && canManage && <Tasks2 userRole={userRole} userId={user.id} profile={profile} />}
-        {!['dashboard', 'tasks', 'vacation', 'meetings', 'finance', 'inventory', 'compliance', 'contacts', 'tasks2'].includes(currentPage) && (
+        {!['dashboard', 'tasks2', 'vacation', 'meetings', 'finance', 'inventory', 'compliance', 'contacts'].includes(currentPage) && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--text-muted)', fontSize: '15px' }}>
             This system is coming soon.
           </div>

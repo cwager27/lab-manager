@@ -1,7 +1,7 @@
 import {
   ClipboardList, Calendar, FlaskConical,
   Users, ShieldCheck, Palmtree,
-  LayoutDashboard, LogOut, DollarSign, CalendarClock,
+  LayoutDashboard, LogOut, DollarSign,
 } from 'lucide-react';
 
 const ROLE_LABELS = {
@@ -14,14 +14,13 @@ const ROLE_LABELS = {
 export default function Navigation({ currentPage, setCurrentPage, userRole, profile, onLogout, canManage, permissions }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, always: true },
-    { id: 'tasks', label: 'Tasks', icon: ClipboardList, always: true },
+    { id: 'tasks2', label: 'Tasks', icon: ClipboardList, always: true },
     { id: 'vacation', label: 'Time Away Requests', icon: Palmtree, always: true },
     { id: 'meetings', label: 'Team Meetings', icon: Calendar, always: true },
     { id: 'finance', label: 'Finance', icon: DollarSign, always: true },
     { id: 'inventory', label: 'Sample Inventory', icon: FlaskConical, always: true },
     { id: 'compliance', label: 'Compliance', icon: ShieldCheck, always: true },
     { id: 'contacts', label: 'Contacts', icon: Users, contactsOnly: true },
-    { id: 'tasks2', label: 'Task Assignment', icon: CalendarClock, managerOnly: true },
   ].filter(item => item.always || (item.managerOnly && canManage) || (item.contactsOnly && (permissions?.can_view_contacts || canManage)));
 
   return (

@@ -31,6 +31,54 @@ const FREQ_COLORS = {
   yearly:   { bg: '#FDEDEC', text: '#E74C3C' },
 };
 
+const SCORE_COLOR = s => s === null ? '#9ca3af' : s >= 90 ? '#22c55e' : s >= 70 ? '#f59e0b' : s >= 50 ? '#f97316' : '#ef4444';
+const PROD_PERIODS = [{ id: 'current', label: 'Currently' }, { id: '30d', label: 'Last 30d' }, { id: 'all', label: 'Since Joining' }];
+
+function PeriodPicker({ value, onChange }) {
+  return (
+    <div style={{ display: 'flex', gap: 4 }}>
+      {PROD_PERIODS.map(({ id, label }) => (
+        <button key={id} onClick={() => onChange(id)}
+          style={{ padding: '3px 10px', borderRadius: 12, border: `1.5px solid ${value === id ? 'var(--purple-primary)' : 'var(--border)'}`, background: value === id ? 'var(--purple-primary)' : 'transparent', color: value === id ? '#fff' : 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function MiniScoreRow({ row }) {
+  const { profile, score, onTime, late, missed, pending, matured } = row;
+  const col = SCORE_COLOR(score);
+  const hasData = matured > 0;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile.full_name}</div>
+        {hasData && (
+          <div style={{ display: 'flex', gap: 6, marginTop: 3, fontSize: 10, color: 'var(--text-muted)' }}>
+            {onTime > 0 && <span style={{ color: '#22c55e' }}>✓{onTime}</span>}
+            {late > 0 && <span style={{ color: '#f59e0b' }}>⚠{late}</span>}
+            {missed > 0 && <span style={{ color: '#ef4444' }}>✗{missed}</span>}
+            {pending > 0 && <span>⏳{pending}</span>}
+          </div>
+        )}
+        {matured > 0 && (
+          <div style={{ height: 3, borderRadius: 2, background: 'var(--border)', overflow: 'hidden', display: 'flex', marginTop: 4 }}>
+            <div style={{ flex: onTime, background: '#22c55e', minWidth: onTime > 0 ? 1 : 0 }} />
+            <div style={{ flex: late,   background: '#f59e0b', minWidth: late   > 0 ? 1 : 0 }} />
+            <div style={{ flex: missed, background: '#ef4444', minWidth: missed > 0 ? 1 : 0 }} />
+          </div>
+        )}
+      </div>
+      <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 38 }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: col, lineHeight: 1 }}>{score !== null ? score : '—'}</div>
+        <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>/100</div>
+      </div>
+    </div>
+  );
+}
+
 function Card({ icon, iconColor, title, children }) {
   return (
     <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
@@ -77,8 +125,20 @@ export default function Dashboard({ profile, userRole, userId }) {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Productivity state
+  const [recurPeriod, setRecurPeriod] = useState('current');
+  const [recurData, setRecurData] = useState([]);
+  const [recurLoading, setRecurLoading] = useState(false);
+  const [oneOffPeriod, setOneOffPeriod] = useState('current');
+  const [oneOffData, setOneOffData] = useState([]);
+  const [oneOffLoading, setOneOffLoading] = useState(false);
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchAll(); }, [profile]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (teamMembers.length) loadRecurProductivity(recurPeriod); }, [teamMembers, recurPeriod]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (teamMembers.length) loadOneOffProductivity(oneOffPeriod); }, [teamMembers, oneOffPeriod]);
 
   async function fetchAll() {
     if (!profile?.id) return;
@@ -166,6 +226,58 @@ export default function Dashboard({ profile, userRole, userId }) {
     setTaskDefs(taskDefData || []);
     setGrants(grantData || []);
     setLoading(false);
+  }
+
+  function prodDateRange(period) {
+    const today = new Date().toISOString().split('T')[0];
+    if (period === '30d') return { from: new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0], to: today };
+    if (period === 'all') return { from: '2020-01-01', to: '2099-12-31' };
+    return { from: '2020-01-01', to: new Date(Date.now() + 60 * 86400000).toISOString().split('T')[0] };
+  }
+
+  function calcProdScore(occs, todayStr) {
+    const onTime  = occs.filter(o => (o.status === 'done' || o.completed_at) && o.completed_at && o.completed_at.slice(0,10) <= o.due_date).length;
+    const late    = occs.filter(o => (o.status === 'done' || o.completed_at) && o.completed_at && o.completed_at.slice(0,10) > o.due_date).length;
+    const done    = occs.filter(o => o.status === 'done').length;
+    const missed  = occs.filter(o => o.status !== 'done' && o.due_date < todayStr).length;
+    const pending = occs.filter(o => o.status !== 'done' && o.due_date >= todayStr).length;
+    const matured = onTime + late + missed;
+    const score   = matured > 0 ? Math.round((onTime + late * 0.5) / matured * 100)
+                  : done > 0    ? Math.round(done / (done + missed) * 100)
+                  : null;
+    return { onTime, late, done, missed, pending, matured, score };
+  }
+
+  async function loadRecurProductivity(period) {
+    setRecurLoading(true);
+    const today = new Date().toISOString().split('T')[0];
+    const { from, to } = prodDateRange(period);
+    const { data } = await supabase
+      .from('task_occurrences')
+      .select('id, due_date, status, completed_at, assigned_to')
+      .not('assigned_to', 'is', null)
+      .gte('due_date', from)
+      .lte('due_date', to);
+    const byPerson = {};
+    (data || []).forEach(o => { if (!byPerson[o.assigned_to]) byPerson[o.assigned_to] = []; byPerson[o.assigned_to].push(o); });
+    setRecurData(teamMembers.map(p => ({ profile: p, ...calcProdScore(byPerson[p.id] || [], today) })));
+    setRecurLoading(false);
+  }
+
+  async function loadOneOffProductivity(period) {
+    setOneOffLoading(true);
+    const today = new Date().toISOString().split('T')[0];
+    const { from, to } = prodDateRange(period);
+    const { data } = await supabase
+      .from('sporadic_tasks')
+      .select('id, due_date, status, completed_at, assigned_to')
+      .not('assigned_to', 'is', null)
+      .gte('due_date', from)
+      .lte('due_date', to);
+    const byPerson = {};
+    (data || []).forEach(o => { if (!byPerson[o.assigned_to]) byPerson[o.assigned_to] = []; byPerson[o.assigned_to].push(o); });
+    setOneOffData(teamMembers.map(p => ({ profile: p, ...calcProdScore(byPerson[p.id] || [], today) })));
+    setOneOffLoading(false);
   }
 
   async function handleAssignTask() {
@@ -508,6 +620,28 @@ export default function Dashboard({ profile, userRole, userId }) {
                 )}
               </div>
             </Card>
+
+            {/* ── One-off Task Productivity ── */}
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+              <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <ClipboardList size={13} color="#27AE60" />
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>One-off Task Productivity</span>
+                </div>
+                <PeriodPicker value={oneOffPeriod} onChange={setOneOffPeriod} />
+              </div>
+              {oneOffLoading ? (
+                <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Loading…</p>
+              ) : (
+                <div style={{ padding: '4px 14px 6px' }}>
+                  {(canEdit
+                    ? oneOffData.sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+                    : oneOffData.filter(r => r.profile.id === profile?.id)
+                  ).map(row => <MiniScoreRow key={row.profile.id} row={row} />)}
+                </div>
+              )}
+            </div>
+
           </div>
           </div>
 
@@ -604,6 +738,26 @@ export default function Dashboard({ profile, userRole, userId }) {
             </div>
 
             {/* Admin Contacts (lab_contacts) */}
+            {/* ── Recurring Responsibilities Productivity ── */}
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+              <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <ClipboardList size={13} color="var(--purple-primary)" />
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Recurring Task Productivity</span>
+                </div>
+                <PeriodPicker value={recurPeriod} onChange={setRecurPeriod} />
+              </div>
+              {recurLoading ? (
+                <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Loading…</p>
+              ) : (
+                <div style={{ padding: '4px 14px 6px' }}>
+                  {recurData.sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).map(row => (
+                    <MiniScoreRow key={row.profile.id} row={row} />
+                  ))}
+                </div>
+              )}
+            </div>
+
             {adminContacts.length > 0 && (
               <Card icon={<Users size={13} color="var(--purple-primary)" />} title="Admin Contacts">
                 <div style={{ display: 'flex', flexDirection: 'column' }}>

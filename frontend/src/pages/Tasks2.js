@@ -282,6 +282,15 @@ export default function Tasks2({ userRole }) {
   const [reportRows, setReportRows] = useState([]);
   const [reportLoading, setReportLoading] = useState(false);
 
+  // ── Productivity state ────────────────────────────────────────────────────
+  const [prodPeriod, setProdPeriod] = useState('current');
+  const [prodRows, setProdRows] = useState([]);
+  const [prodLoading, setProdLoading] = useState(false);
+  // PM reminder counts keyed by occurrence ID, persisted in localStorage
+  const [pmReminders, setPmReminders] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('lab_pm_reminders') || '{}'); } catch { return {}; }
+  });
+
   // ── Calendar state ────────────────────────────────────────────────────────
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1);
@@ -314,6 +323,7 @@ export default function Tasks2({ userRole }) {
   useEffect(() => { if (tab === 'view-all' && !vatLoaded) loadVatData(); }, [tab, vatLoaded]); // eslint-disable-line
   useEffect(() => { if (tab === 'assigned') loadAssignedTasks(assignedFrom, assignedTo); }, [tab, assignedFrom, assignedTo]); // eslint-disable-line
   useEffect(() => { if (tab === 'assigned') loadReport(reportPeriod, assignedFrom, assignedTo); }, [tab, reportPeriod, assignedFrom, assignedTo]); // eslint-disable-line
+  useEffect(() => { if (tab === 'productivity') loadProductivity(prodPeriod); }, [tab, prodPeriod]); // eslint-disable-line
 
   useEffect(() => {
     localStorage.setItem('lab_maint_checks', JSON.stringify(maintChecks));
@@ -610,6 +620,12 @@ export default function Tasks2({ userRole }) {
       });
       setRemindedIds(p => new Set([...p, occId]));
       setTimeout(() => setRemindedIds(p => { const n = new Set(p); n.delete(occId); return n; }), 3000);
+      // Track PM reminder count
+      setPmReminders(prev => {
+        const updated = { ...prev, [occId]: (prev[occId] || 0) + 1 };
+        localStorage.setItem('lab_pm_reminders', JSON.stringify(updated));
+        return updated;
+      });
     } catch (e) {
       console.error('Reminder failed', e);
     }
@@ -655,6 +671,176 @@ export default function Tasks2({ userRole }) {
       .sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
     setReportRows(rows);
     setReportLoading(false);
+  }
+
+  async function loadProductivity(period) {
+    setProdLoading(true);
+    const todayStr = new Date().toISOString().split('T')[0];
+    let qFrom, qTo;
+    if (period === '30d') {
+      qFrom = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+      qTo = todayStr;
+    } else if (period === 'all') {
+      qFrom = '2020-01-01';
+      qTo = '2099-12-31';
+    } else {
+      // current: all time including pending future tasks
+      qFrom = '2020-01-01';
+      qTo = new Date(Date.now() + 60 * 86400000).toISOString().split('T')[0];
+    }
+
+    const { data } = await supabase
+      .from('task_occurrences')
+      .select('id, due_date, status, completed_at, assigned_to, task_definition_id, task_def:tasks_definitions(category)')
+      .not('assigned_to', 'is', null)
+      .gte('due_date', qFrom)
+      .lte('due_date', qTo);
+
+    const RECURRING_CATS = new Set(['MISC', 'PM', 'Equipment']);
+
+    function calcScore(arr) {
+      const onTime  = arr.filter(o => o.status === 'done' && o.completed_at && o.completed_at.slice(0,10) <= o.due_date).length;
+      const late    = arr.filter(o => o.status === 'done' && o.completed_at && o.completed_at.slice(0,10) > o.due_date).length;
+      const missed  = arr.filter(o => o.status !== 'done' && o.due_date < todayStr).length;
+      const pending = arr.filter(o => o.status !== 'done' && o.due_date >= todayStr).length;
+      const matured = onTime + late + missed;
+      const score   = matured > 0 ? Math.round((onTime + late * 0.5) / matured * 100) : null;
+      return { onTime, late, missed, pending, matured, score };
+    }
+
+    const byPerson = {};
+    (data || []).forEach(occ => {
+      if (!byPerson[occ.assigned_to]) byPerson[occ.assigned_to] = [];
+      byPerson[occ.assigned_to].push(occ);
+    });
+
+    const rows = profiles
+      .map(p => {
+        const occs    = byPerson[p.id] || [];
+        const recurring = occs.filter(o => RECURRING_CATS.has(o.task_def?.category));
+        const oneOff    = occs.filter(o => !RECURRING_CATS.has(o.task_def?.category));
+        const occIds    = new Set(occs.map(o => o.id));
+        const pmCount   = Object.entries(pmReminders)
+          .filter(([id]) => occIds.has(id))
+          .reduce((s, [, c]) => s + c, 0);
+        return {
+          profile: p,
+          recurring: calcScore(recurring),
+          oneOff: calcScore(oneOff),
+          combined: calcScore(occs),
+          pmReminders: pmCount,
+        };
+      })
+      .sort((a, b) => (b.combined.score ?? -1) - (a.combined.score ?? -1));
+
+    setProdRows(rows);
+    setProdLoading(false);
+  }
+
+  function renderProductivity() {
+    const scoreColor = s => s === null ? 'var(--text-muted)' : s >= 90 ? '#22c55e' : s >= 70 ? '#f59e0b' : s >= 50 ? '#f97316' : '#ef4444';
+
+    function ScoreBlock({ label, stats }) {
+      const { onTime, late, missed, pending, matured, score } = stats;
+      const col = scoreColor(score);
+      return (
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>{label}</div>
+          {score === null && matured === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No completed data</div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 8 }}>
+                <span style={{ fontSize: 32, fontWeight: 800, color: col, lineHeight: 1 }}>{score !== null ? score : '—'}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/ 100</span>
+              </div>
+              {matured > 0 && (
+                <div style={{ height: 5, borderRadius: 3, background: 'var(--bg-secondary)', overflow: 'hidden', display: 'flex', marginBottom: 8 }}>
+                  <div style={{ flex: onTime, background: '#22c55e', minWidth: onTime > 0 ? 2 : 0 }} />
+                  <div style={{ flex: late,   background: '#f59e0b', minWidth: late   > 0 ? 2 : 0 }} />
+                  <div style={{ flex: missed, background: '#ef4444', minWidth: missed > 0 ? 2 : 0 }} />
+                </div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 10px', fontSize: 11 }}>
+                <span style={{ color: '#22c55e' }}>✓ On time: <strong>{onTime}</strong></span>
+                <span style={{ color: '#ef4444' }}>✗ Missed: <strong>{missed}</strong></span>
+                <span style={{ color: '#f59e0b' }}>⚠ Late: <strong>{late}</strong></span>
+                <span style={{ color: 'var(--text-muted)' }}>⏳ Pending: <strong>{pending}</strong></span>
+              </div>
+            </>
+          )}
+        </div>
+      );
+    }
+
+    const periods = [
+      { id: 'current',  label: 'Currently' },
+      { id: '30d',      label: 'Last 30 Days' },
+      { id: 'all',      label: 'Since Joining' },
+    ];
+
+    return (
+      <div>
+        {/* Period picker */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
+          {periods.map(({ id, label }) => (
+            <button key={id} onClick={() => setProdPeriod(id)}
+              style={{ padding: '7px 18px', borderRadius: 20, border: `1.5px solid ${prodPeriod === id ? 'var(--purple-primary)' : 'var(--border)'}`, background: prodPeriod === id ? 'var(--purple-primary)' : 'transparent', color: prodPeriod === id ? '#fff' : 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {prodLoading ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
+            {prodRows.map(({ profile, recurring, oneOff, combined, pmReminders: pmCount }) => {
+              const col = scoreColor(combined.score);
+              return (
+                <div key={profile.id} style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--bg-card)', overflow: 'hidden' }}>
+                  {/* Header */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{profile.full_name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+                        {combined.onTime + combined.late + combined.missed + combined.pending} tasks total
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 34, fontWeight: 800, color: col, lineHeight: 1 }}>{combined.score !== null ? combined.score : '—'}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>overall / 100</div>
+                    </div>
+                  </div>
+
+                  {/* Body */}
+                  <div style={{ padding: '14px 16px' }}>
+                    {/* Recurring + One-off side by side */}
+                    <div style={{ display: 'flex', gap: 16, paddingBottom: 14, borderBottom: '1px solid var(--border)', marginBottom: 14 }}>
+                      <ScoreBlock label="Recurring" stats={recurring} />
+                      <div style={{ width: 1, background: 'var(--border)', flexShrink: 0 }} />
+                      <ScoreBlock label="One-off" stats={oneOff} />
+                    </div>
+
+                    {/* Reminders row */}
+                    <div style={{ display: 'flex', gap: 20 }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>PM reminders</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: pmCount > 0 ? '#f59e0b' : 'var(--text-muted)' }}>{pmCount}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>System reminders</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-muted)' }}>—</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
   }
 
   function renderAssignedTab() {
@@ -2097,9 +2283,10 @@ export default function Tasks2({ userRole }) {
   );
 
   const tabs = [
-    { id: 'view-all', label: 'Tasks' },
-    { id: 'calendar', label: 'Calendar' },
-    { id: 'assigned', label: 'Insights', badge: unassignedCount || null },
+    { id: 'view-all',     label: 'Tasks' },
+    { id: 'calendar',     label: 'Calendar' },
+    { id: 'productivity', label: 'Productivity' },
+    { id: 'assigned',     label: 'Insights', badge: unassignedCount || null },
   ];
 
   return (
@@ -2150,6 +2337,18 @@ export default function Tasks2({ userRole }) {
       {tab === 'calendar' && (
         <div style={card}>
           {renderCalendar()}
+        </div>
+      )}
+
+      {tab === 'productivity' && (
+        <div style={card}>
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>Task Productivity Evaluations</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
+              Score 0–100 based on % of tasks completed on time. Recurring = MISC/PM/Equipment. One-off = all other assigned tasks.
+            </div>
+          </div>
+          {renderProductivity()}
         </div>
       )}
 

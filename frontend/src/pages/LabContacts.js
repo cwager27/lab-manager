@@ -43,14 +43,13 @@ const EMPTY_MEMBER = {
 function formatPhone(raw) {
   const digits = (raw || '').replace(/\D/g, '');
   if (!digits) return '';
-  if (digits.length <= 3) return `(${digits}`;
-  if (digits.length <= 6) return `(${digits.slice(0,3)})-${digits.slice(3)}`;
-  return `(${digits.slice(0,3)})-${digits.slice(3,6)}-${digits.slice(6,10)}`;
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0,3)}-${digits.slice(3)}`;
+  return `${digits.slice(0,3)}-${digits.slice(3,6)}-${digits.slice(6,10)}`;
 }
 
 function formatAddress(raw) {
   if (!raw) return '';
-  // Capitalise each word segment
   return raw.replace(/\b\w/g, c => c.toUpperCase()).trim();
 }
 
@@ -70,13 +69,23 @@ const inpStyle = {
   borderRadius: 4, fontSize: '12px', outline: 'none', boxSizing: 'border-box', background: 'var(--bg-primary)',
 };
 
-function AdminContactEditPanel({ contact, onSave, onCancel }) {
+// Each admin contact row owns its own edit state — no shared state possible
+function AdminContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, onDelete, rowIndex }) {
+  const [expanded, setExpanded] = useState(false);
   const [form, setForm] = useState(() => ({ ...contact }));
   const [saving, setSaving] = useState(false);
+  const roleColors = ROLE_COLORS[contact.role] || ROLE_COLORS.external;
 
   async function handleSave() {
     setSaving(true);
-    await onSave(form);
+    await onUpdate(contact.id, form);
+    setSaving(false);
+    setExpanded(false);
+  }
+
+  function openEdit() {
+    setForm({ ...contact });
+    setExpanded(e => !e);
   }
 
   const inp = (key, ph = '') => (
@@ -84,61 +93,166 @@ function AdminContactEditPanel({ contact, onSave, onCancel }) {
       onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} />
   );
   const phoneInp = (key) => (
-    <input style={inpStyle} type="text" value={form[key] || ''} placeholder="(xxx)-xxx-xxxx"
+    <input style={inpStyle} type="text" value={form[key] || ''} placeholder="xxx-xxx-xxxx"
       onChange={e => setForm(p => ({ ...p, [key]: formatPhone(e.target.value) }))} />
   );
 
   return (
-    <tr style={{ background: 'rgba(123,63,160,0.03)' }}>
-      <td colSpan={99} style={{ padding: '16px 20px', borderTop: '2px solid var(--purple-primary)', borderBottom: '2px solid var(--purple-primary)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-          <div><label style={labelStyle}>First Name</label>{inp('first_name')}</div>
-          <div><label style={labelStyle}>Last Name</label>{inp('last_name')}</div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
-          <div><label style={labelStyle}>Email</label>{inp('email', 'name@example.com')}</div>
-          <div><label style={labelStyle}>Personal Phone</label>{phoneInp('phone')}</div>
-          <div><label style={labelStyle}>Work Phone</label>{phoneInp('alternative_email')}</div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-          <div><label style={labelStyle}>Title</label>{inp('title', 'e.g. Lab Manager')}</div>
-          <div>
-            <label style={labelStyle}>Office / Dept</label>
-            <input style={inpStyle} type="text" value={form.address || ''} placeholder="Room 123, Science Building..."
-              onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
-              onBlur={e => setForm(p => ({ ...p, address: formatAddress(e.target.value) }))} />
+    <>
+      <tr style={{ borderTop: '1px solid var(--border)', background: expanded ? 'rgba(123,63,160,0.04)' : rowIndex % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
+        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0, background: roleColors.bg, border: `2px solid ${roleColors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: roleColors.text }}>{(contact.first_name || contact.full_name || '?').charAt(0).toUpperCase()}</span>
+            </div>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{getDisplayName(contact)}</span>
           </div>
-        </div>
-        <div style={{ marginBottom: 12 }}>
-          <label style={labelStyle}>Responsibilities / Notes</label>
-          <textarea value={form.notes || ''} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-            rows={2} style={{ ...inpStyle, resize: 'vertical' }} />
-        </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button onClick={onCancel} style={{ padding: '7px 16px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
-          <button onClick={handleSave} disabled={saving} style={{ padding: '7px 16px', borderRadius: 6, border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: saving ? 'wait' : 'pointer' }}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-      </td>
-    </tr>
+        </td>
+        <td style={{ padding: '10px 14px', fontSize: '12px' }}>
+          {contact.email ? <a href={`mailto:${contact.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{contact.email}</a> : '—'}
+        </td>
+        {canViewPersonalPhone && (
+          <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
+            {contact.phone ? <a href={`tel:${contact.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.phone}</a> : '—'}
+          </td>
+        )}
+        <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
+          {contact.alternative_email ? <a href={`tel:${contact.alternative_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.alternative_email}</a> : '—'}
+        </td>
+        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>{contact.address || '—'}</td>
+        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: '200px' }}>{contact.notes || '—'}</td>
+        {canManage && (
+          <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <button onClick={openEdit}
+                style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: `1px solid ${expanded ? 'var(--purple-primary)' : 'var(--border)'}`, background: expanded ? '#F5EEF8' : 'var(--bg-primary)', color: expanded ? 'var(--purple-primary)' : 'var(--text-muted)', cursor: 'pointer' }}>
+                <Edit2 size={13} />
+              </button>
+              <button onClick={() => onDelete(contact.id)} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', cursor: 'pointer' }}><Trash2 size={13} /></button>
+            </div>
+          </td>
+        )}
+      </tr>
+      {expanded && (
+        <tr style={{ background: 'rgba(123,63,160,0.03)' }}>
+          <td colSpan={99} style={{ padding: '16px 20px', borderTop: '2px solid var(--purple-primary)', borderBottom: '2px solid var(--purple-primary)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+              <div><label style={labelStyle}>First Name</label>{inp('first_name')}</div>
+              <div><label style={labelStyle}>Last Name</label>{inp('last_name')}</div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+              <div><label style={labelStyle}>Email</label>{inp('email', 'name@example.com')}</div>
+              <div><label style={labelStyle}>Personal Phone</label>{phoneInp('phone')}</div>
+              <div><label style={labelStyle}>Work Phone</label>{phoneInp('alternative_email')}</div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+              <div><label style={labelStyle}>Title</label>{inp('title', 'e.g. Lab Manager')}</div>
+              <div>
+                <label style={labelStyle}>Office / Dept</label>
+                <input style={inpStyle} type="text" value={form.address || ''} placeholder="Room 123, Science Building..."
+                  onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
+                  onBlur={e => setForm(p => ({ ...p, address: formatAddress(e.target.value) }))} />
+              </div>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={labelStyle}>Responsibilities / Notes</label>
+              <textarea value={form.notes || ''} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+                rows={2} style={{ ...inpStyle, resize: 'vertical' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setExpanded(false)} style={{ padding: '7px 16px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleSave} disabled={saving} style={{ padding: '7px 16px', borderRadius: 6, border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: saving ? 'wait' : 'pointer' }}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
-function MemberContactEditPanel({ member, extra, onSave, onCancel }) {
-  const [form, setForm] = useState(() => ({
-    phone: extra?.phone || '',
-    address: extra?.address || '',
-    emergency_contact_name: extra?.emergency_contact_name || '',
-    emergency_contact_phone: extra?.emergency_contact_phone || '',
-    emergency_contact_email: extra?.emergency_contact_email || '',
-    emergency_contact_relationship: extra?.emergency_contact_relationship || '',
-  }));
+// Each lab member row fetches its own contact data by full_name — completely isolated
+function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, onUpdatePermissions, onUpdateRole, onDelete, rowIndex }) {
+  const [extraData, setExtraData] = useState(null);
+  const [showContactEdit, setShowContactEdit] = useState(false);
+  const [showPerms, setShowPerms] = useState(false);
+  const [form, setForm] = useState({
+    phone: '', address: '',
+    emergency_contact_name: '', emergency_contact_phone: '',
+    emergency_contact_email: '', emergency_contact_relationship: '',
+  });
   const [saving, setSaving] = useState(false);
+  const roleColors = ROLE_COLORS[member.role] || ROLE_COLORS.member;
 
-  async function handleSave() {
+  useEffect(() => { loadExtra(); }, []); // eslint-disable-line
+
+  async function loadExtra() {
+    const nameParts = (member.full_name || '').split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
+    // Try matching by full_name generated column first, then fall back to first+last split
+    let { data } = await supabase
+      .from('lab_contacts')
+      .select('*')
+      .eq('full_name', member.full_name)
+      .neq('role', 'external')
+      .limit(1);
+
+    if (!data?.length) {
+      ({ data } = await supabase
+        .from('lab_contacts')
+        .select('*')
+        .eq('first_name', firstName)
+        .eq('last_name', lastName)
+        .neq('role', 'external')
+        .limit(1));
+    }
+
+    setExtraData(data?.[0] || null);
+  }
+
+  function openContactEdit() {
+    setForm({
+      phone: extraData?.phone || '',
+      address: extraData?.address || '',
+      emergency_contact_name: extraData?.emergency_contact_name || '',
+      emergency_contact_phone: extraData?.emergency_contact_phone || '',
+      emergency_contact_email: extraData?.emergency_contact_email || '',
+      emergency_contact_relationship: extraData?.emergency_contact_relationship || '',
+    });
+    setShowContactEdit(e => !e);
+  }
+
+  async function handleSaveContact() {
     setSaving(true);
-    await onSave(form);
+    const payload = {
+      phone: form.phone || '',
+      address: form.address || '',
+      emergency_contact_name: form.emergency_contact_name || '',
+      emergency_contact_phone: form.emergency_contact_phone || '',
+      emergency_contact_email: form.emergency_contact_email || '',
+      emergency_contact_relationship: form.emergency_contact_relationship || '',
+    };
+    if (extraData?.id) {
+      await supabase.from('lab_contacts').update(payload).eq('id', extraData.id);
+      setExtraData(prev => ({ ...prev, ...payload }));
+    } else {
+      const nameParts = (member.full_name || '').split(' ');
+      await supabase.from('lab_contacts').insert([{
+        ...payload,
+        full_name: member.full_name,
+        email: member.email,
+        first_name: nameParts[0] || '',
+        last_name: nameParts.slice(1).join(' ') || '',
+        role: 'member',
+        sort_order: 99,
+      }]);
+      await loadExtra();
+    }
+    setSaving(false);
+    setShowContactEdit(false);
   }
 
   const inp = (key, ph = '') => (
@@ -147,42 +261,116 @@ function MemberContactEditPanel({ member, extra, onSave, onCancel }) {
   );
 
   return (
-    <tr style={{ background: 'rgba(123,63,160,0.03)' }}>
-      <td colSpan={99} style={{ padding: '16px 20px', borderTop: '2px solid var(--purple-primary)', borderBottom: '2px solid var(--purple-primary)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
-          <div>
-            <label style={labelStyle}>Phone Number</label>
-            <input style={inpStyle} type="text" value={form.phone || ''} placeholder="(xxx)-xxx-xxxx"
-              onChange={e => setForm(p => ({ ...p, phone: formatPhone(e.target.value) }))} />
+    <>
+      <tr style={{ borderTop: '1px solid var(--border)', background: rowIndex % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
+        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0, background: roleColors.bg, border: `2px solid ${roleColors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: roleColors.text }}>{member.full_name?.charAt(0).toUpperCase()}</span>
+            </div>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{member.full_name}</span>
           </div>
-          <div>
-            <label style={labelStyle}>Address</label>
-            <input style={inpStyle} type="text" value={form.address || ''} placeholder="123 Main St, Apt 4B..."
-              onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
-              onBlur={e => setForm(p => ({ ...p, address: formatAddress(e.target.value) }))} />
-          </div>
-        </div>
-        <div style={{ marginBottom: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-          <span style={{ ...labelStyle, display: 'inline' }}>Emergency Contact</span>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
-          <div><label style={labelStyle}>Name</label>{inp('emergency_contact_name', 'Jane Doe')}</div>
-          <div>
-            <label style={labelStyle}>Phone</label>
-            <input style={inpStyle} type="text" value={form.emergency_contact_phone || ''} placeholder="(xxx)-xxx-xxxx"
-              onChange={e => setForm(p => ({ ...p, emergency_contact_phone: formatPhone(e.target.value) }))} />
-          </div>
-          <div><label style={labelStyle}>Email</label>{inp('emergency_contact_email', 'name@example.com')}</div>
-          <div><label style={labelStyle}>Relationship</label>{inp('emergency_contact_relationship', 'e.g. Parent')}</div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button onClick={onCancel} style={{ padding: '7px 16px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
-          <button onClick={handleSave} disabled={saving} style={{ padding: '7px 16px', borderRadius: 6, border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: saving ? 'wait' : 'pointer' }}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-      </td>
-    </tr>
+        </td>
+        <td style={{ padding: '10px 14px', fontSize: '12px' }}>
+          {member.email ? <a href={`mailto:${member.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{member.email}</a> : '—'}
+        </td>
+        <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
+          {extraData?.phone ? <a href={`tel:${extraData.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{extraData.phone}</a> : '—'}
+        </td>
+        {canViewPersonalPhone && (
+          <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '200px' }}>
+            {extraData?.emergency_contact_name ? (
+              <div>
+                <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{extraData.emergency_contact_name}{extraData.emergency_contact_relationship ? ` (${extraData.emergency_contact_relationship})` : ''}</div>
+                {extraData.emergency_contact_phone && <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}><Phone size={10} />{extraData.emergency_contact_phone}</div>}
+                {extraData.emergency_contact_email && <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><Mail size={10} />{extraData.emergency_contact_email}</div>}
+              </div>
+            ) : '—'}
+          </td>
+        )}
+        {canViewPersonalPhone && (
+          <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+            {extraData?.address || '—'}
+          </td>
+        )}
+        {canManage && (
+          <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <button onClick={openContactEdit}
+                style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: `1px solid ${showContactEdit ? 'var(--purple-primary)' : 'var(--border)'}`, background: showContactEdit ? '#F5EEF8' : 'var(--bg-primary)', color: showContactEdit ? 'var(--purple-primary)' : 'var(--text-muted)', cursor: 'pointer' }} title="Edit contact info">
+                <Edit2 size={13} />
+              </button>
+              {member.id !== userId && (
+                <button onClick={() => setShowPerms(e => !e)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer' }}>
+                  <Shield size={12} /> {showPerms ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                </button>
+              )}
+              {member.id !== userId && (
+                <button onClick={() => onDelete(member)} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', cursor: 'pointer' }} title="Remove member"><Trash2 size={13} /></button>
+              )}
+            </div>
+          </td>
+        )}
+      </tr>
+      {showContactEdit && (
+        <tr style={{ background: 'rgba(123,63,160,0.03)' }}>
+          <td colSpan={99} style={{ padding: '16px 20px', borderTop: '2px solid var(--purple-primary)', borderBottom: '2px solid var(--purple-primary)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+              <div>
+                <label style={labelStyle}>Phone Number</label>
+                <input style={inpStyle} type="text" value={form.phone || ''} placeholder="xxx-xxx-xxxx"
+                  onChange={e => setForm(p => ({ ...p, phone: formatPhone(e.target.value) }))} />
+              </div>
+              <div>
+                <label style={labelStyle}>Address</label>
+                <input style={inpStyle} type="text" value={form.address || ''} placeholder="123 Main St, Apt 4B..."
+                  onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
+                  onBlur={e => setForm(p => ({ ...p, address: formatAddress(e.target.value) }))} />
+              </div>
+            </div>
+            <div style={{ marginBottom: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+              <span style={{ ...labelStyle, display: 'inline' }}>Emergency Contact</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
+              <div><label style={labelStyle}>Name</label>{inp('emergency_contact_name', 'Jane Doe')}</div>
+              <div>
+                <label style={labelStyle}>Phone</label>
+                <input style={inpStyle} type="text" value={form.emergency_contact_phone || ''} placeholder="xxx-xxx-xxxx"
+                  onChange={e => setForm(p => ({ ...p, emergency_contact_phone: formatPhone(e.target.value) }))} />
+              </div>
+              <div><label style={labelStyle}>Email</label>{inp('emergency_contact_email', 'name@example.com')}</div>
+              <div><label style={labelStyle}>Relationship</label>{inp('emergency_contact_relationship', 'e.g. Parent')}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowContactEdit(false)} style={{ padding: '7px 16px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleSaveContact} disabled={saving} style={{ padding: '7px 16px', borderRadius: 6, border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: saving ? 'wait' : 'pointer' }}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </td>
+        </tr>
+      )}
+      {showPerms && canManage && (
+        <tr style={{ background: 'var(--bg-secondary)' }}>
+          <td colSpan={canViewPersonalPhone ? 6 : 4} style={{ padding: '16px 20px', borderTop: '1px solid var(--border)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '8px' }}>
+              {PERMISSIONS.map(perm => (
+                <div key={perm.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)' }}>{perm.label}</p>
+                  </div>
+                  <button onClick={() => onUpdatePermissions(member.id, perm.key, !member[perm.key])}
+                    style={{ width: '36px', height: '20px', borderRadius: '10px', border: 'none', background: member[perm.key] ? 'var(--purple-primary)' : 'var(--border)', cursor: 'pointer', position: 'relative', flexShrink: 0 }}>
+                    <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: 'white', position: 'absolute', top: '3px', left: member[perm.key] ? '19px' : '3px', transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -192,7 +380,6 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   const [loading, setLoading] = useState(true);
   const [adminSearch, setAdminSearch] = useState('');
   const [labSearch, setLabSearch] = useState('');
-  const [expandedId, setExpandedId] = useState(null);
   const [activeTab, setActiveTab] = useState('admin');
   const [showContactForm, setShowContactForm] = useState(false);
   const [showMemberForm, setShowMemberForm] = useState(false);
@@ -201,8 +388,6 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   const [saving, setSaving] = useState(false);
   const [memberError, setMemberError] = useState('');
   const [confirmDeleteMember, setConfirmDeleteMember] = useState(null);
-  const [expandedAdminEditId, setExpandedAdminEditId] = useState(null);
-  const [memberContactEditId, setMemberContactEditId] = useState(null);
 
   const canManage = userRole === 'admin' || (permissions?.can_add_members);
   const canViewPersonalPhone = userRole === 'admin' || userRole === 'pm' || profile?.full_name?.toLowerCase().startsWith('mia');
@@ -217,21 +402,22 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
 
   useEffect(() => { fetchData(); }, []);
 
-  async function fetchData() {
-    setLoading(true);
+  async function fetchData(silent = false) {
+    if (!silent) setLoading(true);
     const [{ data: contactData }, { data: memberData }] = await Promise.all([
       supabase.from('lab_contacts').select('*').order('sort_order').order('last_name').order('first_name'),
       supabase.from('profiles').select('*').order('full_name')
     ]);
     setContacts(contactData || []);
     setMembers(memberData || []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   }
 
   async function handleSaveContact(e) {
     e.preventDefault();
     setSaving(true);
     const payload = {
+      full_name: `${contactForm.first_name || ''} ${contactForm.last_name || ''}`.trim(),
       first_name: contactForm.first_name || '',
       last_name: contactForm.last_name || '',
       role: 'external',
@@ -254,7 +440,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
     setSaving(false);
     setShowContactForm(false);
     setContactForm(EMPTY_CONTACT);
-    fetchData();
+    await fetchData();
   }
 
   async function handleDeleteContact(id) {
@@ -337,17 +523,6 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
     setMemberForm(p => ({ ...p, role, ...defaults[role] }));
   }
 
-  const memberEmails = new Set(members.map(m => m.email?.toLowerCase()).filter(Boolean));
-  const memberNames = new Set(members.map(m => m.full_name?.toLowerCase().trim()).filter(Boolean));
-  const sortedMembers = [...members].sort((a, b) => (ROLE_ORDER[a.role] || 99) - (ROLE_ORDER[b.role] || 99));
-  const contactsByEmail = {};
-  contacts.forEach(c => { if (c.email) contactsByEmail[c.email.toLowerCase()] = c; });
-  const contactsByName = {};
-  contacts.forEach(c => {
-    const name = getDisplayName(c).toLowerCase().trim();
-    if (name) contactsByName[name] = c;
-  });
-
   async function updateAdminContact(contactId, form) {
     const payload = {
       first_name: form.first_name || '',
@@ -369,34 +544,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
       notes: form.notes || '',
     };
     await supabase.from('lab_contacts').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', contactId);
-    setExpandedAdminEditId(null);
-    fetchData();
-  }
-
-  async function updateMemberContact(member, extra, form) {
-    const payload = {
-      phone: form.phone || '',
-      address: form.address || '',
-      emergency_contact_name: form.emergency_contact_name || '',
-      emergency_contact_phone: form.emergency_contact_phone || '',
-      emergency_contact_email: form.emergency_contact_email || '',
-      emergency_contact_relationship: form.emergency_contact_relationship || '',
-    };
-    if (extra) {
-      await supabase.from('lab_contacts').update(payload).eq('id', extra.id);
-    } else {
-      const nameParts = (member.full_name || '').split(' ');
-      await supabase.from('lab_contacts').insert([{
-        ...payload,
-        email: member.email,
-        first_name: nameParts[0] || '',
-        last_name: nameParts.slice(1).join(' ') || '',
-        role: 'member',
-        sort_order: 99,
-      }]);
-    }
-    setMemberContactEditId(null);
-    fetchData();
+    await fetchData(true);
   }
 
   async function handleDeleteMember(member) {
@@ -417,6 +565,9 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
     setConfirmDeleteMember(null);
   }
 
+  const memberNames = new Set(members.map(m => m.full_name?.toLowerCase().trim()).filter(Boolean));
+  const sortedMembers = [...members].sort((a, b) => (ROLE_ORDER[a.role] || 99) - (ROLE_ORDER[b.role] || 99));
+
   const filteredAdminContacts = contacts.filter(c => {
     if (c.role !== 'external') return false;
     if (!adminSearch) return true;
@@ -428,14 +579,11 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   const filteredLabMembers = sortedMembers.filter(m => {
     if (!labSearch) return true;
     const q = labSearch.toLowerCase();
-    const extra = contactsByEmail[m.email?.toLowerCase()] || contactsByName[m.full_name?.toLowerCase().trim()];
-    return [m.full_name, m.email, ROLE_LABELS[m.role], extra?.phone, extra?.address, extra?.emergency_contact_name].some(v => v?.toLowerCase().includes(q));
+    return [m.full_name, m.email, ROLE_LABELS[m.role]].some(v => v?.toLowerCase().includes(q));
   });
 
-  // lab_contacts with role='member' who don't have a platform profile yet
   const pendingLabContacts = contacts.filter(c => {
     if (c.role === 'external') return false;
-    if (c.email && memberEmails.has(c.email.toLowerCase())) return false;
     if (memberNames.has(getDisplayName(c).toLowerCase().trim())) return false;
     if (!labSearch) return true;
     const q = labSearch.toLowerCase();
@@ -469,7 +617,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
       {/* Tab switcher */}
       <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content', marginBottom: '20px' }}>
         {[{ id: 'admin', label: 'Admin Contacts' }, { id: 'lab', label: 'Lab Contacts' }].map(tab => (
-          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setExpandedId(null); }}
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
             style={{ padding: '10px 20px', background: activeTab === tab.id ? 'var(--purple-primary)' : 'transparent', color: activeTab === tab.id ? 'white' : 'var(--text-secondary)', border: 'none', fontWeight: activeTab === tab.id ? 600 : 400, fontSize: '13px', cursor: 'pointer' }}>
             {tab.label}
           </button>
@@ -503,56 +651,17 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                 <tbody>
                   {filteredAdminContacts.length === 0 ? (
                     <tr><td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No admin contacts yet.</td></tr>
-                  ) : filteredAdminContacts.map((contact, i) => {
-                    const roleColors = ROLE_COLORS[contact.role] || ROLE_COLORS.external;
-                    const isEditingThis = expandedAdminEditId === contact.id;
-                    return (
-                      <>
-                        <tr key={contact.id} style={{ borderTop: '1px solid var(--border)', background: isEditingThis ? 'rgba(123,63,160,0.04)' : i % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
-                          <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <div style={{ width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0, background: roleColors.bg, border: `2px solid ${roleColors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <span style={{ fontSize: '12px', fontWeight: 700, color: roleColors.text }}>{(contact.first_name || contact.full_name || '?').charAt(0).toUpperCase()}</span>
-                              </div>
-                              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{getDisplayName(contact)}</span>
-                            </div>
-                          </td>
-                          <td style={{ padding: '10px 14px', fontSize: '12px' }}>
-                            {contact.email ? <a href={`mailto:${contact.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{contact.email}</a> : '—'}
-                          </td>
-                          {canViewPersonalPhone && (
-                            <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                              {contact.phone ? <a href={`tel:${contact.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.phone}</a> : '—'}
-                            </td>
-                          )}
-                          <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                            {contact.alternative_email ? <a href={`tel:${contact.alternative_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.alternative_email}</a> : '—'}
-                          </td>
-                          <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>{contact.address || '—'}</td>
-                          <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: '200px' }}>{contact.notes || '—'}</td>
-                          {canManage && (
-                            <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
-                              <div style={{ display: 'flex', gap: '4px' }}>
-                                <button onClick={() => setExpandedAdminEditId(isEditingThis ? null : contact.id)}
-                                  style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: `1px solid ${isEditingThis ? 'var(--purple-primary)' : 'var(--border)'}`, background: isEditingThis ? '#F5EEF8' : 'var(--bg-primary)', color: isEditingThis ? 'var(--purple-primary)' : 'var(--text-muted)', cursor: 'pointer' }}>
-                                  <Edit2 size={13} />
-                                </button>
-                                <button onClick={() => handleDeleteContact(contact.id)} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', cursor: 'pointer' }}><Trash2 size={13} /></button>
-                              </div>
-                            </td>
-                          )}
-                        </tr>
-                        {isEditingThis && (
-                          <AdminContactEditPanel
-                            key={`${contact.id}-edit`}
-                            contact={contact}
-                            onSave={(form) => updateAdminContact(contact.id, form)}
-                            onCancel={() => setExpandedAdminEditId(null)}
-                          />
-                        )}
-                      </>
-                    );
-                  })}
+                  ) : filteredAdminContacts.map((contact, i) => (
+                    <AdminContactRow
+                      key={contact.id}
+                      contact={contact}
+                      canManage={canManage}
+                      canViewPersonalPhone={canViewPersonalPhone}
+                      onUpdate={updateAdminContact}
+                      onDelete={handleDeleteContact}
+                      rowIndex={i}
+                    />
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -588,145 +697,30 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                 <tbody>
                   {filteredLabMembers.length === 0 && pendingLabContacts.length === 0 ? (
                     <tr><td colSpan={canManage ? 6 : 4} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No lab contacts found.</td></tr>
-                  ) : filteredLabMembers.map((member, i) => {
-                    const roleColors = ROLE_COLORS[member.role] || ROLE_COLORS.member;
-                    const isExpanded = expandedId === member.id;
-                    const extra = contactsByEmail[member.email?.toLowerCase()] || contactsByName[member.full_name?.toLowerCase().trim()];
-                    return (
-                      <>
-                        <tr key={member.id} style={{ borderTop: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
-                          <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <div style={{ width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0, background: roleColors.bg, border: `2px solid ${roleColors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <span style={{ fontSize: '12px', fontWeight: 700, color: roleColors.text }}>{member.full_name?.charAt(0).toUpperCase()}</span>
-                              </div>
-                              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{member.full_name}</span>
-                            </div>
-                          </td>
-                          <td style={{ padding: '10px 14px', fontSize: '12px' }}>
-                            {member.email ? <a href={`mailto:${member.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{member.email}</a> : '—'}
-                          </td>
-                          <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                            {extra?.phone ? <a href={`tel:${extra.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{extra.phone}</a> : '—'}
-                          </td>
-                          {canViewPersonalPhone && (
-                            <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '200px' }}>
-                              {extra?.emergency_contact_name ? (
-                                <div>
-                                  <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{extra.emergency_contact_name}{extra.emergency_contact_relationship ? ` (${extra.emergency_contact_relationship})` : ''}</div>
-                                  {extra.emergency_contact_phone && <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}><Phone size={10} />{extra.emergency_contact_phone}</div>}
-                                  {extra.emergency_contact_email && <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><Mail size={10} />{extra.emergency_contact_email}</div>}
-                                </div>
-                              ) : '—'}
-                            </td>
-                          )}
-                          {canViewPersonalPhone && (
-                            <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                              {extra?.address || '—'}
-                            </td>
-                          )}
-                          {canManage && (
-                            <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
-                              <div style={{ display: 'flex', gap: '4px' }}>
-                                <button onClick={() => setMemberContactEditId(memberContactEditId === member.id ? null : member.id)}
-                                  style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: `1px solid ${memberContactEditId === member.id ? 'var(--purple-primary)' : 'var(--border)'}`, background: memberContactEditId === member.id ? '#F5EEF8' : 'var(--bg-primary)', color: memberContactEditId === member.id ? 'var(--purple-primary)' : 'var(--text-muted)', cursor: 'pointer' }} title="Edit contact info"><Edit2 size={13} /></button>
-                                {member.id !== userId && (
-                                  <button onClick={() => setExpandedId(isExpanded ? null : member.id)}
-                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer' }}>
-                                    <Shield size={12} /> {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                                  </button>
-                                )}
-                                {member.id !== userId && (
-                                  <button onClick={() => setConfirmDeleteMember(member)} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', cursor: 'pointer' }} title="Remove member"><Trash2 size={13} /></button>
-                                )}
-                              </div>
-                            </td>
-                          )}
-                        </tr>
-                        {memberContactEditId === member.id && (
-                          <MemberContactEditPanel
-                            key={`${member.id}-contact-edit`}
-                            member={member}
-                            extra={extra}
-                            onSave={(form) => updateMemberContact(member, extra, form)}
-                            onCancel={() => setMemberContactEditId(null)}
-                          />
-                        )}
-                        {isExpanded && canManage && (
-                          <tr key={`${member.id}-perms`} style={{ background: 'var(--bg-secondary)' }}>
-                            <td colSpan={canViewPersonalPhone ? 6 : 4} style={{ padding: '16px 20px', borderTop: '1px solid var(--border)' }}>
-                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '8px' }}>
-                                {PERMISSIONS.map(perm => (
-                                  <div key={perm.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-                                    <div>
-                                      <p style={{ margin: 0, fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)' }}>{perm.label}</p>
-                                    </div>
-                                    <button onClick={() => handleUpdatePermissions(member.id, perm.key, !member[perm.key])}
-                                      style={{ width: '36px', height: '20px', borderRadius: '10px', border: 'none', background: member[perm.key] ? 'var(--purple-primary)' : 'var(--border)', cursor: 'pointer', position: 'relative', flexShrink: 0 }}>
-                                      <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: 'white', position: 'absolute', top: '3px', left: member[perm.key] ? '19px' : '3px', transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </>
-                    );
-                  })}
-                  {pendingLabContacts.map((c, i) => {
-                    const isPendingEditing = expandedAdminEditId === c.id;
-                    return (
-                      <>
-                        <tr key={c.id} style={{ borderTop: '1px solid var(--border)', background: isPendingEditing ? 'rgba(123,63,160,0.04)' : (filteredLabMembers.length + i) % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
-                          <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <div style={{ width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0, background: '#F2F3F4', border: '2px solid #CCD1D1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <span style={{ fontSize: '12px', fontWeight: 700, color: '#5D6D7E' }}>{(c.first_name || '?').charAt(0).toUpperCase()}</span>
-                              </div>
-                              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{getDisplayName(c)}</span>
-                            </div>
-                          </td>
-                          <td style={{ padding: '10px 14px', fontSize: '12px' }}>
-                            {c.email ? <a href={`mailto:${c.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{c.email}</a> : '—'}
-                          </td>
-                          <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                            {c.phone ? <a href={`tel:${c.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{c.phone}</a> : '—'}
-                          </td>
-                          {canViewPersonalPhone && (
-                            <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '200px' }}>
-                              {c.emergency_contact_name ? (
-                                <div>
-                                  <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{c.emergency_contact_name}{c.emergency_contact_relationship ? ` (${c.emergency_contact_relationship})` : ''}</div>
-                                  {c.emergency_contact_phone && <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}><Phone size={10} />{c.emergency_contact_phone}</div>}
-                                  {c.emergency_contact_email && <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><Mail size={10} />{c.emergency_contact_email}</div>}
-                                </div>
-                              ) : '—'}
-                            </td>
-                          )}
-                          {canViewPersonalPhone && (
-                            <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>{c.address || '—'}</td>
-                          )}
-                          {canManage && (
-                            <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
-                              <button onClick={() => setExpandedAdminEditId(isPendingEditing ? null : c.id)}
-                                style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: `1px solid ${isPendingEditing ? 'var(--purple-primary)' : 'var(--border)'}`, background: isPendingEditing ? '#F5EEF8' : 'var(--bg-primary)', color: isPendingEditing ? 'var(--purple-primary)' : 'var(--text-muted)', cursor: 'pointer' }}>
-                                <Edit2 size={13} />
-                              </button>
-                            </td>
-                          )}
-                        </tr>
-                        {isPendingEditing && (
-                          <AdminContactEditPanel
-                            key={`${c.id}-edit`}
-                            contact={c}
-                            onSave={(form) => updateAdminContact(c.id, form)}
-                            onCancel={() => setExpandedAdminEditId(null)}
-                          />
-                        )}
-                      </>
-                    );
-                  })}
+                  ) : filteredLabMembers.map((member, i) => (
+                    <LabMemberRow
+                      key={member.id}
+                      member={member}
+                      canManage={canManage}
+                      canViewPersonalPhone={canViewPersonalPhone}
+                      userId={userId}
+                      onUpdatePermissions={handleUpdatePermissions}
+                      onUpdateRole={handleUpdateRole}
+                      onDelete={setConfirmDeleteMember}
+                      rowIndex={i}
+                    />
+                  ))}
+                  {pendingLabContacts.map((c, i) => (
+                    <AdminContactRow
+                      key={c.id}
+                      contact={c}
+                      canManage={canManage}
+                      canViewPersonalPhone={canViewPersonalPhone}
+                      onUpdate={updateAdminContact}
+                      onDelete={handleDeleteContact}
+                      rowIndex={filteredLabMembers.length + i}
+                    />
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -755,7 +749,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
         </div>
       )}
 
-      {/* Add/Edit Contact Modal */}
+      {/* Add Contact Modal */}
       {showContactForm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '480px', maxHeight: '85vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
@@ -773,8 +767,8 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
 
             {[
               { key: 'email', label: 'Email', placeholder: 'name@example.com' },
-              { key: 'phone', label: 'Personal Phone', placeholder: '(xxx)-xxx-xxxx', format: formatPhone },
-              { key: 'alternative_email', label: 'Work Phone', placeholder: '(xxx)-xxx-xxxx', format: formatPhone },
+              { key: 'phone', label: 'Personal Phone', placeholder: 'xxx-xxx-xxxx', format: formatPhone },
+              { key: 'alternative_email', label: 'Work Phone', placeholder: 'xxx-xxx-xxxx', format: formatPhone },
               { key: 'address', label: 'Office / Department', placeholder: '123 Main St, Apt 4B, New York, NY 10001', format: formatAddress },
               { key: 'title', label: 'Official Title', placeholder: 'e.g. Lab Manager' },
             ].map(field => (
