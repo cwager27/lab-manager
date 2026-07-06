@@ -284,6 +284,7 @@ export default function Tasks2({ userRole }) {
 
   // ── Unassigned state ──────────────────────────────────────────────────────
   const [unassigned, setUnassigned] = useState([]);
+  const unassignedCount = unassigned.length;
   const [uLoading, setULoading] = useState(false);
   const [quickAssign, setQuickAssign] = useState(null);
   const [qaAssignees, setQaAssignees] = useState([]);
@@ -566,7 +567,6 @@ export default function Tasks2({ userRole }) {
     const { data } = await supabase
       .from('task_occurrences')
       .select('id, due_date, status, assigned_to, completed_at, notes, task_def:tasks_definitions(id, title, category, frequency, group_name), assignee:profiles!assigned_to(id, full_name)')
-      .not('assigned_to', 'is', null)
       .gte('due_date', from)
       .lte('due_date', to)
       .order('due_date');
@@ -581,19 +581,13 @@ export default function Tasks2({ userRole }) {
       .from('task_occurrences')
       .update({ assigned_to: newAssignee, status: newAssignee ? 'assigned' : 'unassigned' })
       .eq('id', occId);
-    if (!newAssignee) {
-      // Unassigned — remove from this list and refresh unassigned tab
-      setAssignedOccs(prev => prev.filter(o => o.id !== occId));
-      loadUnassigned();
-    } else {
-      const assigneeProfile = profiles.find(p => p.id === newAssignee);
-      setAssignedOccs(prev => prev.map(o => o.id !== occId ? o : {
-        ...o,
-        assigned_to: newAssignee,
-        assignee: assigneeProfile ? { id: newAssignee, full_name: assigneeProfile.full_name } : null,
-        status: 'assigned',
-      }));
-    }
+    const assigneeProfile = profiles.find(p => p.id === newAssignee);
+    setAssignedOccs(prev => prev.map(o => o.id !== occId ? o : {
+      ...o,
+      assigned_to: newAssignee,
+      assignee: newAssignee && assigneeProfile ? { id: newAssignee, full_name: assigneeProfile.full_name } : null,
+      status: newAssignee ? 'assigned' : 'unassigned',
+    }));
     setEditingOccId(null);
     setEditSaving(false);
   }
@@ -602,9 +596,111 @@ export default function Tasks2({ userRole }) {
     const today = new Date().toISOString().split('T')[0];
     const members = profiles.filter(p => p.role === 'member');
 
-    const completed = assignedOccs.filter(o => o.status === 'done' || o.completed_at);
-    const overdue   = assignedOccs.filter(o => o.status !== 'done' && !o.completed_at && o.due_date < today);
-    const upcoming  = assignedOccs.filter(o => o.status !== 'done' && !o.completed_at && o.due_date >= today);
+    const assignedList   = assignedOccs.filter(o => o.assigned_to);
+    const unassignedList = assignedOccs.filter(o => !o.assigned_to);
+    const completed      = assignedList.filter(o => o.status === 'done' || o.completed_at);
+    const overdue        = assignedList.filter(o => o.status !== 'done' && !o.completed_at && o.due_date < today);
+    const upcoming       = assignedList.filter(o => o.status !== 'done' && !o.completed_at && o.due_date >= today);
+
+    const tableHeader = (cols) => (
+      <div style={{ display: 'grid', gridTemplateColumns: cols, gap: '0 12px', padding: '8px 14px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', marginBottom: '4px' }}>
+        {['Due date', 'Task', 'Assigned to', 'Status', ''].map(h => (
+          <span key={h} style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</span>
+        ))}
+      </div>
+    );
+
+    const renderOccRow = (occ, isUnassignedSection) => {
+      const isDone    = occ.status === 'done' || !!occ.completed_at;
+      const isOverdue = !isDone && occ.due_date < today;
+      const taskDef   = occ.task_def;
+      const taskLabel = taskDef?.group_name || taskDef?.title || '—';
+      const isEditing = editingOccId === occ.id;
+      const freqColor = FREQ_COLORS[taskDef?.frequency] || {};
+
+      const statusChip = isUnassignedSection
+        ? { label: 'Unassigned', color: '#7B3FA0', bg: '#F5EEF8' }
+        : isDone
+          ? { label: 'Done', color: '#27AE60', bg: '#EAF7F0' }
+          : isOverdue
+            ? { label: 'Overdue', color: '#E74C3C', bg: '#FDEDEC' }
+            : { label: 'Upcoming', color: '#2980B9', bg: '#EBF5FB' };
+
+      if (isEditing) {
+        return (
+          <div key={occ.id} style={{ padding: '12px 14px', background: 'var(--bg-card)', border: '2px solid var(--purple-primary)', borderRadius: 'var(--radius-md)', marginBottom: '4px', boxShadow: 'var(--shadow-sm)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+              <div style={{ flexShrink: 0, fontSize: '13px', fontWeight: 600, color: isOverdue ? '#E74C3C' : 'var(--text-primary)' }}>
+                {new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{taskLabel}</div>
+                <div style={{ display: 'flex', gap: '5px', marginTop: '2px' }}>
+                  {taskDef?.category && <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>{taskDef.category}</span>}
+                  {taskDef?.frequency && <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', background: freqColor.bg || 'var(--bg-secondary)', color: freqColor.text || 'var(--text-muted)', border: `1px solid ${freqColor.border || 'var(--border)'}` }}>{taskDef.frequency}</span>}
+                </div>
+              </div>
+              <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '10px', background: statusChip.bg, color: statusChip.color, flexShrink: 0 }}>{statusChip.label}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', flexShrink: 0 }}>Assign to:</span>
+              <select value={editAssigneeId} onChange={e => setEditAssigneeId(e.target.value)}
+                style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--purple-primary)', borderRadius: 'var(--radius-md)', fontSize: '13px', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}>
+                {!isUnassignedSection && <option value="">— Unassign —</option>}
+                {isUnassignedSection && <option value="">— Select member —</option>}
+                {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
+              </select>
+              <button onClick={() => saveAssignment(occ.id)} disabled={editSaving}
+                style={{ padding: '7px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+                {editSaving ? 'Saving…' : 'Save'}
+              </button>
+              <button onClick={() => setEditingOccId(null)}
+                style={{ padding: '7px 12px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', cursor: 'pointer', flexShrink: 0 }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div key={occ.id} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 160px 100px 36px', gap: '0 12px', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '4px', boxShadow: 'var(--shadow-sm)', opacity: isDone ? 0.75 : 1 }}>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: isOverdue ? '#E74C3C' : 'var(--text-primary)' }}>
+              {new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              {new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric' })}
+            </div>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{taskLabel}</div>
+            <div style={{ display: 'flex', gap: '5px', marginTop: '3px', flexWrap: 'wrap' }}>
+              {taskDef?.category && <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>{taskDef.category}</span>}
+              {taskDef?.frequency && <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', background: freqColor.bg || 'var(--bg-secondary)', color: freqColor.text || 'var(--text-muted)', border: `1px solid ${freqColor.border || 'var(--border)'}` }}>{taskDef.frequency}</span>}
+            </div>
+          </div>
+          <div>
+            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{occ.assignee?.full_name || '—'}</span>
+          </div>
+          <div>
+            <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '10px', background: statusChip.bg, color: statusChip.color, whiteSpace: 'nowrap' }}>{statusChip.label}</span>
+            {isDone && occ.completed_at && (
+              <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                {new Date(occ.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </div>
+            )}
+          </div>
+          <div>
+            <button onClick={() => { setEditingOccId(occ.id); setEditAssigneeId(occ.assigned_to || ''); }}
+              style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--text-muted)', fontSize: isUnassignedSection ? '15px' : '13px' }}
+              title={isUnassignedSection ? 'Assign' : 'Edit assignee'}>
+              {isUnassignedSection ? '+' : '✎'}
+            </button>
+          </div>
+        </div>
+      );
+    };
 
     return (
       <div>
@@ -619,12 +715,12 @@ export default function Tasks2({ userRole }) {
         </div>
 
         {/* Stats row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '24px' }}>
           {[
-            { label: 'Total assigned', value: assignedOccs.length, color: 'var(--text-primary)', bg: 'var(--bg-secondary)' },
-            { label: 'Completed', value: completed.length, color: '#27AE60', bg: '#EAF7F0' },
-            { label: 'Overdue', value: overdue.length, color: '#E74C3C', bg: '#FDEDEC' },
-            { label: 'Upcoming', value: upcoming.length, color: '#2980B9', bg: '#EBF5FB' },
+            { label: 'Unassigned', value: unassignedList.length, color: '#7B3FA0', bg: '#F5EEF8' },
+            { label: 'Upcoming',   value: upcoming.length,       color: '#2980B9', bg: '#EBF5FB' },
+            { label: 'Overdue',    value: overdue.length,        color: '#E74C3C', bg: '#FDEDEC' },
+            { label: 'Done',       value: completed.length,      color: '#27AE60', bg: '#EAF7F0' },
           ].map(s => (
             <div key={s.label} style={{ padding: '12px 14px', background: s.bg, borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
               <div style={{ fontSize: '22px', fontWeight: 700, color: s.color }}>{s.value}</div>
@@ -635,119 +731,36 @@ export default function Tasks2({ userRole }) {
 
         {assignedLoading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
-        ) : assignedOccs.length === 0 ? (
-          <div style={{ padding: '40px', textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>No assigned tasks in this date range.</div>
         ) : (
-          <div>
-            {/* Table header */}
-            <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 160px 100px 36px', gap: '0 12px', padding: '8px 14px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', marginBottom: '4px' }}>
-              {['Due date', 'Task', 'Assigned to', 'Status', ''].map(h => (
-                <span key={h} style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</span>
-              ))}
+          <>
+            {/* ── Assigned section ── */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>Assigned</span>
+              <span style={{ fontSize: '11px', background: 'var(--bg-secondary)', color: 'var(--text-muted)', borderRadius: '10px', padding: '1px 8px', border: '1px solid var(--border)' }}>{assignedList.length}</span>
             </div>
+            {assignedList.length === 0 ? (
+              <div style={{ padding: '20px', textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: '13px', marginBottom: '24px' }}>No assigned tasks in this date range.</div>
+            ) : (
+              <div style={{ marginBottom: '28px' }}>
+                {tableHeader('110px 1fr 160px 100px 36px')}
+                {assignedList.map(occ => renderOccRow(occ, false))}
+              </div>
+            )}
 
-            {/* Rows */}
-            {assignedOccs.map(occ => {
-              const isDone    = occ.status === 'done' || !!occ.completed_at;
-              const isOverdue = !isDone && occ.due_date < today;
-              const taskDef   = occ.task_def;
-              const taskLabel = taskDef?.group_name || taskDef?.title || '—';
-              const isEditing = editingOccId === occ.id;
-
-              const statusChip = isDone
-                ? { label: 'Done', color: '#27AE60', bg: '#EAF7F0' }
-                : isOverdue
-                  ? { label: 'Overdue', color: '#E74C3C', bg: '#FDEDEC' }
-                  : { label: 'Upcoming', color: '#2980B9', bg: '#EBF5FB' };
-
-              const freqColor = FREQ_COLORS[taskDef?.frequency] || {};
-
-              if (isEditing) {
-                return (
-                  <div key={occ.id} style={{ padding: '12px 14px', background: 'var(--bg-card)', border: '2px solid var(--purple-primary)', borderRadius: 'var(--radius-md)', marginBottom: '4px', boxShadow: 'var(--shadow-sm)' }}>
-                    {/* Task summary row */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-                      <div style={{ flexShrink: 0 }}>
-                        <div style={{ fontSize: '13px', fontWeight: 600, color: isOverdue ? '#E74C3C' : 'var(--text-primary)' }}>
-                          {new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </div>
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{taskLabel}</div>
-                        <div style={{ display: 'flex', gap: '5px', marginTop: '2px' }}>
-                          {taskDef?.category && <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>{taskDef.category}</span>}
-                          {taskDef?.frequency && <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', background: freqColor.bg || 'var(--bg-secondary)', color: freqColor.text || 'var(--text-muted)', border: `1px solid ${freqColor.border || 'var(--border)'}` }}>{taskDef.frequency}</span>}
-                        </div>
-                      </div>
-                      <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '10px', background: statusChip.bg, color: statusChip.color, flexShrink: 0 }}>{statusChip.label}</span>
-                    </div>
-                    {/* Edit controls — full width, no overlap */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
-                      <span style={{ fontSize: '12px', color: 'var(--text-muted)', flexShrink: 0 }}>Assign to:</span>
-                      <select value={editAssigneeId} onChange={e => setEditAssigneeId(e.target.value)}
-                        style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--purple-primary)', borderRadius: 'var(--radius-md)', fontSize: '13px', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}>
-                        <option value="">— Unassign —</option>
-                        {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
-                      </select>
-                      <button onClick={() => saveAssignment(occ.id)} disabled={editSaving}
-                        style={{ padding: '7px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
-                        {editSaving ? 'Saving…' : 'Save'}
-                      </button>
-                      <button onClick={() => setEditingOccId(null)}
-                        style={{ padding: '7px 12px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', cursor: 'pointer', flexShrink: 0 }}>
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                );
-              }
-
-              return (
-                <div key={occ.id} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 160px 100px 36px', gap: '0 12px', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '4px', boxShadow: 'var(--shadow-sm)', opacity: isDone ? 0.75 : 1 }}>
-                  {/* Due date */}
-                  <div>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: isOverdue ? '#E74C3C' : 'var(--text-primary)' }}>
-                      {new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      {new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric' })}
-                    </div>
-                  </div>
-
-                  {/* Task */}
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{taskLabel}</div>
-                    <div style={{ display: 'flex', gap: '5px', marginTop: '3px', flexWrap: 'wrap' }}>
-                      {taskDef?.category && <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>{taskDef.category}</span>}
-                      {taskDef?.frequency && <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', background: freqColor.bg || 'var(--bg-secondary)', color: freqColor.text || 'var(--text-muted)', border: `1px solid ${freqColor.border || 'var(--border)'}` }}>{taskDef.frequency}</span>}
-                    </div>
-                  </div>
-
-                  {/* Assignee */}
-                  <div>
-                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{occ.assignee?.full_name || '—'}</span>
-                  </div>
-
-                  {/* Status */}
-                  <div>
-                    <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '10px', background: statusChip.bg, color: statusChip.color, whiteSpace: 'nowrap' }}>{statusChip.label}</span>
-                    {isDone && occ.completed_at && (
-                      <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        {new Date(occ.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Edit button */}
-                  <div>
-                    <button onClick={() => { setEditingOccId(occ.id); setEditAssigneeId(occ.assigned_to || ''); }}
-                      style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '13px' }}
-                      title="Edit assignee">✎</button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+            {/* ── Unassigned section ── */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>Unassigned</span>
+              <span style={{ fontSize: '11px', background: unassignedList.length > 0 ? '#F5EEF8' : 'var(--bg-secondary)', color: unassignedList.length > 0 ? '#7B3FA0' : 'var(--text-muted)', borderRadius: '10px', padding: '1px 8px', border: `1px solid ${unassignedList.length > 0 ? '#D7BDE2' : 'var(--border)'}`, fontWeight: unassignedList.length > 0 ? 700 : 400 }}>{unassignedList.length}</span>
+            </div>
+            {unassignedList.length === 0 ? (
+              <div style={{ padding: '20px', textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: '13px' }}>All tasks in this range are assigned.</div>
+            ) : (
+              <div>
+                {tableHeader('110px 1fr 160px 100px 36px')}
+                {unassignedList.map(occ => renderOccRow(occ, true))}
+              </div>
+            )}
+          </>
         )}
       </div>
     );
@@ -1956,8 +1969,7 @@ export default function Tasks2({ userRole }) {
   const tabs = [
     { id: 'view-all', label: 'Tasks' },
     { id: 'calendar', label: 'Calendar' },
-    { id: 'assigned', label: 'Assigned' },
-    { id: 'unassigned', label: 'Unassigned', badge: unassigned.length || null },
+    { id: 'assigned', label: 'Assigned', badge: unassignedCount || null },
   ];
 
   return (
@@ -2014,12 +2026,6 @@ export default function Tasks2({ userRole }) {
       {tab === 'assigned' && (
         <div style={card}>
           {renderAssignedTab()}
-        </div>
-      )}
-
-      {tab === 'unassigned' && (
-        <div style={card}>
-          {renderUnassigned()}
         </div>
       )}
 
