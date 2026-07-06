@@ -262,6 +262,19 @@ export default function Tasks2({ userRole }) {
     () => new Set(EQUIPMENT_MAINTENANCE.flatMap(e => e.frequencies.map(f => `${e.id}|${f.id}`)))
   );
 
+  // ── Assigned Tasks log state ──────────────────────────────────────────────
+  const [assignedOccs, setAssignedOccs] = useState([]);
+  const [assignedLoading, setAssignedLoading] = useState(false);
+  const [assignedFrom, setAssignedFrom] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0];
+  });
+  const [assignedTo, setAssignedTo] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString().split('T')[0];
+  });
+  const [editingOccId, setEditingOccId] = useState(null);
+  const [editAssigneeId, setEditAssigneeId] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+
   // ── Calendar state ────────────────────────────────────────────────────────
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1);
@@ -291,6 +304,7 @@ export default function Tasks2({ userRole }) {
   useEffect(() => { if (tab === 'calendar') loadCalendar(); }, [tab, calYear, calMonth]);
   useEffect(() => { if (tab === 'unassigned') loadUnassigned(); }, [tab]);
   useEffect(() => { if (tab === 'view-all' && !vatLoaded) loadVatData(); }, [tab, vatLoaded]); // eslint-disable-line
+  useEffect(() => { if (tab === 'assigned') loadAssignedTasks(assignedFrom, assignedTo); }, [tab, assignedFrom, assignedTo]); // eslint-disable-line
 
   useEffect(() => {
     localStorage.setItem('lab_maint_checks', JSON.stringify(maintChecks));
@@ -543,6 +557,170 @@ export default function Tasks2({ userRole }) {
 
   function profileName(id) {
     return profiles.find(p => p.id === id)?.full_name || id;
+  }
+
+  // ── Assigned Tasks log helpers ────────────────────────────────────────────
+
+  async function loadAssignedTasks(from, to) {
+    setAssignedLoading(true);
+    const { data } = await supabase
+      .from('task_occurrences')
+      .select('id, due_date, status, assigned_to, completed_at, notes, task_def:tasks_definitions(id, title, category, frequency, group_name), assignee:profiles!assigned_to(id, full_name)')
+      .not('assigned_to', 'is', null)
+      .gte('due_date', from)
+      .lte('due_date', to)
+      .order('due_date');
+    setAssignedOccs(data || []);
+    setAssignedLoading(false);
+  }
+
+  async function saveAssignment(occId) {
+    setEditSaving(true);
+    const newAssignee = editAssigneeId || null;
+    await supabase
+      .from('task_occurrences')
+      .update({ assigned_to: newAssignee, status: newAssignee ? 'assigned' : 'unassigned' })
+      .eq('id', occId);
+    const assigneeProfile = profiles.find(p => p.id === newAssignee);
+    setAssignedOccs(prev => prev.map(o => o.id !== occId ? o : {
+      ...o,
+      assigned_to: newAssignee,
+      assignee: assigneeProfile ? { id: newAssignee, full_name: assigneeProfile.full_name } : null,
+      status: newAssignee ? 'assigned' : 'unassigned',
+    }));
+    setEditingOccId(null);
+    setEditSaving(false);
+  }
+
+  function renderAssignedTab() {
+    const today = new Date().toISOString().split('T')[0];
+    const members = profiles.filter(p => p.role === 'member');
+
+    const completed = assignedOccs.filter(o => o.status === 'done' || o.completed_at);
+    const overdue   = assignedOccs.filter(o => o.status !== 'done' && !o.completed_at && o.due_date < today);
+    const upcoming  = assignedOccs.filter(o => o.status !== 'done' && !o.completed_at && o.due_date >= today);
+
+    return (
+      <div>
+        {/* Date range controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '20px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>From</span>
+          <input type="date" value={assignedFrom} onChange={e => setAssignedFrom(e.target.value)}
+            style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }} />
+          <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>to</span>
+          <input type="date" value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
+            style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }} />
+        </div>
+
+        {/* Stats row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
+          {[
+            { label: 'Total assigned', value: assignedOccs.length, color: 'var(--text-primary)', bg: 'var(--bg-secondary)' },
+            { label: 'Completed', value: completed.length, color: '#27AE60', bg: '#EAF7F0' },
+            { label: 'Overdue', value: overdue.length, color: '#E74C3C', bg: '#FDEDEC' },
+            { label: 'Upcoming', value: upcoming.length, color: '#2980B9', bg: '#EBF5FB' },
+          ].map(s => (
+            <div key={s.label} style={{ padding: '12px 14px', background: s.bg, borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: '22px', fontWeight: 700, color: s.color }}>{s.value}</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {assignedLoading ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
+        ) : assignedOccs.length === 0 ? (
+          <div style={{ padding: '40px', textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>No assigned tasks in this date range.</div>
+        ) : (
+          <div>
+            {/* Table header */}
+            <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 160px 100px 36px', gap: '0 12px', padding: '8px 14px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', marginBottom: '4px' }}>
+              {['Due date', 'Task', 'Assigned to', 'Status', ''].map(h => (
+                <span key={h} style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</span>
+              ))}
+            </div>
+
+            {/* Rows */}
+            {assignedOccs.map(occ => {
+              const isDone    = occ.status === 'done' || !!occ.completed_at;
+              const isOverdue = !isDone && occ.due_date < today;
+              const taskDef   = occ.task_def;
+              const taskLabel = taskDef?.group_name || taskDef?.title || '—';
+              const isEditing = editingOccId === occ.id;
+
+              const statusChip = isDone
+                ? { label: 'Done', color: '#27AE60', bg: '#EAF7F0' }
+                : isOverdue
+                  ? { label: 'Overdue', color: '#E74C3C', bg: '#FDEDEC' }
+                  : { label: 'Upcoming', color: '#2980B9', bg: '#EBF5FB' };
+
+              const freqColor = FREQ_COLORS[taskDef?.frequency] || {};
+
+              return (
+                <div key={occ.id} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 160px 100px 36px', gap: '0 12px', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '4px', boxShadow: 'var(--shadow-sm)', opacity: isDone ? 0.75 : 1 }}>
+                  {/* Due date */}
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: isOverdue ? '#E74C3C' : 'var(--text-primary)' }}>
+                      {new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      {new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric' })}
+                    </div>
+                  </div>
+
+                  {/* Task */}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{taskLabel}</div>
+                    <div style={{ display: 'flex', gap: '5px', marginTop: '3px', flexWrap: 'wrap' }}>
+                      {taskDef?.category && <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>{taskDef.category}</span>}
+                      {taskDef?.frequency && <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', background: freqColor.bg || 'var(--bg-secondary)', color: freqColor.text || 'var(--text-muted)', border: `1px solid ${freqColor.border || 'var(--border)'}` }}>{taskDef.frequency}</span>}
+                    </div>
+                  </div>
+
+                  {/* Assignee — editable */}
+                  <div>
+                    {isEditing ? (
+                      <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+                        <select value={editAssigneeId} onChange={e => setEditAssigneeId(e.target.value)}
+                          style={{ flex: 1, padding: '4px 6px', border: '1px solid var(--purple-primary)', borderRadius: 'var(--radius-sm)', fontSize: '12px', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}>
+                          <option value="">Unassign</option>
+                          {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
+                        </select>
+                        <button onClick={() => saveAssignment(occ.id)} disabled={editSaving}
+                          style={{ padding: '4px 8px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
+                          {editSaving ? '…' : 'Save'}
+                        </button>
+                        <button onClick={() => setEditingOccId(null)}
+                          style={{ padding: '4px 6px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '11px', cursor: 'pointer' }}>✕</button>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{occ.assignee?.full_name || '—'}</span>
+                    )}
+                  </div>
+
+                  {/* Status */}
+                  <div>
+                    <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '10px', background: statusChip.bg, color: statusChip.color, whiteSpace: 'nowrap' }}>{statusChip.label}</span>
+                    {isDone && occ.completed_at && (
+                      <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        {new Date(occ.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Edit button */}
+                  <div>
+                    <button onClick={() => { setEditingOccId(occ.id); setEditAssigneeId(occ.assigned_to || ''); }}
+                      style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '13px' }}
+                      title="Edit assignee">✎</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
   }
 
   // ── View All Tasks render ─────────────────────────────────────────────────
@@ -1748,6 +1926,7 @@ export default function Tasks2({ userRole }) {
   const tabs = [
     { id: 'view-all', label: 'Tasks' },
     { id: 'calendar', label: 'Calendar' },
+    { id: 'assigned', label: 'Assigned' },
     { id: 'unassigned', label: 'Unassigned', badge: unassigned.length || null },
   ];
 
@@ -1799,6 +1978,12 @@ export default function Tasks2({ userRole }) {
       {tab === 'calendar' && (
         <div style={card}>
           {renderCalendar()}
+        </div>
+      )}
+
+      {tab === 'assigned' && (
+        <div style={card}>
+          {renderAssignedTab()}
         </div>
       )}
 
