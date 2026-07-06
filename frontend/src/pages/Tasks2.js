@@ -1969,7 +1969,7 @@ export default function Tasks2({ userRole }) {
   const tabs = [
     { id: 'view-all', label: 'Tasks' },
     { id: 'calendar', label: 'Calendar' },
-    { id: 'assigned', label: 'Assigned', badge: unassignedCount || null },
+    { id: 'assigned', label: 'Insights', badge: unassignedCount || null },
   ];
 
   return (
