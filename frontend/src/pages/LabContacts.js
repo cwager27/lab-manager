@@ -260,7 +260,6 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
       await supabase.from('lab_contacts').insert([{
         ...payload,
         email: member.email,
-        full_name: member.full_name,
         first_name: nameParts[0] || '',
         last_name: nameParts.slice(1).join(' ') || '',
         role: 'member',
@@ -613,8 +612,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
               <div key={field.key} style={{ marginBottom: '12px' }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
                 <input type="text" value={contactForm[field.key] || ''} placeholder={field.placeholder || ''}
-                  onChange={e => setContactForm(p => ({ ...p, [field.key]: e.target.value }))}
-                  onBlur={field.format ? e => setContactForm(p => ({ ...p, [field.key]: field.format(e.target.value) })) : undefined}
+                  onChange={e => setContactForm(p => ({ ...p, [field.key]: field.format ? field.format(e.target.value) : e.target.value }))}
                   style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
             ))}
@@ -646,8 +644,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
             <div style={{ marginBottom: '12px' }}>
               <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Phone Number</label>
               <input type="text" value={memberInfoForm.phone} placeholder="(xxx)-xxx-xxxx"
-                onChange={e => setMemberInfoForm(p => ({ ...p, phone: e.target.value }))}
-                onBlur={e => setMemberInfoForm(p => ({ ...p, phone: formatPhone(e.target.value) }))}
+                onChange={e => setMemberInfoForm(p => ({ ...p, phone: formatPhone(e.target.value) }))}
                 style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
 
@@ -672,8 +669,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
               <div key={field.key} style={{ marginBottom: '12px' }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
                 <input type="text" value={memberInfoForm[field.key]} placeholder={field.placeholder || ''}
-                  onChange={e => setMemberInfoForm(p => ({ ...p, [field.key]: e.target.value }))}
-                  onBlur={field.format ? e => setMemberInfoForm(p => ({ ...p, [field.key]: field.format(e.target.value) })) : undefined}
+                  onChange={e => setMemberInfoForm(p => ({ ...p, [field.key]: field.format ? field.format(e.target.value) : e.target.value }))}
                   style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
             ))}

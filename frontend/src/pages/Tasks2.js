@@ -277,6 +277,11 @@ export default function Tasks2({ userRole }) {
   const [remindingId, setRemindingId] = useState(null);
   const [remindedIds, setRemindedIds] = useState(new Set());
 
+  // ── Performance report state ──────────────────────────────────────────────
+  const [reportPeriod, setReportPeriod] = useState('current');
+  const [reportRows, setReportRows] = useState([]);
+  const [reportLoading, setReportLoading] = useState(false);
+
   // ── Calendar state ────────────────────────────────────────────────────────
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1);
@@ -308,6 +313,7 @@ export default function Tasks2({ userRole }) {
   useEffect(() => { if (tab === 'unassigned') loadUnassigned(); }, [tab]);
   useEffect(() => { if (tab === 'view-all' && !vatLoaded) loadVatData(); }, [tab, vatLoaded]); // eslint-disable-line
   useEffect(() => { if (tab === 'assigned') loadAssignedTasks(assignedFrom, assignedTo); }, [tab, assignedFrom, assignedTo]); // eslint-disable-line
+  useEffect(() => { if (tab === 'assigned') loadReport(reportPeriod, assignedFrom, assignedTo); }, [tab, reportPeriod, assignedFrom, assignedTo]); // eslint-disable-line
 
   useEffect(() => {
     localStorage.setItem('lab_maint_checks', JSON.stringify(maintChecks));
@@ -384,7 +390,7 @@ export default function Tasks2({ userRole }) {
 
   // ── Scope tree helpers ────────────────────────────────────────────────────
 
-  const CAT_ORDER = ['PM', 'MISC', 'Equipment'];
+  const CAT_ORDER = ['MISC', 'PM', 'Equipment'];
 
   function buildTree() {
     const catFreqs = {};
@@ -610,6 +616,47 @@ export default function Tasks2({ userRole }) {
     setRemindingId(null);
   }
 
+  async function loadReport(period, from, to) {
+    setReportLoading(true);
+    const today = new Date().toISOString().split('T')[0];
+    let qFrom = from, qTo = to;
+    if (period === '30d') {
+      qFrom = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+      qTo = today;
+    } else if (period === 'all') {
+      qFrom = '2020-01-01';
+      qTo = '2099-12-31';
+    }
+    const { data } = await supabase
+      .from('task_occurrences')
+      .select('id, due_date, status, completed_at, assigned_to')
+      .not('assigned_to', 'is', null)
+      .gte('due_date', qFrom)
+      .lte('due_date', qTo);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const byPerson = {};
+    (data || []).forEach(occ => {
+      if (!byPerson[occ.assigned_to]) byPerson[occ.assigned_to] = [];
+      byPerson[occ.assigned_to].push(occ);
+    });
+    const rows = profiles
+      .map(p => {
+        const occs = byPerson[p.id] || [];
+        if (!occs.length) return null;
+        const onTime  = occs.filter(o => o.status === 'done' && o.completed_at && o.completed_at.slice(0, 10) <= o.due_date).length;
+        const late    = occs.filter(o => o.status === 'done' && o.completed_at && o.completed_at.slice(0, 10) > o.due_date).length;
+        const missed  = occs.filter(o => o.status !== 'done' && o.due_date < todayStr).length;
+        const pending = occs.filter(o => o.status !== 'done' && o.due_date >= todayStr).length;
+        const matured = onTime + late + missed;
+        const score   = matured > 0 ? Math.round((onTime + late * 0.5) / matured * 100) : null;
+        return { profile: p, total: occs.length, onTime, late, missed, pending, score };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+    setReportRows(rows);
+    setReportLoading(false);
+  }
+
   function renderAssignedTab() {
     const today = new Date().toISOString().split('T')[0];
     const members = profiles.slice().sort((a, b) => a.full_name.localeCompare(b.full_name));
@@ -790,6 +837,61 @@ export default function Tasks2({ userRole }) {
             )}
           </>
         )}
+
+        {/* ── Performance Report ─────────────────────────────────────────── */}
+        <div style={{ marginTop: 36, paddingTop: 28, borderTop: '2px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+            <span style={{ fontSize: '14px', fontWeight: 700 }}>Performance Report</span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {[['current', 'Current Range'], ['30d', 'Last 30 Days'], ['all', 'Since Joining']].map(([key, label]) => (
+                <button key={key} onClick={() => setReportPeriod(key)}
+                  style={{ padding: '5px 14px', borderRadius: 20, border: `1px solid ${reportPeriod === key ? 'var(--purple-primary)' : 'var(--border)'}`, background: reportPeriod === key ? 'var(--purple-primary)' : 'transparent', color: reportPeriod === key ? 'white' : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {reportLoading ? (
+            <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Loading report…</div>
+          ) : reportRows.length === 0 ? (
+            <div style={{ padding: '20px', textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: '13px' }}>No assigned tasks found for this period.</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
+              {reportRows.map(({ profile, total, onTime, late, missed, pending, score }) => {
+                const scoreCol = score === null ? 'var(--text-muted)' : score >= 90 ? '#22c55e' : score >= 70 ? '#f59e0b' : score >= 50 ? '#f97316' : '#ef4444';
+                const matured = onTime + late + missed;
+                return (
+                  <div key={profile.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 16, background: 'var(--bg-card)' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>{profile.full_name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{total} task{total !== 1 ? 's' : ''} assigned</div>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 8 }}>
+                        <div style={{ fontSize: 28, fontWeight: 800, color: scoreCol, lineHeight: 1 }}>{score !== null ? score : '—'}</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>/ 100</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 10px', fontSize: 12, marginBottom: matured > 0 ? 10 : 0 }}>
+                      <div style={{ color: '#22c55e' }}>✓ On time: <strong>{onTime}</strong></div>
+                      <div style={{ color: '#ef4444' }}>✗ Missed: <strong>{missed}</strong></div>
+                      <div style={{ color: '#f59e0b' }}>⚠ Late: <strong>{late}</strong></div>
+                      <div style={{ color: 'var(--text-muted)' }}>⏳ Pending: <strong>{pending}</strong></div>
+                    </div>
+                    {matured > 0 && (
+                      <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-secondary)', overflow: 'hidden', display: 'flex' }}>
+                        <div style={{ flex: onTime, background: '#22c55e', minWidth: onTime > 0 ? 2 : 0 }} />
+                        <div style={{ flex: late, background: '#f59e0b', minWidth: late > 0 ? 2 : 0 }} />
+                        <div style={{ flex: missed, background: '#ef4444', minWidth: missed > 0 ? 2 : 0 }} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
