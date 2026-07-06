@@ -612,7 +612,7 @@ export default function Tasks2({ userRole }) {
 
   function renderAssignedTab() {
     const today = new Date().toISOString().split('T')[0];
-    const members = profiles.filter(p => p.role === 'member');
+    const members = profiles.slice().sort((a, b) => a.full_name.localeCompare(b.full_name));
 
     const assignedList   = assignedOccs.filter(o => o.assigned_to);
     const unassignedList = assignedOccs.filter(o => !o.assigned_to);
@@ -1273,7 +1273,7 @@ export default function Tasks2({ userRole }) {
   }
 
   function renderStep3() {
-    const members = profiles.filter(p => p.role === 'member');
+    const members = profiles.slice().sort((a, b) => a.full_name.localeCompare(b.full_name));
     const available = members.filter(p => !assigneeIds.includes(p.id));
     return (
       <div>
