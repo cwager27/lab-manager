@@ -40,6 +40,20 @@ const EMPTY_MEMBER = {
   can_edit_samples: true, can_view_contacts: false, can_add_members: false
 };
 
+function formatPhone(raw) {
+  const digits = (raw || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length <= 3) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0,3)})-${digits.slice(3)}`;
+  return `(${digits.slice(0,3)})-${digits.slice(3,6)}-${digits.slice(6,10)}`;
+}
+
+function formatAddress(raw) {
+  if (!raw) return '';
+  // Capitalise each word segment
+  return raw.replace(/\b\w/g, c => c.toUpperCase()).trim();
+}
+
 function getDisplayName(contact) {
   if (contact.first_name || contact.last_name) {
     return [contact.first_name, contact.last_name].filter(Boolean).join(' ');
@@ -93,10 +107,30 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   async function handleSaveContact(e) {
     e.preventDefault();
     setSaving(true);
+    // Only send editable fields — never send generated columns (full_name), PKs, or timestamps
+    const payload = {
+      first_name: contactForm.first_name || '',
+      last_name: contactForm.last_name || '',
+      role: contactForm.role || 'external',
+      title: contactForm.title || '',
+      phone: contactForm.phone || '',
+      email: contactForm.email || '',
+      alternative_email: contactForm.alternative_email || '',
+      address: contactForm.address || '',
+      supervisor: contactForm.supervisor || '',
+      supervisor_email: contactForm.supervisor_email || '',
+      emergency_contact_name: contactForm.emergency_contact_name || '',
+      emergency_contact_phone: contactForm.emergency_contact_phone || '',
+      emergency_contact_email: contactForm.emergency_contact_email || '',
+      emergency_contact_relationship: contactForm.emergency_contact_relationship || '',
+      status: contactForm.status || 'active',
+      sort_order: contactForm.sort_order ?? 99,
+      notes: contactForm.notes || '',
+    };
     if (editingContact) {
-      await supabase.from('lab_contacts').update({ ...contactForm, updated_at: new Date().toISOString() }).eq('id', editingContact.id);
+      await supabase.from('lab_contacts').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editingContact.id);
     } else {
-      await supabase.from('lab_contacts').insert([contactForm]);
+      await supabase.from('lab_contacts').insert([payload]);
     }
     setSaving(false);
     setShowContactForm(false);
@@ -369,7 +403,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                         {canManage && (
                           <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
                             <div style={{ display: 'flex', gap: '4px' }}>
-                              <button onClick={() => { setEditingContact(contact); setContactForm(contact); setShowContactForm(true); }} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)', cursor: 'pointer' }}><Edit2 size={13} /></button>
+                              <button onClick={() => { setEditingContact(contact); setContactForm({ ...contact }); setShowContactForm(true); }} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)', cursor: 'pointer' }}><Edit2 size={13} /></button>
                               <button onClick={() => handleDeleteContact(contact.id)} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', cursor: 'pointer' }}><Trash2 size={13} /></button>
                             </div>
                           </td>
@@ -520,7 +554,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                       )}
                       {canManage && (
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
-                          <button onClick={() => { setEditingContact(c); setContactForm(c); setShowContactForm(true); }} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)', cursor: 'pointer' }} title="Edit contact info"><Edit2 size={13} /></button>
+                          <button onClick={() => { setEditingContact(c); setContactForm({ ...c }); setShowContactForm(true); }} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)', cursor: 'pointer' }} title="Edit contact info"><Edit2 size={13} /></button>
                         </td>
                       )}
                     </tr>
@@ -570,15 +604,17 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
             </div>
 
             {[
-              { key: 'email', label: 'Email' },
-              { key: 'phone', label: 'Personal Phone' },
-              { key: 'alternative_email', label: 'Work Phone' },
-              { key: 'address', label: 'Office / Department' },
-              { key: 'title', label: 'Official Title' },
+              { key: 'email', label: 'Email', placeholder: 'name@example.com' },
+              { key: 'phone', label: 'Personal Phone', placeholder: '(xxx)-xxx-xxxx', format: formatPhone },
+              { key: 'alternative_email', label: 'Work Phone', placeholder: '(xxx)-xxx-xxxx', format: formatPhone },
+              { key: 'address', label: 'Office / Department', placeholder: '123 Main St, Apt 4B, New York, NY 10001', format: formatAddress },
+              { key: 'title', label: 'Official Title', placeholder: 'e.g. Lab Manager' },
             ].map(field => (
               <div key={field.key} style={{ marginBottom: '12px' }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
-                <input type="text" value={contactForm[field.key] || ''} onChange={e => setContactForm(p => ({ ...p, [field.key]: e.target.value }))}
+                <input type="text" value={contactForm[field.key] || ''} placeholder={field.placeholder || ''}
+                  onChange={e => setContactForm(p => ({ ...p, [field.key]: e.target.value }))}
+                  onBlur={field.format ? e => setContactForm(p => ({ ...p, [field.key]: field.format(e.target.value) })) : undefined}
                   style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
             ))}
@@ -609,13 +645,17 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
 
             <div style={{ marginBottom: '12px' }}>
               <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Phone Number</label>
-              <input type="text" value={memberInfoForm.phone} onChange={e => setMemberInfoForm(p => ({ ...p, phone: e.target.value }))}
+              <input type="text" value={memberInfoForm.phone} placeholder="(xxx)-xxx-xxxx"
+                onChange={e => setMemberInfoForm(p => ({ ...p, phone: e.target.value }))}
+                onBlur={e => setMemberInfoForm(p => ({ ...p, phone: formatPhone(e.target.value) }))}
                 style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
 
             <div style={{ marginBottom: '12px' }}>
               <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Address</label>
-              <input type="text" value={memberInfoForm.address} onChange={e => setMemberInfoForm(p => ({ ...p, address: e.target.value }))}
+              <input type="text" value={memberInfoForm.address} placeholder="123 Main St, Apt 4B, New York, NY 10001"
+                onChange={e => setMemberInfoForm(p => ({ ...p, address: e.target.value }))}
+                onBlur={e => setMemberInfoForm(p => ({ ...p, address: formatAddress(e.target.value) }))}
                 style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
 
@@ -624,14 +664,16 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
             </div>
 
             {[
-              { key: 'emergency_contact_name', label: 'Name (First & Last)' },
-              { key: 'emergency_contact_phone', label: 'Phone' },
-              { key: 'emergency_contact_email', label: 'Email' },
-              { key: 'emergency_contact_relationship', label: 'Relationship' },
+              { key: 'emergency_contact_name', label: 'Name (First & Last)', placeholder: 'Jane Doe' },
+              { key: 'emergency_contact_phone', label: 'Phone', placeholder: '(xxx)-xxx-xxxx', format: formatPhone },
+              { key: 'emergency_contact_email', label: 'Email', placeholder: 'name@example.com' },
+              { key: 'emergency_contact_relationship', label: 'Relationship', placeholder: 'e.g. Parent, Spouse' },
             ].map(field => (
               <div key={field.key} style={{ marginBottom: '12px' }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
-                <input type="text" value={memberInfoForm[field.key]} onChange={e => setMemberInfoForm(p => ({ ...p, [field.key]: e.target.value }))}
+                <input type="text" value={memberInfoForm[field.key]} placeholder={field.placeholder || ''}
+                  onChange={e => setMemberInfoForm(p => ({ ...p, [field.key]: e.target.value }))}
+                  onBlur={field.format ? e => setMemberInfoForm(p => ({ ...p, [field.key]: field.format(e.target.value) })) : undefined}
                   style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
             ))}
