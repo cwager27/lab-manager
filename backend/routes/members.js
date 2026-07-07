@@ -95,17 +95,20 @@ router.post('/members/invite', async (req, res) => {
 
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
-  // 1. Create pending auth user — Supabase sends the invite email with the set-password link
-  const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+  // 1. Generate invite link — creates the auth user and returns a set-password URL
+  //    without sending Supabase's own email (which has a broken apostrophe in the subject).
+  const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.generateLink({
+    type: 'invite',
     email,
-    { redirectTo: frontendUrl }
-  );
+    options: { redirectTo: frontendUrl },
+  });
 
   if (inviteError) {
     return res.status(400).json({ error: inviteError.message });
   }
 
   const userId = inviteData.user.id;
+  const inviteLink = inviteData.properties.action_link;
 
   // 2. Insert profile row now that we have the auth user ID
   const perms = permissions || ROLE_DEFAULTS[role] || ROLE_DEFAULTS.member;
@@ -132,7 +135,7 @@ router.post('/members/invite', async (req, res) => {
     details:      { role, full_name: fullName },
   }]).catch(err => console.error('audit log failed:', err.message));
 
-  // 4. Send companion welcome email explaining the invite flow
+  // 4. Send welcome email with the set-password link embedded
   try {
     await transporter.sendMail({
       from: `"Petljak Lab" <${process.env.GMAIL_USER}>`,
@@ -147,6 +150,7 @@ router.post('/members/invite', async (req, res) => {
             <p style="color:#5A5A7A;font-size:14px;margin:0 0 24px;">
               You have been added to the Petljak Lab Operations Platform as a
               <strong>${ROLE_LABELS[role] || role}</strong>.
+              Click the button below to set your password and get started.
             </p>
             <div style="background:#f8f6fb;border-radius:8px;padding:20px;margin-bottom:24px;border:1px solid #e8e4f0;">
               <table style="width:100%;border-collapse:collapse;">
@@ -154,17 +158,13 @@ router.post('/members/invite', async (req, res) => {
                 <tr><td style="padding:6px 0;font-size:12px;color:#9A9AB0;">Role</td><td style="padding:6px 0;font-size:13px;color:#5A5A7A;">${ROLE_LABELS[role] || role}</td></tr>
               </table>
             </div>
-            <p style="color:#5A5A7A;font-size:14px;margin:0 0 8px;">
-              Check your inbox for a separate email with a secure link to set your password.
-              The link expires in 24 hours.
-            </p>
-            <p style="color:#9A9AB0;font-size:13px;margin:0 0 24px;">
-              If you don't see it within a few minutes, check your spam folder or ask your lab administrator to resend the invite.
-            </p>
-            <a href="${frontendUrl}" style="display:inline-block;padding:12px 24px;background:#7B3FA0;color:white;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">
-              Go to Platform
+            <a href="${inviteLink}" style="display:inline-block;padding:12px 24px;background:#7B3FA0;color:white;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">
+              Set Your Password
             </a>
-            <p style="color:#9A9AB0;font-size:12px;margin-top:24px;">
+            <p style="color:#9A9AB0;font-size:13px;margin-top:20px;margin-bottom:0;">
+              This link expires in 24 hours. If you need a new one, contact your lab administrator.
+            </p>
+            <p style="color:#9A9AB0;font-size:12px;margin-top:16px;">
               Petljak Lab Operations Platform · NYU Langone
             </p>
           </div>
@@ -172,8 +172,7 @@ router.post('/members/invite', async (req, res) => {
       `
     });
   } catch (emailErr) {
-    // Non-fatal: auth invite was sent and profile created. Log and continue.
-    console.error('Companion welcome email failed:', emailErr.message);
+    console.error('Welcome email failed:', emailErr.message);
   }
 
   res.json({ success: true });
