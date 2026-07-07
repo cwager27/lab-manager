@@ -186,6 +186,7 @@ export default function Finance({ userRole }) {
   const [vendors, setVendors] = useState([]);
   const [editingOrder, setEditingOrder] = useState(null);
   const [editOrderForm, setEditOrderForm] = useState({});
+  const [confirmDeleteOrder, setConfirmDeleteOrder] = useState(false);
 
   const canManage = userRole === 'admin' || userRole === 'pm';
 
@@ -253,6 +254,7 @@ export default function Finance({ userRole }) {
   }
 
   function openEditOrder(order) {
+    setConfirmDeleteOrder(false);
     setEditingOrder(order);
     setEditOrderForm({
       item: order.item || '',
@@ -293,6 +295,14 @@ export default function Finance({ userRole }) {
     await supabase.from('orders').update(updated).eq('id', editingOrder.id);
     setOrders(prev => prev.map(o => o.id === editingOrder.id ? { ...o, ...updated } : o));
     setEditingOrder(null);
+  }
+
+  async function handleDeleteOrder() {
+    if (!editingOrder) return;
+    await supabase.from('orders').delete().eq('id', editingOrder.id);
+    setOrders(prev => prev.filter(o => o.id !== editingOrder.id));
+    setEditingOrder(null);
+    setConfirmDeleteOrder(false);
   }
 
   async function commitReagentEdit() {
@@ -1031,9 +1041,21 @@ export default function Finance({ userRole }) {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button onClick={() => setEditingOrder(null)} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
-              <button onClick={saveEditOrder} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Save Changes</button>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                {confirmDeleteOrder ? (
+                  <>
+                    <button onClick={handleDeleteOrder} style={{ padding: '10px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--danger)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Confirm Delete</button>
+                    <button onClick={() => setConfirmDeleteOrder(false)} style={{ padding: '10px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                  </>
+                ) : (
+                  <button onClick={() => setConfirmDeleteOrder(true)} style={{ padding: '10px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--danger)', background: 'transparent', color: 'var(--danger)', fontWeight: 500, cursor: 'pointer' }}>Delete Order</button>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button onClick={() => setEditingOrder(null)} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={saveEditOrder} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Save Changes</button>
+              </div>
             </div>
           </div>
         </div>
