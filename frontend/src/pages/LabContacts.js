@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   Plus, Edit2, Trash2, Phone, Mail,
-  Shield,
+  Shield, Key, Eye, EyeOff,
   ChevronDown, ChevronUp, Search
 } from 'lucide-react';
 
@@ -173,7 +173,7 @@ function AdminContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, o
 }
 
 // Each lab member row fetches its own contact data by full_name — completely isolated
-function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, onUpdatePermissions, onUpdateRole, onDelete, rowIndex }) {
+function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin, onUpdatePermissions, onUpdateRole, onDelete, onChangePassword, rowIndex }) {
   const [extraData, setExtraData] = useState(null);
   const [showContactEdit, setShowContactEdit] = useState(false);
   const [showPerms, setShowPerms] = useState(false);
@@ -314,6 +314,12 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, onUpdat
                   <Shield size={12} /> {showPerms ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                 </button>
               )}
+              {isAdmin && (
+                <button onClick={() => onChangePassword(member)}
+                  style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)', cursor: 'pointer' }} title="Set password">
+                  <Key size={13} />
+                </button>
+              )}
               {member.id !== userId && (
                 <button onClick={() => onDelete(member)} style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', cursor: 'pointer' }} title="Remove member"><Trash2 size={13} /></button>
               )}
@@ -397,6 +403,12 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   const [saving, setSaving] = useState(false);
   const [memberError, setMemberError] = useState('');
   const [confirmDeleteMember, setConfirmDeleteMember] = useState(null);
+  const [passwordTarget, setPasswordTarget] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const [pwSuccess, setPwSuccess] = useState(false);
 
   const canManage = userRole === 'admin' || (permissions?.can_add_members);
   const canViewPersonalPhone = userRole === 'admin' || userRole === 'pm' || profile?.full_name?.toLowerCase().startsWith('mia');
@@ -574,6 +586,26 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
     setConfirmDeleteMember(null);
   }
 
+  async function handleChangePassword() {
+    if (!newPassword || newPassword.length < 8) { setPwError('Password must be at least 8 characters.'); return; }
+    setPwSaving(true);
+    setPwError('');
+    try {
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/change-member-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: passwordTarget.id, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update password');
+      setPwSuccess(true);
+      setTimeout(() => { setPasswordTarget(null); setNewPassword(''); setShowPw(false); setPwSuccess(false); }, 1800);
+    } catch (err) {
+      setPwError(err.message);
+    }
+    setPwSaving(false);
+  }
+
   const memberNames = new Set(members.map(m => m.full_name?.toLowerCase().trim()).filter(Boolean));
   const sortedMembers = [...members].sort((a, b) => (ROLE_ORDER[a.role] || 99) - (ROLE_ORDER[b.role] || 99));
 
@@ -713,9 +745,11 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                       canManage={canManage}
                       canViewPersonalPhone={canViewPersonalPhone}
                       userId={userId}
+                      isAdmin={userRole === 'admin'}
                       onUpdatePermissions={handleUpdatePermissions}
                       onUpdateRole={handleUpdateRole}
                       onDelete={setConfirmDeleteMember}
+                      onChangePassword={setPasswordTarget}
                       rowIndex={i}
                     />
                   ))}
@@ -802,6 +836,51 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                 {saving ? 'Saving...' : 'Save Contact'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Password Modal */}
+      {passwordTarget && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '400px', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
+            {pwSuccess ? (
+              <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                <div style={{ fontSize: '32px', marginBottom: '12px' }}>✓</div>
+                <p style={{ fontSize: '15px', fontWeight: 600, color: '#27AE60', margin: 0 }}>Password updated for {passwordTarget.full_name}</p>
+              </div>
+            ) : (
+              <>
+                <h2 style={{ fontSize: '17px', fontWeight: 700, marginBottom: '6px' }}>Set Password</h2>
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>
+                  Set a new password for <strong>{passwordTarget.full_name}</strong>. Their active sessions won't be affected — the new password takes effect on next login.
+                </p>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>New Password</label>
+                <div style={{ position: 'relative', marginBottom: '8px' }}>
+                  <input
+                    type={showPw ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={e => { setNewPassword(e.target.value); setPwError(''); }}
+                    placeholder="Min. 8 characters"
+                    autoFocus
+                    onKeyDown={e => e.key === 'Enter' && handleChangePassword()}
+                    style={{ width: '100%', padding: '10px 40px 10px 12px', border: `1px solid ${pwError ? 'var(--danger)' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                  />
+                  <button onClick={() => setShowPw(v => !v)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+                    {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+                {pwError && <p style={{ fontSize: '12px', color: 'var(--danger)', margin: '0 0 12px' }}>{pwError}</p>}
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
+                  <button onClick={() => { setPasswordTarget(null); setNewPassword(''); setShowPw(false); setPwError(''); }}
+                    style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                  <button onClick={handleChangePassword} disabled={pwSaving || !newPassword}
+                    style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: pwSaving || !newPassword ? 'var(--border)' : 'var(--purple-primary)', color: pwSaving || !newPassword ? 'var(--text-muted)' : 'white', fontWeight: 600, cursor: pwSaving || !newPassword ? 'default' : 'pointer' }}>
+                    {pwSaving ? 'Saving…' : 'Set Password'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -10,6 +10,17 @@ const ALLOWED_TYPES = new Set([
   'failed_login',
 ]);
 
+// Admin-only: set a member's password without invalidating their active sessions.
+// Existing JWTs remain valid until expiry; new logins require the updated password.
+router.post('/auth/change-member-password', async (req, res) => {
+  const { userId, newPassword } = req.body;
+  if (!userId || !newPassword) return res.status(400).json({ error: 'userId and newPassword required' });
+  if (newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: newPassword });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
 // Returns whether an email address has a registered profile.
 // Used by the forgot-password form to block resets for unknown emails
 // without exposing auth.users directly (which requires service role).
