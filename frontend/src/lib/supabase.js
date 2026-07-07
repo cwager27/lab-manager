@@ -13,5 +13,5 @@ export const isRecoveryUrl =
 export const recoveryTokenHash = _s.get('token_hash') || null;
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: { flowType: 'implicit' },
+  auth: { flowType: 'implicit' }, // implicit avoids PKCE localStorage dependency for password reset
 });
