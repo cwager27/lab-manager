@@ -16,9 +16,14 @@ router.post('/auth/change-member-password', async (req, res) => {
   const { userId, newPassword } = req.body;
   if (!userId || !newPassword) return res.status(400).json({ error: 'userId and newPassword required' });
   if (newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
-  const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: newPassword });
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true });
+  try {
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: newPassword });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('change-member-password error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Returns whether an email address has a registered profile.

@@ -47,6 +47,7 @@ const STATUS_STYLES = {
   complete: { bg: '#EAF7F0', text: '#27AE60', label: 'Complete' },
   pending: { bg: '#FEF9E7', text: '#F39C12', label: 'Pending' },
   cancelled: { bg: '#FDEDEC', text: '#E74C3C', label: 'Cancelled' },
+  deleted: { bg: '#F2F2F2', text: '#9E9E9E', label: 'Deleted' },
 };
 
 function GrantCard({ grant }) {
@@ -122,7 +123,7 @@ export default function Finance({ userRole }) {
   const [draftCategories, setDraftCategories] = useState([]);
   const [categorySearch, setCategorySearch] = useState('');
   const chartData = useMemo(() => {
-    const real = orders.filter(o => o.item && o.item.trim() !== '');
+    const real = orders.filter(o => o.item && o.item.trim() !== '' && o.status !== 'deleted');
 
     // sorted unique months
     const monthMap = {};
@@ -299,10 +300,17 @@ export default function Finance({ userRole }) {
 
   async function handleDeleteOrder() {
     if (!editingOrder) return;
-    await supabase.from('orders').delete().eq('id', editingOrder.id);
-    setOrders(prev => prev.filter(o => o.id !== editingOrder.id));
+    await supabase.from('orders').update({ status: 'deleted' }).eq('id', editingOrder.id);
+    setOrders(prev => prev.map(o => o.id === editingOrder.id ? { ...o, status: 'deleted' } : o));
     setEditingOrder(null);
     setConfirmDeleteOrder(false);
+  }
+
+  async function handleReinstateOrder() {
+    if (!editingOrder) return;
+    await supabase.from('orders').update({ status: 'pending' }).eq('id', editingOrder.id);
+    setOrders(prev => prev.map(o => o.id === editingOrder.id ? { ...o, status: 'pending' } : o));
+    setEditingOrder(null);
   }
 
   async function commitReagentEdit() {
@@ -484,10 +492,11 @@ export default function Finance({ userRole }) {
                   </thead>
                   <tbody>
                     {filteredOrders.map(order => {
+                      const isDeleted = order.status === 'deleted';
                       const statusStyle = STATUS_STYLES[order.status] || STATUS_STYLES.pending;
                       return (
                         <tr key={order.id} onClick={() => openEditOrder(order)}
-                          style={{ borderTop: '1px solid var(--border)', cursor: 'pointer' }}
+                          style={{ borderTop: '1px solid var(--border)', cursor: 'pointer', opacity: isDeleted ? 0.45 : 1 }}
                           onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
                           onMouseLeave={e => e.currentTarget.style.background = ''}>
                           <td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-primary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{order.item}</td>
@@ -498,14 +507,18 @@ export default function Finance({ userRole }) {
                           <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{order.total_price != null ? `$${order.total_price.toLocaleString()}` : ''}</td>
                           <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{order.order_date}</td>
                           <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{order.requestor}</td>
-                          <td style={{ padding: '10px 12px' }} onClick={e => e.stopPropagation()}>
-                            <select value={order.status || 'pending'} onChange={e => commitOrderSelectEdit(order.id, 'status', e.target.value)}
-                              style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text, border: 'none', cursor: 'pointer', outline: 'none' }}>
-                              <option value="pending">Pending</option>
-                              <option value="processing">Processing</option>
-                              <option value="complete">Complete</option>
-                              <option value="cancelled">Cancelled</option>
-                            </select>
+                          <td style={{ padding: '10px 12px' }} onClick={isDeleted ? undefined : e => e.stopPropagation()}>
+                            {isDeleted ? (
+                              <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: STATUS_STYLES.deleted.bg, color: STATUS_STYLES.deleted.text }}>Deleted</span>
+                            ) : (
+                              <select value={order.status || 'pending'} onChange={e => commitOrderSelectEdit(order.id, 'status', e.target.value)}
+                                style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text, border: 'none', cursor: 'pointer', outline: 'none' }}>
+                                <option value="pending">Pending</option>
+                                <option value="processing">Processing</option>
+                                <option value="complete">Complete</option>
+                                <option value="cancelled">Cancelled</option>
+                              </select>
+                            )}
                           </td>
                         </tr>
                       );
@@ -989,7 +1002,9 @@ export default function Finance({ userRole }) {
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</label>
                 <select value={editOrderForm.status} onChange={e => setEditOrderForm(p => ({ ...p, status: e.target.value }))}
+                  disabled={editingOrder?.status === 'deleted'}
                   style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', background: 'var(--bg-primary)' }}>
+                  {editingOrder?.status === 'deleted' && <option value="deleted">Deleted</option>}
                   <option value="pending">Pending</option>
                   <option value="processing">Processing</option>
                   <option value="complete">Complete</option>
@@ -1041,20 +1056,26 @@ export default function Finance({ userRole }) {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                {confirmDeleteOrder ? (
-                  <>
-                    <button onClick={handleDeleteOrder} style={{ padding: '10px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--danger)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Confirm Delete</button>
-                    <button onClick={() => setConfirmDeleteOrder(false)} style={{ padding: '10px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
-                  </>
-                ) : (
-                  <button onClick={() => setConfirmDeleteOrder(true)} style={{ padding: '10px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--danger)', background: 'transparent', color: 'var(--danger)', fontWeight: 500, cursor: 'pointer' }}>Delete Order</button>
-                )}
-              </div>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: editingOrder?.status === 'deleted' ? 'flex-end' : 'space-between', alignItems: 'center' }}>
+              {editingOrder?.status !== 'deleted' && (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  {confirmDeleteOrder ? (
+                    <>
+                      <button onClick={handleDeleteOrder} style={{ padding: '10px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--danger)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Confirm Delete</button>
+                      <button onClick={() => setConfirmDeleteOrder(false)} style={{ padding: '10px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                    </>
+                  ) : (
+                    <button onClick={() => setConfirmDeleteOrder(true)} style={{ padding: '10px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--danger)', background: 'transparent', color: 'var(--danger)', fontWeight: 500, cursor: 'pointer' }}>Delete Order</button>
+                  )}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button onClick={() => setEditingOrder(null)} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
-                <button onClick={saveEditOrder} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Save Changes</button>
+                {editingOrder?.status === 'deleted' ? (
+                  <button onClick={handleReinstateOrder} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: '#27AE60', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Reinstate Order</button>
+                ) : (
+                  <button onClick={saveEditOrder} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Save Changes</button>
+                )}
               </div>
             </div>
           </div>
