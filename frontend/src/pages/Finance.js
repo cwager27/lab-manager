@@ -186,6 +186,7 @@ export default function Finance({ userRole }) {
   const [editCell, setEditCell] = useState(null);
   const [editVal, setEditVal] = useState('');
   const [vendors, setVendors] = useState([]);
+  const [members, setMembers] = useState([]);
   const [editingOrder, setEditingOrder] = useState(null);
   const [editOrderForm, setEditOrderForm] = useState({});
   const [confirmDeleteOrder, setConfirmDeleteOrder] = useState(false);
@@ -196,18 +197,20 @@ export default function Finance({ userRole }) {
 
   async function fetchData() {
     setLoading(true);
-    const [{ data: grantData }, { data: orderData }, { data: reagentData }, { data: nanoseqData }, { data: vendorData }] = await Promise.all([
+    const [{ data: grantData }, { data: orderData }, { data: reagentData }, { data: nanoseqData }, { data: vendorData }, { data: profileData }] = await Promise.all([
       supabase.from('grants').select('*').order('name'),
       supabase.from('orders').select('*').order('order_date', { ascending: false }),
       supabase.from('reagents').select('*').order('category').order('name'),
       supabase.from('nanoseq_reagents').select('*').order('protocol').order('name'),
-      supabase.from('vendors').select('*').order('name')
+      supabase.from('vendors').select('*').order('name'),
+      supabase.from('profiles').select('id, full_name').order('full_name')
     ]);
     setGrants(grantData || []);
     setOrders(orderData || []);
     setReagents(reagentData || []);
     setNanoseq(nanoseqData || []);
     setVendors(vendorData || []);
+    setMembers(profileData || []);
     setLoading(false);
   }
 
@@ -218,7 +221,7 @@ export default function Finance({ userRole }) {
       ['item', 'Item Name'], ['vendor', 'Vendor'], ['catalog_number', 'Catalog Number'],
       ['category', 'Category'], ['grant_name', 'Grant'], ['requisition_id', 'Requisition ID'],
       ['unit_description', 'Unit Description'], ['unit_price', 'Unit Price'],
-      ['units', 'Units'], ['order_date', 'Order Date'], ['requestor', 'Requestor'],
+      ['units', 'Units'], ['order_date', 'Order Date'],
     ];
     const missing = REQUIRED_FIELDS.filter(([key]) => !String(newOrder[key] ?? '').trim()).map(([, label]) => label);
     if (missing.length > 0) {
@@ -944,7 +947,7 @@ export default function Finance({ userRole }) {
               </div>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-              {[{label:'Item Name',key:'item',full:true},{label:'Catalog Number',key:'catalog_number'},{label:'Category',key:'category'},{label:'Requisition ID',key:'requisition_id'},{label:'Unit Description',key:'unit_description'},{label:'Unit Price ($)',key:'unit_price',type:'number'},{label:'Units',key:'units',type:'number'},{label:'Order Date',key:'order_date',type:'date'},{label:'Requestor',key:'requestor'}].map(field => (
+              {[{label:'Item Name',key:'item',full:true},{label:'Catalog Number',key:'catalog_number'},{label:'Category',key:'category'},{label:'Requisition ID',key:'requisition_id'},{label:'Unit Description',key:'unit_description'},{label:'Unit Price ($)',key:'unit_price',type:'number'},{label:'Units',key:'units',type:'number'},{label:'Order Date',key:'order_date',type:'date'}].map(field => (
                 <div key={field.key} style={{ gridColumn: field.full ? '1 / -1' : 'auto' }}>
                   <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
                   <input type={field.type || 'text'} value={newOrder[field.key]} onChange={e => setNewOrder(p => ({ ...p, [field.key]: e.target.value }))} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
@@ -963,6 +966,14 @@ export default function Finance({ userRole }) {
                 <datalist id="order-vendor-list">
                   {vendors.map(v => <option key={v.id} value={v.name} />)}
                 </datalist>
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Requestor</label>
+                <select value={newOrder.requestor} onChange={e => setNewOrder(p => ({ ...p, requestor: e.target.value }))} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', background: 'var(--bg-primary)' }}>
+                  <option value="">—</option>
+                  <option value="General Lab">General Lab</option>
+                  {members.filter(m => m.full_name).map(m => <option key={m.id} value={m.full_name}>{m.full_name}</option>)}
+                </select>
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</label>
@@ -1038,7 +1049,6 @@ export default function Finance({ userRole }) {
                 { key: 'catalog_number', label: 'Catalog Number' },
                 { key: 'requisition_id', label: 'Requisition ID' },
                 { key: 'unit_description', label: 'Unit Description' },
-                { key: 'requestor', label: 'Requestor' },
               ].map(f => (
                 <div key={f.key}>
                   <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{f.label}</label>
@@ -1046,6 +1056,19 @@ export default function Finance({ userRole }) {
                     style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
                 </div>
               ))}
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Requestor</label>
+                <select value={editOrderForm.requestor} onChange={e => setEditOrderForm(p => ({ ...p, requestor: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', background: 'var(--bg-primary)' }}>
+                  <option value="">—</option>
+                  <option value="General Lab">General Lab</option>
+                  {members.filter(m => m.full_name).map(m => <option key={m.id} value={m.full_name}>{m.full_name}</option>)}
+                  {editOrderForm.requestor && editOrderForm.requestor !== 'General Lab' && !members.some(m => m.full_name === editOrderForm.requestor) && (
+                    <option value={editOrderForm.requestor}>{editOrderForm.requestor}</option>
+                  )}
+                </select>
+              </div>
 
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Unit Price ($)</label>
