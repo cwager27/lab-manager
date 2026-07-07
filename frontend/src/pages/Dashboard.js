@@ -39,6 +39,8 @@ function MiniScoreRow({ row }) {
   const noData = score === null;
   const barStyle = noData
     ? { width: '100%', background: '#e5d0f5' }
+    : score === 0
+    ? { width: '100%', background: 'hsl(0, 75%, 42%)' }
     : { width: `${score}%`, background: `hsl(${Math.round(score * 1.2)}, 75%, 42%)` };
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
