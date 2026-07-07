@@ -611,41 +611,6 @@ export default function Dashboard({ profile, userRole, userId }) {
               </div>
             </Card>
 
-            {/* Public Tasks */}
-            <Card icon={<Globe size={13} color="var(--purple-primary)" />} title="Lab Tasks">
-              {publicTasks.length === 0 ? (
-                <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>No public tasks.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {publicTasks.map((task, i) => {
-                    const done = task.status === 'done';
-                    const today = new Date().toISOString().split('T')[0];
-                    const overdue = !done && task.due_date && task.due_date < today;
-                    return (
-                      <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', opacity: done ? 0.7 : 1 }}>
-                        <div style={{ width: 16, height: 16, borderRadius: 4, border: `1.5px solid ${done ? '#27AE60' : 'var(--border)'}`, background: done ? '#27AE60' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          {done && <Check size={10} color="white" strokeWidth={3} />}
-                        </div>
-                        <span style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', flex: 1, lineHeight: 1.4, textDecoration: done ? 'line-through' : 'none' }}>{task.title}</span>
-                        {done && task.assignee?.full_name && (
-                          <span style={{ fontSize: '11px', color: '#27AE60', flexShrink: 0, whiteSpace: 'nowrap' }}>✓ {task.assignee.full_name}</span>
-                        )}
-                        {!done && task.assignee?.full_name && (
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{task.assignee.full_name}</span>
-                        )}
-                        {!done && (
-                          <span style={{ fontSize: '11px', color: overdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                            {formatDate(task.due_date)}
-                          </span>
-                        )}
-                        {overdue && <AlertTriangle size={11} color="#E74C3C" style={{ flexShrink: 0 }} />}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </Card>
-
             {/* ── One-off Task Productivity ── */}
             <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
               <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
@@ -763,6 +728,41 @@ export default function Dashboard({ profile, userRole, userId }) {
             </div>
 
             {/* Admin Contacts (lab_contacts) */}
+            {/* ── Lab Tasks ── */}
+            <Card icon={<Globe size={13} color="var(--purple-primary)" />} title="Lab Tasks">
+              {publicTasks.length === 0 ? (
+                <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>No public tasks.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {publicTasks.map((task, i) => {
+                    const done = task.status === 'done';
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const overdue = !done && task.due_date && task.due_date < todayStr;
+                    return (
+                      <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', opacity: done ? 0.7 : 1 }}>
+                        <div style={{ width: 16, height: 16, borderRadius: 4, border: `1.5px solid ${done ? '#27AE60' : 'var(--border)'}`, background: done ? '#27AE60' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          {done && <Check size={10} color="white" strokeWidth={3} />}
+                        </div>
+                        <span style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', flex: 1, lineHeight: 1.4, textDecoration: done ? 'line-through' : 'none' }}>{task.title}</span>
+                        {done && task.assignee?.full_name && (
+                          <span style={{ fontSize: '11px', color: '#27AE60', flexShrink: 0, whiteSpace: 'nowrap' }}>✓ {task.assignee.full_name}</span>
+                        )}
+                        {!done && task.assignee?.full_name && (
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{task.assignee.full_name}</span>
+                        )}
+                        {!done && (
+                          <span style={{ fontSize: '11px', color: overdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                            {formatDate(task.due_date)}
+                          </span>
+                        )}
+                        {overdue && <AlertTriangle size={11} color="#E74C3C" style={{ flexShrink: 0 }} />}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+
             {/* ── Recurring Responsibilities Productivity ── */}
             <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
               <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
