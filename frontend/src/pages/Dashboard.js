@@ -35,24 +35,19 @@ function PeriodPicker({ value, onChange }) {
 
 function MiniScoreRow({ row }) {
   const { profile, score } = row;
-  const pct = score !== null ? score : 0;
   const firstName = (profile.full_name || '').split(' ')[0];
+  const noData = score === null;
+  const barStyle = noData
+    ? { width: '100%', background: '#e5d0f5' }
+    : { width: `${score}%`, background: `hsl(${Math.round(score * 1.2)}, 75%, 42%)` };
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
       <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', width: 72, overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>{firstName}</div>
-      <div style={{ flex: 1, height: 10, borderRadius: 5, background: 'var(--border)', overflow: 'hidden', position: 'relative' }}>
-        <div style={{
-          width: `${pct}%`,
-          height: '100%',
-          borderRadius: 5,
-          background: score === null
-            ? 'var(--border)'
-            : `hsl(${Math.round(pct * 1.2)}, 80%, 45%)`,
-          transition: 'width 0.4s ease',
-        }} />
+      <div style={{ flex: 1, height: 10, borderRadius: 5, background: 'var(--border)', overflow: 'hidden' }}>
+        <div style={{ height: '100%', borderRadius: 5, transition: 'width 0.4s ease', ...barStyle }} />
       </div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', width: 26, textAlign: 'right', flexShrink: 0 }}>
-        {score !== null ? score : '—'}
+      <div style={{ fontSize: 11, fontWeight: 700, color: noData ? '#b084d0' : 'var(--text-secondary)', width: 26, textAlign: 'right', flexShrink: 0 }}>
+        {noData ? '—' : score}
       </div>
     </div>
   );
