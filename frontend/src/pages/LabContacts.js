@@ -183,6 +183,7 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, onUpdat
     emergency_contact_email: '', emergency_contact_relationship: '',
   });
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const roleColors = ROLE_COLORS[member.role] || ROLE_COLORS.member;
 
   useEffect(() => { loadExtra(); }, []); // eslint-disable-line
@@ -227,32 +228,39 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, onUpdat
 
   async function handleSaveContact() {
     setSaving(true);
-    const payload = {
-      phone: form.phone || '',
-      address: form.address || '',
-      emergency_contact_name: form.emergency_contact_name || '',
-      emergency_contact_phone: form.emergency_contact_phone || '',
-      emergency_contact_email: form.emergency_contact_email || '',
-      emergency_contact_relationship: form.emergency_contact_relationship || '',
-    };
-    if (extraData?.id) {
-      await supabase.from('lab_contacts').update(payload).eq('id', extraData.id);
-      setExtraData(prev => ({ ...prev, ...payload }));
-    } else {
-      const nameParts = (member.full_name || '').split(' ');
-      await supabase.from('lab_contacts').insert([{
-        ...payload,
-        full_name: member.full_name,
-        email: member.email,
-        first_name: nameParts[0] || '',
-        last_name: nameParts.slice(1).join(' ') || '',
-        role: 'member',
-        sort_order: 99,
-      }]);
-      await loadExtra();
+    setSaveError('');
+    try {
+      const payload = {
+        phone: form.phone || '',
+        address: form.address || '',
+        emergency_contact_name: form.emergency_contact_name || '',
+        emergency_contact_phone: form.emergency_contact_phone || '',
+        emergency_contact_email: form.emergency_contact_email || '',
+        emergency_contact_relationship: form.emergency_contact_relationship || '',
+      };
+      if (extraData?.id) {
+        const { error } = await supabase.from('lab_contacts').update(payload).eq('id', extraData.id);
+        if (error) throw error;
+        setExtraData(prev => ({ ...prev, ...payload }));
+      } else {
+        const nameParts = (member.full_name || '').split(' ');
+        const { error } = await supabase.from('lab_contacts').insert([{
+          ...payload,
+          email: member.email,
+          first_name: nameParts[0] || '',
+          last_name: nameParts.slice(1).join(' ') || '',
+          role: 'member',
+          sort_order: 99,
+        }]);
+        if (error) throw error;
+        await loadExtra();
+      }
+      setShowContactEdit(false);
+    } catch (err) {
+      setSaveError(err?.message || 'Save failed. Please try again.');
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    setShowContactEdit(false);
   }
 
   const inp = (key, ph = '') => (
@@ -342,8 +350,9 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, onUpdat
               <div><label style={labelStyle}>Email</label>{inp('emergency_contact_email', 'name@example.com')}</div>
               <div><label style={labelStyle}>Relationship</label>{inp('emergency_contact_relationship', 'e.g. Parent')}</div>
             </div>
+            {saveError && <div style={{ color: 'var(--danger)', fontSize: '12px', marginBottom: 8, textAlign: 'right' }}>{saveError}</div>}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowContactEdit(false)} style={{ padding: '7px 16px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => { setShowContactEdit(false); setSaveError(''); }} style={{ padding: '7px 16px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
               <button onClick={handleSaveContact} disabled={saving} style={{ padding: '7px 16px', borderRadius: 6, border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: saving ? 'wait' : 'pointer' }}>
                 {saving ? 'Saving…' : 'Save'}
               </button>

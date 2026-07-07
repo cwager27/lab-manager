@@ -1,6 +1,6 @@
 import './styles/global.css';
 import { useState, useEffect, useRef } from 'react';
-import { supabase, isRecoveryUrl, recoveryTokenHash, recoveryCode } from './lib/supabase';
+import { supabase, isRecoveryUrl, recoveryTokenHash } from './lib/supabase';
 import Navigation from './components/Navigation';
 import VacationLogs from './pages/VacationLogs';
 import LabMeetings from './pages/LabMeetings';
@@ -30,24 +30,23 @@ export default function App() {
 
   useEffect(() => {
     if (isRecoveryUrl) {
-      // Kick off whichever token exchange is needed
+      // Supabase auto-processes both hash-based (#access_token) and code-based (?code=) recovery
+      // URLs during createClient init and fires PASSWORD_RECOVERY. We only need to manually
+      // handle token_hash (email OTP style). Set a timeout as a fallback for expired links.
+      errorTimeoutRef.current = setTimeout(() => {
+        setRecoveryError('This reset link has expired or has already been used. Please request a new one.');
+        setLoading(false);
+      }, 10000);
+
       if (recoveryTokenHash) {
         supabase.auth.verifyOtp({ token_hash: recoveryTokenHash, type: 'recovery' }).catch(() => {
+          clearTimeout(errorTimeoutRef.current);
           setRecoveryError('This reset link has expired or has already been used. Please request a new one.');
           setLoading(false);
         });
-      } else if (recoveryCode) {
-        supabase.auth.exchangeCodeForSession(recoveryCode).catch(() => {
-          setRecoveryError('This reset link has expired or has already been used. Please request a new one.');
-          setLoading(false);
-        });
-      } else {
-        // Hash-based: Supabase auto-processes and fires PASSWORD_RECOVERY
-        errorTimeoutRef.current = setTimeout(() => {
-          setRecoveryError('This reset link has expired or has already been used. Please request a new one.');
-          setLoading(false);
-        }, 12000);
       }
+      // For ?code= and #access_token cases: createClient already exchanged the token,
+      // PASSWORD_RECOVERY will fire in onAuthStateChange below.
     } else {
       supabase.auth.getSession().then(async ({ data: { session } }) => {
         if (session) {
@@ -62,6 +61,7 @@ export default function App() {
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // PASSWORD_RECOVERY is the definitive signal from Supabase for all reset link formats
       if (event === 'PASSWORD_RECOVERY') {
         clearTimeout(errorTimeoutRef.current);
         inRecoveryRef.current = true;
@@ -71,15 +71,18 @@ export default function App() {
         return;
       }
 
-      // Supabase sometimes fires SIGNED_IN instead of PASSWORD_RECOVERY for recovery tokens.
-      // If we know we're in a recovery flow, treat it as the confirmation signal.
-      if (inRecoveryRef.current && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+      // Backup: some Supabase versions fire SIGNED_IN instead of PASSWORD_RECOVERY
+      // Only treat it as recovery if we detected a recovery URL on load
+      if (inRecoveryRef.current && event === 'SIGNED_IN' && session) {
         clearTimeout(errorTimeoutRef.current);
         setShowPasswordReset(true);
         setRecoveryConfirmed(true);
         setLoading(false);
         return;
       }
+
+      // Normal auth — skip entirely if we're in recovery mode
+      if (inRecoveryRef.current) return;
 
       if (session) {
         setUser(session.user);

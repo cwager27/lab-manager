@@ -1104,7 +1104,17 @@ export default function Tasks2({ userRole }) {
       return [...map.entries()];
     })();
 
-    const completedCount = visibleTasks.filter(t => vatResponses[t.id]?.response).length;
+    // Live Cell group: checkbox sub-tasks only count when parent answered "yes"
+    const liveCellParent = visibleTasks.find(t => t.group_name === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time' && t.response_type === 'yes_no');
+    const liveCellParentResp = liveCellParent ? vatResponses[liveCellParent.id]?.response : null;
+    const adjustedVisibleTasks = visibleTasks.filter(t =>
+      !(t.group_name === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time' && t.response_type === 'checkbox' && liveCellParentResp !== 'yes')
+    );
+    const completedCount = adjustedVisibleTasks.filter(t => {
+      const r = vatResponses[t.id]?.response;
+      if (t.group_name === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time' && t.response_type === 'yes_no' && r === 'no') return true;
+      return !!r;
+    }).length;
 
     return (
       <div>
@@ -1142,69 +1152,102 @@ export default function Tasks2({ userRole }) {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>
                 <CheckCircle size={13} color="var(--success)" />
-                {completedCount} / {visibleTasks.length}
+                {completedCount} / {adjustedVisibleTasks.length}
               </div>
             </div>
 
-            {visibleTasks.length > 0 && (
+            {adjustedVisibleTasks.length > 0 && (
               <div style={{ height: '4px', background: 'var(--border)', borderRadius: '2px', marginBottom: '12px', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${(completedCount / visibleTasks.length) * 100}%`, background: 'var(--purple-primary)', transition: 'width 0.3s' }} />
+                <div style={{ height: '100%', width: `${(completedCount / adjustedVisibleTasks.length) * 100}%`, background: 'var(--purple-primary)', transition: 'width 0.3s' }} />
               </div>
             )}
 
             {visibleTasks.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>No tasks found.</div>
-            ) : visibleGroups.map(([groupName, groupTasks]) => (
-              <div key={groupName || 'ungrouped'} style={{ marginBottom: '4px' }}>
-                {groupName && (
-                  <div style={{ padding: '12px 2px 6px', borderBottom: '2px solid var(--purple-primary)', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--purple-primary)' }}>{groupName}</span>
-                  </div>
-                )}
-                {groupTasks.map(task => {
-                  const resp = vatResponses[task.id];
-                  const done = resp?.response === 'yes' || resp?.response === 'checked';
-                  if (task.response_type === 'placeholder') {
-                    return <div key={task.id} style={{ padding: '8px 14px', color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>Tasks to be defined.</div>;
-                  }
-                  return (
-                    <div key={task.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px' }}>
-                        <div style={{ display: 'flex', gap: '5px', flexShrink: 0, marginTop: '2px' }}>
-                          {(task.response_type === 'yes_no' || task.response_type === 'yes_no_na') ? (
-                            <>
-                              <button onClick={() => handleVatResponse(task.id, resp?.response === 'yes' ? '' : 'yes')} title="Yes" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'yes' ? 'var(--success)' : 'var(--border)', background: resp?.response === 'yes' ? 'var(--success)' : 'transparent', color: resp?.response === 'yes' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
-                              <button onClick={() => handleVatResponse(task.id, resp?.response === 'no' ? '' : 'no')} title="No" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'no' ? 'var(--danger)' : 'var(--border)', background: resp?.response === 'no' ? 'var(--danger)' : 'transparent', color: resp?.response === 'no' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><XCircle size={13} /></button>
-                              {task.response_type === 'yes_no_na' && <button onClick={() => handleVatResponse(task.id, resp?.response === 'na' ? '' : 'na')} style={{ padding: '0 7px', height: '26px', borderRadius: '13px', border: '2px solid', borderColor: resp?.response === 'na' ? 'var(--text-muted)' : 'var(--border)', background: resp?.response === 'na' ? 'var(--text-muted)' : 'transparent', color: resp?.response === 'na' ? 'white' : 'var(--text-muted)', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}>N/A</button>}
-                            </>
-                          ) : task.response_type === 'checkbox' ? (
-                            <button onClick={() => handleVatResponse(task.id, resp?.response === 'checked' ? '' : 'checked')} style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid', borderColor: resp?.response === 'checked' ? 'var(--purple-primary)' : 'var(--border)', background: resp?.response === 'checked' ? 'var(--purple-primary)' : 'transparent', color: resp?.response === 'checked' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
-                          ) : (
-                            <label style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                              <Upload size={13} />
-                              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={() => {}} />
-                            </label>
-                          )}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', lineHeight: 1.5, margin: 0 }}>{task.title}</p>
-                          {task.sop_trigger && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px', padding: '2px 7px', background: '#FEF0F0', color: 'var(--danger)', borderRadius: '12px', fontSize: '10px', fontWeight: 600 }}><AlertTriangle size={9} /> SOP</span>}
-                          {vatExisting[task.id] && (
-                            <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
-                              <span style={{ color: 'var(--success)' }}>✓</span> Done by {vatExisting[task.id].assignment?.profile?.full_name || '?'} on {new Date(vatExisting[task.id].responded_at).toLocaleDateString()}
-                            </div>
-                          )}
-                          {resp?.response && (
-                            <textarea value={resp?.notes || ''} onChange={e => handleVatNotes(task.id, e.target.value)} placeholder="Notes (optional)" rows={1}
-                              style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />
-                          )}
+            ) : visibleGroups.map(([groupName, groupTasks]) => {
+              const isLiveCellGroup = groupName === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time';
+              const lcParent = isLiveCellGroup ? groupTasks.find(t => t.response_type === 'yes_no') : null;
+              const lcParentResp = lcParent ? vatResponses[lcParent.id]?.response : null;
+              const lcSubTasks = isLiveCellGroup ? groupTasks.filter(t => t.response_type === 'checkbox') : [];
+              const lcAllChecked = lcSubTasks.length > 0 && lcSubTasks.every(t => vatResponses[t.id]?.response === 'checked');
+
+              return (
+                <div key={groupName || 'ungrouped'} style={{ marginBottom: '4px' }}>
+                  {groupName && (
+                    <div style={{ padding: '12px 2px 6px', borderBottom: '2px solid var(--purple-primary)', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--purple-primary)' }}>{groupName}</span>
+                    </div>
+                  )}
+                  {groupTasks.map(task => {
+                    // Hide Live Cell subtasks unless parent answered "yes"
+                    if (isLiveCellGroup && task.response_type === 'checkbox' && lcParentResp !== 'yes') return null;
+
+                    const resp = vatResponses[task.id];
+                    const done = resp?.response === 'yes' || resp?.response === 'checked';
+                    if (task.response_type === 'placeholder') {
+                      return <div key={task.id} style={{ padding: '8px 14px', color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>Tasks to be defined.</div>;
+                    }
+                    return (
+                      <div key={task.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px' }}>
+                          <div style={{ display: 'flex', gap: '5px', flexShrink: 0, marginTop: '2px' }}>
+                            {(task.response_type === 'yes_no' || task.response_type === 'yes_no_na') ? (
+                              <>
+                                <button onClick={() => handleVatResponse(task.id, resp?.response === 'yes' ? '' : 'yes')} title="Yes" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'yes' ? 'var(--success)' : 'var(--border)', background: resp?.response === 'yes' ? 'var(--success)' : 'transparent', color: resp?.response === 'yes' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
+                                <button onClick={() => handleVatResponse(task.id, resp?.response === 'no' ? '' : 'no')} title="No" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'no' ? 'var(--danger)' : 'var(--border)', background: resp?.response === 'no' ? 'var(--danger)' : 'transparent', color: resp?.response === 'no' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><XCircle size={13} /></button>
+                                {task.response_type === 'yes_no_na' && <button onClick={() => handleVatResponse(task.id, resp?.response === 'na' ? '' : 'na')} style={{ padding: '0 7px', height: '26px', borderRadius: '13px', border: '2px solid', borderColor: resp?.response === 'na' ? 'var(--text-muted)' : 'var(--border)', background: resp?.response === 'na' ? 'var(--text-muted)' : 'transparent', color: resp?.response === 'na' ? 'white' : 'var(--text-muted)', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}>N/A</button>}
+                              </>
+                            ) : task.response_type === 'checkbox' ? (
+                              <button onClick={() => handleVatResponse(task.id, resp?.response === 'checked' ? '' : 'checked')} style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid', borderColor: resp?.response === 'checked' ? 'var(--purple-primary)' : 'var(--border)', background: resp?.response === 'checked' ? 'var(--purple-primary)' : 'transparent', color: resp?.response === 'checked' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
+                            ) : (
+                              <label style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                                <Upload size={13} />
+                                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={() => {}} />
+                              </label>
+                            )}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', lineHeight: 1.5, margin: 0 }}>{task.title}</p>
+                            {task.sop_trigger && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px', padding: '2px 7px', background: '#FEF0F0', color: 'var(--danger)', borderRadius: '12px', fontSize: '10px', fontWeight: 600 }}><AlertTriangle size={9} /> SOP</span>}
+                            {vatExisting[task.id] && (
+                              <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                                <span style={{ color: 'var(--success)' }}>✓</span> Done by {vatExisting[task.id].assignment?.profile?.full_name || '?'} on {new Date(vatExisting[task.id].responded_at).toLocaleDateString()}
+                              </div>
+                            )}
+                            {resp?.response && (
+                              <textarea value={resp?.notes || ''} onChange={e => handleVatNotes(task.id, e.target.value)} placeholder="Notes (optional)" rows={1}
+                                style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />
+                            )}
+                          </div>
                         </div>
                       </div>
+                    );
+                  })}
+
+                  {/* Live Cell group: contextual status after the parent task */}
+                  {isLiveCellGroup && !lcParentResp && (
+                    <div style={{ padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '4px' }}>
+                      Select Yes or No above to continue.
                     </div>
-                  );
-                })}
-              </div>
-            ))}
+                  )}
+                  {isLiveCellGroup && lcParentResp === 'no' && (
+                    <div style={{ padding: '10px 14px', background: '#EAF7F0', borderRadius: 'var(--radius-md)', border: '1px solid #A9DFBF', fontSize: '13px', color: '#27AE60', fontWeight: 500, marginTop: '4px' }}>
+                      ✓ No new live cell material this week — protocol steps not required.
+                    </div>
+                  )}
+                  {isLiveCellGroup && lcParentResp === 'yes' && !lcAllChecked && (
+                    <div style={{ padding: '8px 14px', fontSize: '12px', color: 'var(--danger)', fontWeight: 500, marginTop: '2px' }}>
+                      All protocol steps must be confirmed to complete this task.
+                    </div>
+                  )}
+                  {isLiveCellGroup && lcParentResp === 'yes' && lcAllChecked && (
+                    <div style={{ padding: '10px 14px', background: '#EAF7F0', borderRadius: 'var(--radius-md)', border: '1px solid #A9DFBF', fontSize: '13px', color: '#27AE60', fontWeight: 500, marginTop: '4px' }}>
+                      ✓ All quarantine protocol steps confirmed.
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </>
         )}
 

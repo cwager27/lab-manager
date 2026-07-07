@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   Plus, Calendar, CheckCircle, XCircle,
-  Clock, User, MessageSquare, Palmtree
+  Clock, User, MessageSquare, Palmtree, Trash2
 } from 'lucide-react';
 
 const NO_APPROVAL_REQUIRED = new Set([
@@ -174,6 +174,11 @@ export default function VacationLogs({ userRole, userId, profile }) {
     }
   }
 
+  async function handleDelete(requestId) {
+    await supabase.from('vacation_requests').delete().eq('id', requestId);
+    fetchRequests();
+  }
+
   function getDayCount(start, end) {
     const diff = new Date(end) - new Date(start);
     return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
@@ -277,12 +282,21 @@ export default function VacationLogs({ userRole, userId, profile }) {
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
                       <User size={14} color="var(--text-muted)" />
                       <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
                         {request.requester?.full_name}
                       </span>
                     </div>
+                    {(request.requested_by === userId || (isAdmin && request.status !== 'approved')) && (
+                      <button onClick={() => handleDelete(request.id)}
+                        title="Remove this request"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', borderRadius: 'var(--radius-sm)', flexShrink: 0 }}
+                        onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
+                        onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                     <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: leaveColor.bg, color: leaveColor.text }}>
                       {request.leave_type}
                     </span>
@@ -383,12 +397,22 @@ export default function VacationLogs({ userRole, userId, profile }) {
             <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
               <div style={{ flex: 1 }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Start Date</label>
-                <input type="date" value={form.start_date} onChange={e => setForm(p => ({ ...p, start_date: e.target.value }))}
+                <input type="date" value={form.start_date}
+                  max={form.end_date || undefined}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setForm(p => ({ ...p, start_date: val, end_date: p.end_date && p.end_date < val ? val : p.end_date }));
+                  }}
                   style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <div style={{ flex: 1 }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>End Date</label>
-                <input type="date" value={form.end_date} onChange={e => setForm(p => ({ ...p, end_date: e.target.value }))}
+                <input type="date" value={form.end_date}
+                  min={form.start_date || undefined}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setForm(p => ({ ...p, end_date: val, start_date: p.start_date && p.start_date > val ? val : p.start_date }));
+                  }}
                   style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
             </div>

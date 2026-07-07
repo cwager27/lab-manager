@@ -13,8 +13,6 @@ const transporter = nodemailer.createTransport({
     pass: process.env.GMAIL_APP_PASSWORD
   }
 });
-// EMAILS PAUSED — remove this line to resume
-transporter.sendMail = async () => {};
 
 router.post('/vacation-request', async (req, res) => {
   const { requestId, memberName, memberEmail, startDate, endDate, leaveType, comments } = req.body;
@@ -23,8 +21,9 @@ router.post('/vacation-request', async (req, res) => {
       .from('profiles').select('email, full_name').eq('role', 'admin');
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const approveUrl = `http://localhost:3001/api/vacation-action?id=${requestId}&action=approved`;
-    const denyUrl = `http://localhost:3001/api/vacation-action?id=${requestId}&action=denied`;
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3001';
+    const approveUrl = `${backendUrl}/api/vacation-action?id=${requestId}&action=approved`;
+    const denyUrl = `${backendUrl}/api/vacation-action?id=${requestId}&action=denied`;
     const viewUrl = `${frontendUrl}`;
 
     for (const admin of (admins || [])) {

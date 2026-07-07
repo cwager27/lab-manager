@@ -163,13 +163,10 @@ export default function Dashboard({ profile, userRole, userId }) {
       // my own vacation requests
       supabase.from('vacation_requests')
         .select('*').eq('requested_by', profile.id).order('start_date', { ascending: false }),
-      // meetings
+      // meetings — both types live in lab_meetings, split by meeting_type
       supabase.from('lab_meetings')
         .select('*, presenter:profiles!lab_meetings_presenter_id_fkey(full_name)')
-        .eq('status', 'scheduled').gte('meeting_date', today).order('meeting_date').limit(2),
-      supabase.from('adhoc_meetings')
-        .select('*, presenter:profiles!adhoc_meetings_presenter_id_fkey(full_name)')
-        .eq('status', 'scheduled').gte('meeting_date', today).order('meeting_date').limit(2),
+        .eq('status', 'scheduled').gte('meeting_date', today).order('meeting_date'),
       // tasks
       sporQuery,
       canEdit
@@ -195,8 +192,7 @@ export default function Dashboard({ profile, userRole, userId }) {
     const [
       { data: vacData },
       { data: myVacData },
-      { data: labData },
-      { data: adhocData },
+      { data: allMeetingData },
       { data: sporData },
       { data: assignData },
       { data: contactData },
@@ -208,8 +204,9 @@ export default function Dashboard({ profile, userRole, userId }) {
     const allVac = vacData || [];
     setOutToday(allVac.filter(r => r.start_date <= today && r.end_date >= today));
     setNextWeekOut(allVac.filter(r => r.start_date > today && r.start_date <= nextWeek));
-    setLabMeetings(labData || []);
-    setAdhocMeetings(adhocData || []);
+    const allMeetings = allMeetingData || [];
+    setLabMeetings(allMeetings.filter(m => m.meeting_type !== 'adhoc_meeting').slice(0, 2));
+    setAdhocMeetings(allMeetings.filter(m => m.meeting_type === 'adhoc_meeting').slice(0, 2));
     setMyTimeOff(myVacData || []);
     setMyTasks(sporData || []);
 

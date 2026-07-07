@@ -11,6 +11,5 @@ export const isRecoveryUrl =
   (_s.get('type') === 'recovery' && !!_s.get('token_hash')) ||
   !!_s.get('code');
 export const recoveryTokenHash = _s.get('token_hash') || null;
-export const recoveryCode = _s.get('code') || null;
 
 export const supabase = createClient(supabaseUrl, supabaseKey);

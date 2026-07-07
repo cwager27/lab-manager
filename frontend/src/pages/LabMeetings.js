@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { Plus, X, Star, AlertTriangle } from 'lucide-react';
+import { Plus, X, Star, AlertTriangle, CheckCircle } from 'lucide-react';
 
 const STATUS_STYLES = {
   scheduled: { bg: '#EBF5FB', text: '#2980B9', label: 'Scheduled' },
@@ -50,32 +50,29 @@ export default function LabMeetings({ userRole, userId, profile }) {
   const canEdit = userRole === 'pm' || profile?.full_name?.toLowerCase().startsWith('mia');
   const today = new Date().toISOString().split('T')[0];
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    const [{ data: lab }, { data: adhoc }, { data: memberData }, { data: vacData }] = await Promise.all([
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    const [{ data: allMeetings }, { data: memberData }, { data: vacData }] = await Promise.all([
       supabase.from('lab_meetings').select('*, presenter:profiles!lab_meetings_presenter_id_fkey(id, full_name, email)').order('meeting_date'),
-      supabase.from('adhoc_meetings').select('*, presenter:profiles!adhoc_meetings_presenter_id_fkey(id, full_name, email)').order('meeting_date'),
       supabase.from('profiles').select('*').order('full_name'),
       supabase.from('vacation_requests').select('*').eq('status', 'approved'),
     ]);
-    setLabMeetings(lab || []);
-    setAdhocMeetings(adhoc || []);
+    const all = allMeetings || [];
+    setLabMeetings(all.filter(m => m.meeting_type !== 'adhoc_meeting'));
+    setAdhocMeetings(all.filter(m => m.meeting_type === 'adhoc_meeting'));
     setMembers(memberData || []);
     setVacations(vacData || []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
   useEffect(() => {
-    const channels = [
-      supabase.channel('lab_mt').on('postgres_changes', { event: '*', schema: 'public', table: 'lab_meetings' }, fetchData).subscribe(),
-      supabase.channel('adhoc_mt').on('postgres_changes', { event: '*', schema: 'public', table: 'adhoc_meetings' }, fetchData).subscribe(),
-    ];
-    return () => channels.forEach(c => supabase.removeChannel(c));
+    const ch = supabase.channel('lab_mt').on('postgres_changes', { event: '*', schema: 'public', table: 'lab_meetings' }, fetchData).subscribe();
+    return () => supabase.removeChannel(ch);
   }, [fetchData]);
 
-  function tblName(table) { return table === 'lab' ? 'lab_meetings' : 'adhoc_meetings'; }
+  function tblName() { return 'lab_meetings'; }
   function getMeetings(table) { return table === 'lab' ? labMeetings : adhocMeetings; }
 
   function warnVacation(memberId, date) {
@@ -114,7 +111,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
       update[field] = value || null;
     }
 
-    await supabase.from(tblName(table)).update(update).eq('id', id);
+    await supabase.from(tblName()).update(update).eq('id', id);
 
     if (field === 'presenter_id' && value !== (meeting.presenter_id || '')) {
       const oldP = members.find(m => m.id === meeting.presenter_id);
@@ -136,17 +133,17 @@ export default function LabMeetings({ userRole, userId, profile }) {
 
     setEditingCell(null);
     setCellValue('');
-    fetchData();
+    fetchData(true);
   }
 
   async function handleCancelMeeting(id, table) {
     const meeting = getMeetings(table).find(m => m.id === id);
-    await supabase.from(tblName(table)).update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', id);
+    await supabase.from(tblName()).update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', id);
     await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/meeting-cancelled`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ meetingDate: meeting?.meeting_date, cancelledByName: profile?.full_name }),
     });
-    fetchData();
+    fetchData(true);
   }
 
   async function handleAddMeeting(e) {
@@ -161,7 +158,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
       if (fair) presenterId = fair.id;
     }
 
-    await supabase.from(tblName(showAddForm)).insert([{
+    await supabase.from(tblName()).insert([{
       meeting_date: newMeeting.meeting_date,
       presenter_id: newMeeting.presenter_id === 'guest' ? null : (presenterId || null),
       guest_name: newMeeting.presenter_id === 'guest' ? (newMeeting.guest_name || null) : null,
@@ -170,6 +167,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
       sof_topic: newMeeting.sof_topic || null,
       notes: newMeeting.notes || null,
       status: 'scheduled',
+      meeting_type: showAddForm === 'adhoc' ? 'adhoc_meeting' : 'lab_meeting',
     }]);
 
     const presenter = members.find(m => m.id === presenterId);
@@ -185,11 +183,11 @@ export default function LabMeetings({ userRole, userId, profile }) {
     setShowAddForm(null);
     setNewMeeting(EMPTY_MEETING);
     setSaving(false);
-    fetchData();
+    fetchData(true);
   }
 
   function getFiltered(meetings, filter) {
-    if (filter === 'upcoming') return meetings.filter(m => m.meeting_date >= today && m.status !== 'cancelled');
+    if (filter === 'upcoming') return meetings.filter(m => m.meeting_date >= today);
     if (filter === 'past') return meetings.filter(m => m.meeting_date < today);
     if (filter === 'cancelled') return meetings.filter(m => m.status === 'cancelled');
     if (filter === 'sof') return meetings.filter(m => m.is_sof);
@@ -263,7 +261,12 @@ export default function LabMeetings({ userRole, userId, profile }) {
               title={onVac ? '⚠ Out of office — click to reassign' : (canEdit ? 'Click to edit' : '')}
               style={{ cursor: canEdit ? 'pointer' : 'default', fontWeight: 600, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: onVac ? '#E67E22' : 'var(--text-primary)' }}>
               {presenterName
-                ? <>{presenterName}{onVac && <AlertTriangle size={11} style={{ marginLeft: '3px', verticalAlign: 'middle' }} />}</>
+                ? <>
+                    {presenterName}{onVac && <AlertTriangle size={11} style={{ marginLeft: '3px', verticalAlign: 'middle' }} />}
+                    {meeting.presenter_id && meeting.confirmation_status !== 'confirmed' && (
+                      <span style={{ display: 'block', fontSize: '10px', fontWeight: 400, color: '#E67E22', marginTop: '1px' }}>Invite pending acceptance</span>
+                    )}
+                  </>
                 : <em style={{ color: 'var(--text-muted)', fontWeight: 400 }}>TBD</em>}
             </span>
           )}
@@ -271,8 +274,8 @@ export default function LabMeetings({ userRole, userId, profile }) {
 
         {/* SOF star */}
         <button onClick={canEdit ? async () => {
-          await supabase.from(tblName(table)).update({ is_sof: !meeting.is_sof, updated_at: new Date().toISOString() }).eq('id', meeting.id);
-          fetchData();
+          await supabase.from(tblName()).update({ is_sof: !meeting.is_sof, updated_at: new Date().toISOString() }).eq('id', meeting.id);
+          fetchData(true);
         } : undefined}
           disabled={!canEdit} title={canEdit ? (meeting.is_sof ? 'Remove SOF' : 'Mark SOF') : (meeting.is_sof ? 'SOF' : '')}
           style={{ background: 'none', border: 'none', cursor: canEdit ? 'pointer' : 'default', padding: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: !meeting.is_sof && !canEdit ? 0 : 1 }}>
@@ -312,12 +315,20 @@ export default function LabMeetings({ userRole, userId, profile }) {
           )}
         </div>
 
-        {/* Cancel */}
-        {canEdit && meeting.status !== 'cancelled' ? (
-          <button onClick={() => handleCancelMeeting(meeting.id, table)} title="Cancel meeting"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <X size={12} />
-          </button>
+        {/* Cancel / Uncancel */}
+        {canEdit ? (
+          meeting.status === 'cancelled' ? (
+            <button onClick={() => { supabase.from(tblName()).update({ status: 'scheduled', updated_at: new Date().toISOString() }).eq('id', meeting.id).then(() => fetchData(true)); }}
+              title="Restore meeting"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <CheckCircle size={12} />
+            </button>
+          ) : (
+            <button onClick={() => handleCancelMeeting(meeting.id, table)} title="Cancel meeting"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <X size={12} />
+            </button>
+          )
         ) : <span />}
       </div>
     );

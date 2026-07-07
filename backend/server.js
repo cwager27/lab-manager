@@ -19,8 +19,6 @@ const transporter = nodemailer.createTransport({
     pass: process.env.GMAIL_APP_PASSWORD
   }
 });
-// EMAILS PAUSED — remove this line to resume
-transporter.sendMail = async () => {};
 
 const assignmentRoutes = require('./routes/assignments');
 const checklistRoutes = require('./routes/checklists');
