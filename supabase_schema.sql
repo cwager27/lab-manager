@@ -75,10 +75,16 @@ CREATE TABLE IF NOT EXISTS sporadic_tasks (
   assigned_by   uuid REFERENCES profiles(id),
   due_date      date,
   status        text DEFAULT 'requested',
+  completed_at  timestamptz,
+  show_on_public_dashboard boolean DEFAULT false,
   file_url      text,
   notes         text,
   created_at    timestamptz DEFAULT now()
 );
+
+-- Migration (run in Supabase SQL editor if table already exists):
+-- ALTER TABLE sporadic_tasks ADD COLUMN IF NOT EXISTS completed_at timestamptz;
+-- ALTER TABLE sporadic_tasks ADD COLUMN IF NOT EXISTS show_on_public_dashboard boolean DEFAULT false;
 
 -- 6. vacation_requests
 CREATE TABLE IF NOT EXISTS vacation_requests (

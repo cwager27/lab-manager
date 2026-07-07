@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle, Users, Mail, Phone, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
+import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle, Users, Mail, Phone, Plus, Pencil, Trash2, X, Check, Globe } from 'lucide-react';
 
 const ROLE_COLORS = {
   admin:    { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
@@ -109,6 +109,7 @@ export default function Dashboard({ profile, userRole, userId }) {
   const [myAssignments, setMyAssignments] = useState([]);
   const [taskFreq, setTaskFreq] = useState(null);
   const [grants, setGrants] = useState([]);
+  const [publicTasks, setPublicTasks] = useState([]);
 
   // Admin task management
   const [members, setMembers] = useState([]);
@@ -149,10 +150,10 @@ export default function Dashboard({ profile, userRole, userId }) {
     const sporQuery = canEdit
       ? supabase.from('sporadic_tasks')
           .select('*, assignee:profiles!sporadic_tasks_assigned_to_fkey(id, full_name), assigner:profiles!sporadic_tasks_assigned_by_fkey(full_name)')
-          .in('status', ['pending', 'in_progress']).order('due_date')
+          .in('status', ['pending', 'in_progress', 'done']).order('due_date')
       : supabase.from('sporadic_tasks')
           .select('*, assigner:profiles!sporadic_tasks_assigned_by_fkey(full_name)')
-          .eq('assigned_to', profile.id).in('status', ['pending', 'in_progress']).order('due_date');
+          .eq('assigned_to', profile.id).in('status', ['pending', 'in_progress', 'done']).order('due_date');
 
     const queries = [
       // vacation – all approved in next 30 days
@@ -186,6 +187,12 @@ export default function Dashboard({ profile, userRole, userId }) {
       showGrantAlert
         ? supabase.from('grants').select('id, name, end_date, total_amount, remaining_balance')
         : Promise.resolve({ data: [] }),
+      // public one-off tasks
+      supabase.from('sporadic_tasks')
+        .select('*, assignee:profiles!sporadic_tasks_assigned_to_fkey(full_name)')
+        .eq('show_on_public_dashboard', true)
+        .neq('status', 'done')
+        .order('due_date'),
     ];
 
     const [
@@ -198,6 +205,7 @@ export default function Dashboard({ profile, userRole, userId }) {
       { data: memberData },
       { data: taskDefData },
       { data: grantData },
+      { data: publicTaskData },
     ] = await Promise.all(queries);
 
     const allVac = vacData || [];
@@ -219,6 +227,7 @@ export default function Dashboard({ profile, userRole, userId }) {
     setMembers(memberData || []);
     setTaskDefs(taskDefData || []);
     setGrants(grantData || []);
+    setPublicTasks(publicTaskData || []);
     setLoading(false);
   }
 
@@ -305,6 +314,15 @@ export default function Dashboard({ profile, userRole, userId }) {
   async function handleDeleteTask(taskId) {
     await supabase.from('sporadic_tasks').delete().eq('id', taskId);
     fetchAll();
+  }
+
+  async function handleToggleMyTaskDone(task) {
+    const isDone = task.status === 'done';
+    const update = isDone
+      ? { status: 'pending', completed_at: null }
+      : { status: 'done', completed_at: new Date().toISOString() };
+    setMyTasks(prev => prev.map(t => t.id === task.id ? { ...t, ...update } : t));
+    await supabase.from('sporadic_tasks').update(update).eq('id', task.id);
   }
 
   async function handleAssignRecurring() {
@@ -537,7 +555,13 @@ export default function Dashboard({ profile, userRole, userId }) {
                         </>
                       ) : (
                         <>
-                          <span style={{ fontSize: '13px', color: 'var(--text-primary)', flex: 1, lineHeight: 1.4 }}>{task.title}</span>
+                          <input
+                            type="checkbox"
+                            checked={task.status === 'done'}
+                            onChange={() => handleToggleMyTaskDone(task)}
+                            style={{ width: 13, height: 13, flexShrink: 0, cursor: 'pointer', accentColor: 'var(--purple-primary)' }}
+                          />
+                          <span style={{ fontSize: '13px', color: task.status === 'done' ? 'var(--text-muted)' : 'var(--text-primary)', flex: 1, lineHeight: 1.4, textDecoration: task.status === 'done' ? 'line-through' : 'none' }}>{task.title}</span>
                           {canEdit && task.assignee?.full_name && (
                             <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>{task.assignee.full_name}</span>
                           )}
@@ -614,6 +638,27 @@ export default function Dashboard({ profile, userRole, userId }) {
                 )}
               </div>
             </Card>
+
+            {/* Public Tasks */}
+            {publicTasks.length > 0 && (
+              <Card icon={<Globe size={13} color="var(--purple-primary)" />} title="Lab Tasks">
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {publicTasks.map((task, i) => {
+                    const overdue = task.due_date && task.due_date < new Date().toISOString().split('T')[0];
+                    return (
+                      <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
+                        <span style={{ fontSize: '13px', color: 'var(--text-primary)', flex: 1, lineHeight: 1.4 }}>{task.title}</span>
+                        {task.assignee?.full_name && (
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>{task.assignee.full_name}</span>
+                        )}
+                        <span style={{ fontSize: '11px', color: overdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(task.due_date)}</span>
+                        {overdue && <AlertTriangle size={11} color="#E74C3C" style={{ flexShrink: 0 }} />}
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
 
             {/* ── One-off Task Productivity ── */}
             <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>

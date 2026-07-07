@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { CheckCircle, XCircle, AlertTriangle, Upload, Clock, Search, ChevronDown, Bell } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, Upload, Clock, Search, ChevronDown, Bell, Trash2, Plus, Check, Globe } from 'lucide-react';
 import {
   getMaintCycleKey, getMaintNextDue, getMaintKey,
   isMaintParentDone, isMaintFreqDone,
@@ -298,6 +298,14 @@ export default function Tasks2({ userRole }) {
   const [qaSubmitting, setQaSubmitting] = useState(false);
   const [qaDone, setQaDone] = useState(false);
 
+  // ── One-off Tasks state ───────────────────────────────────────────────────
+  const [oneOffTasks, setOneOffTasks] = useState([]);
+  const [oneOffLoading, setOneOffLoading] = useState(false);
+  const [oneOffForm, setOneOffForm] = useState({ title: '', assigneeIds: [], dueDate: '', showOnPublic: false });
+  const [oneOffSaving, setOneOffSaving] = useState(false);
+  const [oneOffError, setOneOffError] = useState('');
+  const [confirmDeleteOneOff, setConfirmDeleteOneOff] = useState(null);
+
   // ── Load initial data ─────────────────────────────────────────────────────
   useEffect(() => {
     fetch(`${API}/api/tasks2/data`)
@@ -312,6 +320,7 @@ export default function Tasks2({ userRole }) {
   useEffect(() => { if (tab === 'assigned') loadAssignedTasks(assignedFrom, assignedTo); }, [tab, assignedFrom, assignedTo]); // eslint-disable-line
   useEffect(() => { if (tab === 'assigned') loadReport(reportPeriod, assignedFrom, assignedTo); }, [tab, reportPeriod, assignedFrom, assignedTo]); // eslint-disable-line
   useEffect(() => { if (tab === 'productivity') loadProductivity(prodPeriod); }, [tab, prodPeriod]); // eslint-disable-line
+  useEffect(() => { if (tab === 'oneoff') loadOneOffTab(); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     localStorage.setItem('lab_maint_checks', JSON.stringify(maintChecks));
@@ -2184,6 +2193,189 @@ export default function Tasks2({ userRole }) {
     if (tab === 'calendar') loadCalendar();
   }
 
+  async function loadOneOffTab() {
+    setOneOffLoading(true);
+    const { data } = await supabase
+      .from('sporadic_tasks')
+      .select('*, assignee:profiles!assigned_to(id, full_name)')
+      .order('created_at', { ascending: false });
+    setOneOffTasks(data || []);
+    setOneOffLoading(false);
+  }
+
+  async function handleCreateOneOff() {
+    if (!oneOffForm.title.trim() || !oneOffForm.dueDate || oneOffForm.assigneeIds.length === 0) {
+      setOneOffError('Please enter a title, due date, and assign to at least one person.');
+      return;
+    }
+    setOneOffSaving(true);
+    setOneOffError('');
+    const rows = oneOffForm.assigneeIds.map(uid => ({
+      title: oneOffForm.title.trim(),
+      assigned_to: uid,
+      due_date: oneOffForm.dueDate,
+      show_on_public_dashboard: oneOffForm.showOnPublic,
+      status: 'pending',
+    }));
+    const { error: insertErr } = await supabase.from('sporadic_tasks').insert(rows);
+    if (insertErr) {
+      setOneOffError(insertErr.message);
+      setOneOffSaving(false);
+      return;
+    }
+    setOneOffForm({ title: '', assigneeIds: [], dueDate: '', showOnPublic: false });
+    setOneOffSaving(false);
+    loadOneOffTab();
+  }
+
+  async function handleOneOffToggleDone(task) {
+    const isDone = task.status === 'done';
+    const update = isDone
+      ? { status: 'pending', completed_at: null }
+      : { status: 'done', completed_at: new Date().toISOString() };
+    setOneOffTasks(prev => prev.map(t => t.id === task.id ? { ...t, ...update } : t));
+    await supabase.from('sporadic_tasks').update(update).eq('id', task.id);
+  }
+
+  async function handleOneOffDelete(id) {
+    setConfirmDeleteOneOff(null);
+    setOneOffTasks(prev => prev.filter(t => t.id !== id));
+    await supabase.from('sporadic_tasks').delete().eq('id', id);
+  }
+
+  function renderOneOffTab() {
+    const todayStr = today();
+    const pending = oneOffTasks.filter(t => t.status !== 'done');
+    const done = oneOffTasks.filter(t => t.status === 'done');
+
+    return (
+      <div>
+        {/* Create form */}
+        <div style={{ marginBottom: 24, padding: 20, background: 'var(--bg-secondary)', borderRadius: 10, border: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Create One-off Task</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Title</label>
+              <input
+                value={oneOffForm.title}
+                onChange={e => setOneOffForm(p => ({ ...p, title: e.target.value }))}
+                placeholder="Task title"
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Due Date</label>
+              <input
+                type="date"
+                value={oneOffForm.dueDate}
+                onChange={e => setOneOffForm(p => ({ ...p, dueDate: e.target.value }))}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 20 }}>
+              <input
+                type="checkbox"
+                id="one-off-public"
+                checked={oneOffForm.showOnPublic}
+                onChange={e => setOneOffForm(p => ({ ...p, showOnPublic: e.target.checked }))}
+                style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--purple-primary)' }}
+              />
+              <label htmlFor="one-off-public" style={{ fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Globe size={13} color="var(--purple-primary)" /> Show on public dashboard
+              </label>
+            </div>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>Assign To</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {profiles.map(p => {
+                const selected = oneOffForm.assigneeIds.includes(p.id);
+                return (
+                  <button key={p.id} onClick={() => setOneOffForm(prev => ({
+                    ...prev,
+                    assigneeIds: selected ? prev.assigneeIds.filter(id => id !== p.id) : [...prev.assigneeIds, p.id],
+                  }))} style={{
+                    padding: '4px 12px', borderRadius: 16, fontSize: 12, fontWeight: selected ? 600 : 400, cursor: 'pointer',
+                    border: `1.5px solid ${selected ? 'var(--purple-primary)' : 'var(--border)'}`,
+                    background: selected ? 'var(--purple-faint)' : 'transparent',
+                    color: selected ? 'var(--purple-primary)' : 'var(--text-secondary)',
+                  }}>
+                    {selected && <Check size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />}
+                    {p.full_name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {oneOffError && <div style={{ fontSize: 12, color: 'var(--danger)', marginBottom: 10 }}>{oneOffError}</div>}
+          <button onClick={handleCreateOneOff} disabled={oneOffSaving} style={{ ...btn('primary'), display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Plus size={14} /> {oneOffSaving ? 'Creating…' : 'Create Task'}
+          </button>
+        </div>
+
+        {/* Task list */}
+        {oneOffLoading ? (
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading…</div>
+        ) : (
+          <>
+            {pending.length === 0 && done.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 14 }}>No one-off tasks yet.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {[...pending, ...done].map(task => {
+                  const isDone = task.status === 'done';
+                  const overdue = !isDone && task.due_date && task.due_date < todayStr;
+                  const isConfirmDelete = confirmDeleteOneOff === task.id;
+                  return (
+                    <div key={task.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                      background: 'var(--bg-primary)', borderRadius: 8, border: '1px solid var(--border)',
+                      opacity: isDone ? 0.55 : 1,
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={isDone}
+                        onChange={() => handleOneOffToggleDone(task)}
+                        style={{ width: 15, height: 15, flexShrink: 0, cursor: 'pointer', accentColor: 'var(--purple-primary)' }}
+                      />
+                      <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none' }}>
+                        {task.title}
+                      </span>
+                      {task.assignee?.full_name && (
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{task.assignee.full_name}</span>
+                      )}
+                      {task.show_on_public_dashboard && (
+                        <Globe size={12} color="var(--purple-primary)" style={{ flexShrink: 0 }} title="Visible on public dashboard" />
+                      )}
+                      {task.due_date && (
+                        <span style={{ fontSize: 11, color: overdue ? 'var(--danger)' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                          {fmtDate(task.due_date)}
+                        </span>
+                      )}
+                      {overdue && <AlertTriangle size={11} color="var(--danger)" style={{ flexShrink: 0 }} />}
+                      {isConfirmDelete ? (
+                        <>
+                          <button onClick={() => handleOneOffDelete(task.id)} style={{ fontSize: 11, padding: '3px 8px', background: 'var(--danger)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}>Confirm</button>
+                          <button onClick={() => setConfirmDeleteOneOff(null)} style={{ fontSize: 11, padding: '3px 8px', background: 'none', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0 }}>Cancel</button>
+                        </>
+                      ) : (
+                        <button onClick={() => setConfirmDeleteOneOff(task.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex', flexShrink: 0 }}
+                          onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
+                          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
+
   function renderQuickAssignModal() {
     if (!quickAssign) return null;
     const taskId = quickAssign.task_definition_id || quickAssign.task?.id;
@@ -2307,6 +2499,7 @@ export default function Tasks2({ userRole }) {
 
   const tabs = [
     { id: 'view-all',     label: 'Tasks' },
+    { id: 'oneoff',       label: 'One-off Tasks' },
     { id: 'calendar',     label: 'Calendar' },
     { id: 'productivity', label: 'Productivity' },
     { id: 'assigned',     label: 'Insights', badge: unassignedCount || null },
@@ -2378,6 +2571,12 @@ export default function Tasks2({ userRole }) {
       {tab === 'assigned' && (
         <div style={card}>
           {renderAssignedTab()}
+        </div>
+      )}
+
+      {tab === 'oneoff' && (
+        <div style={card}>
+          {renderOneOffTab()}
         </div>
       )}
 
