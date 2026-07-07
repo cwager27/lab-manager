@@ -105,6 +105,7 @@ export default function Finance({ userRole }) {
   const [reagentSearch, setReagentSearch] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddOrder, setShowAddOrder] = useState(false);
+  const [addOrderError, setAddOrderError] = useState('');
   const [uploadingFile, setUploadingFile] = useState(false);
   const [previewData, setPreviewData] = useState(null);
   const [previewReagents, setPreviewReagents] = useState(null);
@@ -212,17 +213,33 @@ export default function Finance({ userRole }) {
 
   async function handleAddOrder(e) {
     e.preventDefault();
-    const { error } = await supabase.from('orders').insert([{
+    setAddOrderError('');
+    const REQUIRED_FIELDS = [
+      ['item', 'Item Name'], ['vendor', 'Vendor'], ['catalog_number', 'Catalog Number'],
+      ['category', 'Category'], ['grant_name', 'Grant'], ['requisition_id', 'Requisition ID'],
+      ['unit_description', 'Unit Description'], ['unit_price', 'Unit Price'],
+      ['units', 'Units'], ['order_date', 'Order Date'], ['requestor', 'Requestor'],
+    ];
+    const missing = REQUIRED_FIELDS.filter(([key]) => !String(newOrder[key] ?? '').trim()).map(([, label]) => label);
+    if (missing.length > 0) {
+      setAddOrderError(`Please fill in: ${missing.join(', ')}`);
+      return;
+    }
+    const toInsert = {
       ...newOrder,
       unit_price: parseFloat(newOrder.unit_price) || null,
       units: parseInt(newOrder.units) || null,
-      total_price: (parseFloat(newOrder.unit_price) || 0) * (parseInt(newOrder.units) || 1),
-      order_date: newOrder.order_date || null
-    }]);
-    if (!error) {
+      total_price: parseFloat(newOrder.unit_price) * parseInt(newOrder.units),
+      order_date: newOrder.order_date || null,
+    };
+    const { data, error } = await supabase.from('orders').insert([toInsert]).select().single();
+    if (!error && data) {
+      setOrders(prev => [...prev, data]);
       setShowAddOrder(false);
+      setAddOrderError('');
       setNewOrder({ item: '', vendor: '', catalog_number: '', category: '', grant_name: '', requisition_id: '', unit_description: '', unit_price: '', units: '', order_date: '', requestor: '', status: 'pending', notes: '' });
-      fetchData();
+    } else if (error) {
+      setAddOrderError(error.message);
     }
   }
 
@@ -921,6 +938,11 @@ export default function Finance({ userRole }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '580px', maxHeight: '80vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
             <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>Add Order</h2>
+            {addOrderError && (
+              <div style={{ padding: '10px 14px', background: '#FEF0F0', border: '1px solid #FADBD8', borderRadius: 'var(--radius-md)', color: 'var(--danger)', fontSize: '12px', marginBottom: '16px' }}>
+                {addOrderError}
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
               {[{label:'Item Name',key:'item',full:true},{label:'Catalog Number',key:'catalog_number'},{label:'Category',key:'category'},{label:'Requisition ID',key:'requisition_id'},{label:'Unit Description',key:'unit_description'},{label:'Unit Price ($)',key:'unit_price',type:'number'},{label:'Units',key:'units',type:'number'},{label:'Order Date',key:'order_date',type:'date'},{label:'Requestor',key:'requestor'}].map(field => (
                 <div key={field.key} style={{ gridColumn: field.full ? '1 / -1' : 'auto' }}>
@@ -950,7 +972,7 @@ export default function Finance({ userRole }) {
               </div>
             </div>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowAddOrder(false)} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500 }}>Cancel</button>
+              <button onClick={() => { setShowAddOrder(false); setAddOrderError(''); }} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500 }}>Cancel</button>
               <button onClick={handleAddOrder} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600 }}>Add Order</button>
             </div>
           </div>
