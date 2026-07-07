@@ -508,8 +508,14 @@ export default function Dashboard({ profile, userRole, userId }) {
               {/* Task list */}
               <div style={{ padding: '6px 14px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
                 {myTasks.map(task => {
-                  const overdue = task.due_date && task.due_date < today;
+                  const done = task.status === 'done';
+                  const overdue = !done && task.due_date && task.due_date < today;
                   const isEditing = editingTask === task.id;
+                  const statusBadge = done
+                    ? { label: 'Completed', bg: '#E8F8F0', color: '#27AE60' }
+                    : overdue
+                    ? { label: 'Late', bg: '#FDEDEC', color: '#E74C3C' }
+                    : { label: 'Not Completed', bg: 'var(--bg-secondary)', color: 'var(--text-muted)' };
                   return (
                     <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 0', borderBottom: '1px solid var(--border)' }}>
                       {isEditing ? (
@@ -529,16 +535,15 @@ export default function Dashboard({ profile, userRole, userId }) {
                         <>
                           <input
                             type="checkbox"
-                            checked={task.status === 'done'}
+                            checked={done}
                             onChange={() => handleToggleMyTaskDone(task)}
                             style={{ width: 13, height: 13, flexShrink: 0, cursor: 'pointer', accentColor: 'var(--purple-primary)' }}
                           />
-                          <span style={{ fontSize: '13px', color: task.status === 'done' ? 'var(--text-muted)' : 'var(--text-primary)', flex: 1, lineHeight: 1.4, textDecoration: task.status === 'done' ? 'line-through' : 'none' }}>{task.title}</span>
+                          <span style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', flex: 1, lineHeight: 1.4, textDecoration: done ? 'line-through' : 'none' }}>{task.title}</span>
                           {canEdit && task.assignee?.full_name && (
                             <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>{task.assignee.full_name}</span>
                           )}
-                          <span style={{ fontSize: '11px', color: overdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(task.due_date)}</span>
-                          {overdue && <AlertTriangle size={11} color="#E74C3C" style={{ flexShrink: 0 }} />}
+                          <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: 8, background: statusBadge.bg, color: statusBadge.color, flexShrink: 0, whiteSpace: 'nowrap' }}>{statusBadge.label}</span>
                           {canEdit && (
                             <>
                               <button onClick={() => { setEditingTask(task.id); setEditForm({ title: task.title, assignedTo: task.assigned_to, dueDate: task.due_date }); setShowAssignForm(false); }}
@@ -570,6 +575,9 @@ export default function Dashboard({ profile, userRole, userId }) {
                       const overdue = a.cycle_end && a.cycle_end < today;
                       const c = FREQ_COLORS[a.task?.frequency];
                       const isReassigning = editingAssignment === a.id;
+                      const statusBadge = overdue
+                        ? { label: 'Late', bg: '#FDEDEC', color: '#E74C3C' }
+                        : { label: 'Not Completed', bg: 'var(--bg-secondary)', color: 'var(--text-muted)' };
                       return (
                         <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 0' }}>
                           <span style={{ fontSize: '13px', color: 'var(--text-primary)', flex: 1, lineHeight: 1.4 }}>{a.task?.title || 'Task'}</span>
@@ -590,7 +598,7 @@ export default function Dashboard({ profile, userRole, userId }) {
                               {!taskFreq && c && (
                                 <span style={{ padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 600, background: c.bg, color: c.text, flexShrink: 0 }}>{a.task?.frequency}</span>
                               )}
-                              {overdue && <AlertTriangle size={11} color="#E74C3C" style={{ flexShrink: 0 }} />}
+                              <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: 8, background: statusBadge.bg, color: statusBadge.color, flexShrink: 0, whiteSpace: 'nowrap' }}>{statusBadge.label}</span>
                               {canEdit && (
                                 <button onClick={() => { setEditingAssignment(a.id); setReassignTo(a.assigned_to); setEditingTask(null); setShowAssignForm(false); }}
                                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px', display: 'flex', flexShrink: 0 }}><Pencil size={11} /></button>
