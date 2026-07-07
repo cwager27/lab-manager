@@ -16,3 +16,4 @@ frontend/build/
 .vercel
 .env*
 !**/.env.example
+!frontend/.env.production
