@@ -12,4 +12,6 @@ export const isRecoveryUrl =
   !!_s.get('code');
 export const recoveryTokenHash = _s.get('token_hash') || null;
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: { flowType: 'implicit' },
+});

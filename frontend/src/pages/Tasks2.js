@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { CheckCircle, XCircle, AlertTriangle, Upload, Clock, Search, ChevronDown, Bell } from 'lucide-react';
 import {
   getMaintCycleKey, getMaintNextDue, getMaintKey,
-  isMaintSubDone, isMaintParentDone, isMaintFreqDone,
+  isMaintParentDone, isMaintFreqDone,
   EQUIPMENT_MAINTENANCE,
 } from '../data/equipmentMaintenance';
 
@@ -27,12 +27,6 @@ const LOOKAHEAD = { daily: 7, weekly: 14, biweekly: 30, monthly: 60, quarterly: 
 
 // ── Style helpers ─────────────────────────────────────────────────────────────
 
-const chip = (active) => ({
-  padding: '5px 14px', borderRadius: 20, fontSize: 13, cursor: 'pointer', fontWeight: 500,
-  border: `1.5px solid ${active ? 'var(--purple-primary)' : 'var(--border)'}`,
-  background: active ? 'var(--purple-primary)' : 'transparent',
-  color: active ? '#fff' : 'var(--text-primary)',
-});
 
 const btn = (variant = 'primary') => ({
   padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
@@ -62,12 +56,6 @@ function fmtDate(iso) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
   return `${MONTHS_SHORT[Number(m) - 1]} ${Number(d)}, ${y}`;
-}
-
-function fmtMonthYear(iso) {
-  if (!iso) return '';
-  const [y, m] = iso.split('-');
-  return `${MONTHS_SHORT[Number(m) - 1]} ${y}`;
 }
 
 // ── Range list picker (Year / Quarter / Month / Week) ────────────────────────
@@ -318,7 +306,7 @@ export default function Tasks2({ userRole }) {
       .catch(() => setDataLoading(false));
   }, []);
 
-  useEffect(() => { if (tab === 'calendar') loadCalendar(); }, [tab, calYear, calMonth]);
+  useEffect(() => { if (tab === 'calendar') loadCalendar(); }, [tab, calYear, calMonth]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (tab === 'unassigned') loadUnassigned(); }, [tab]);
   useEffect(() => { if (tab === 'view-all' && !vatLoaded) loadVatData(); }, [tab, vatLoaded]); // eslint-disable-line
   useEffect(() => { if (tab === 'assigned') loadAssignedTasks(assignedFrom, assignedTo); }, [tab, assignedFrom, assignedTo]); // eslint-disable-line
@@ -502,15 +490,6 @@ export default function Tasks2({ userRole }) {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  }
-
-  function getOverallRange() {
-    const ranges = Object.values(dateRanges).filter(r => r?.start && r?.end);
-    if (!ranges.length) return null;
-    return {
-      start: ranges.map(r => r.start).sort()[0],
-      end: ranges.map(r => r.end).sort().reverse()[0],
-    };
   }
 
   async function loadOccurrences(rangesOverride) {
@@ -2101,6 +2080,7 @@ export default function Tasks2({ userRole }) {
 
   // ── Unassigned tab ────────────────────────────────────────────────────────
 
+  // eslint-disable-next-line no-unused-vars
   function renderUnassigned() {
     const byCatFreq = {};
     unassigned.forEach(o => {
