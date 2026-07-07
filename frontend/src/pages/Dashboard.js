@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle, Plus, Pencil, Trash2, X, Check, Globe } from 'lucide-react';
+import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle, Pencil, Trash2, X, Check, Globe } from 'lucide-react';
 
 
 function formatDate(d) {
@@ -89,11 +89,6 @@ export default function Dashboard({ profile, userRole, userId }) {
 
   // Admin task management
   const [members, setMembers] = useState([]);
-  const [taskDefs, setTaskDefs] = useState([]);
-  const [showAssignForm, setShowAssignForm] = useState(false);
-  const [assignType, setAssignType] = useState('oneoff');
-  const [assignForm, setAssignForm] = useState({ title: '', assignedTo: '', dueDate: '' });
-  const [recurringForm, setRecurringForm] = useState({ taskId: '', assignedTo: '' });
   const [editingTask, setEditingTask] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [editingAssignment, setEditingAssignment] = useState(null);
@@ -153,10 +148,6 @@ export default function Dashboard({ profile, userRole, userId }) {
             .select('*, task:tasks_definitions(title, frequency, category)')
             .eq('assigned_to', profile.id).eq('status', 'pending'),
       supabase.from('profiles').select('id, full_name, email, role').order('full_name'),
-      // admin task mgmt helpers
-      canEdit
-        ? supabase.from('tasks_definitions').select('id, title, frequency').eq('is_active', true).order('frequency').order('title')
-        : Promise.resolve({ data: [] }),
       // grants (for Mia and PM only)
       showGrantAlert
         ? supabase.from('grants').select('id, name, end_date, total_amount, remaining_balance')
@@ -176,7 +167,6 @@ export default function Dashboard({ profile, userRole, userId }) {
       { data: sporData },
       { data: assignData },
       { data: memberData },
-      { data: taskDefData },
       { data: grantData },
       { data: publicTaskData },
     ] = await Promise.all(queries);
@@ -197,7 +187,6 @@ export default function Dashboard({ profile, userRole, userId }) {
 
     setTeamMembers(memberData || []);
     setMembers(memberData || []);
-    setTaskDefs(taskDefData || []);
     setGrants(grantData || []);
     setPublicTasks(publicTaskData || []);
     setLoading(false);
@@ -255,21 +244,6 @@ export default function Dashboard({ profile, userRole, userId }) {
     setOneOffLoading(false);
   }
 
-  async function handleAssignTask() {
-    if (!assignForm.title.trim() || !assignForm.assignedTo || !assignForm.dueDate) return;
-    setSaving(true);
-    await supabase.from('sporadic_tasks').insert({
-      title: assignForm.title.trim(),
-      assigned_to: assignForm.assignedTo,
-      assigned_by: profile.id,
-      due_date: assignForm.dueDate,
-      status: 'pending',
-    });
-    setAssignForm({ title: '', assignedTo: '', dueDate: '' });
-    setShowAssignForm(false);
-    setSaving(false);
-    fetchAll();
-  }
 
   async function handleSaveEdit(taskId) {
     setSaving(true);
@@ -288,32 +262,7 @@ export default function Dashboard({ profile, userRole, userId }) {
     fetchAll();
   }
 
-  async function handleToggleMyTaskDone(task) {
-    const isDone = task.status === 'done';
-    const update = isDone
-      ? { status: 'pending', completed_at: null }
-      : { status: 'done', completed_at: new Date().toISOString() };
-    setMyTasks(prev => prev.map(t => t.id === task.id ? { ...t, ...update } : t));
-    await supabase.from('sporadic_tasks').update(update).eq('id', task.id);
-  }
 
-  async function handleAssignRecurring() {
-    if (!recurringForm.taskId || !recurringForm.assignedTo) return;
-    setSaving(true);
-    const { data: existing } = await supabase.from('task_assignments')
-      .select('id').eq('task_id', recurringForm.taskId).eq('assigned_to', recurringForm.assignedTo).eq('status', 'pending').maybeSingle();
-    if (!existing) {
-      await supabase.from('task_assignments').insert({
-        task_id: recurringForm.taskId,
-        assigned_to: recurringForm.assignedTo,
-        status: 'pending',
-      });
-    }
-    setRecurringForm({ taskId: '', assignedTo: '' });
-    setShowAssignForm(false);
-    setSaving(false);
-    fetchAll();
-  }
 
   async function handleReassign(assignmentId) {
     if (!reassignTo) return;
@@ -443,67 +392,7 @@ export default function Dashboard({ profile, userRole, userId }) {
                     </button>
                   );
                 })}
-                {canEdit && (
-                  <button onClick={() => { setShowAssignForm(v => !v); setEditingTask(null); }} style={{
-                    display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 9px',
-                    borderRadius: '10px', border: '1px solid var(--purple-primary)',
-                    background: showAssignForm ? 'var(--purple-faint)' : 'transparent',
-                    color: 'var(--purple-primary)', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                  }}>
-                    <Plus size={11} /> Assign
-                  </button>
-                )}
               </div>
-
-              {/* Inline assign form */}
-              {canEdit && showAssignForm && (
-                <div style={{ padding: '8px 14px', borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
-                  <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
-                    {['oneoff', 'recurring'].map(t => (
-                      <button key={t} onClick={() => setAssignType(t)} style={{
-                        padding: '3px 10px', borderRadius: '10px', border: `1px solid ${assignType === t ? 'var(--purple-primary)' : 'var(--border)'}`,
-                        background: assignType === t ? 'var(--purple-faint)' : 'transparent',
-                        color: assignType === t ? 'var(--purple-primary)' : 'var(--text-muted)',
-                        fontSize: '11px', fontWeight: assignType === t ? 600 : 400, cursor: 'pointer',
-                      }}>
-                        {t === 'oneoff' ? 'One-off' : 'Recurring'}
-                      </button>
-                    ))}
-                  </div>
-                  {assignType === 'oneoff' ? (
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-                      <input placeholder="Task title" value={assignForm.title} onChange={e => setAssignForm(p => ({ ...p, title: e.target.value }))}
-                        style={{ flex: '2 1 150px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', background: 'var(--bg-card)', color: 'var(--text-primary)' }} />
-                      <select value={assignForm.assignedTo} onChange={e => setAssignForm(p => ({ ...p, assignedTo: e.target.value }))}
-                        style={{ flex: '1 1 130px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', background: 'var(--bg-card)', color: 'var(--text-primary)' }}>
-                        <option value="">Assign to…</option>
-                        {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
-                      </select>
-                      <input type="date" value={assignForm.dueDate} onChange={e => setAssignForm(p => ({ ...p, dueDate: e.target.value }))}
-                        style={{ flex: '1 1 120px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', background: 'var(--bg-card)', color: 'var(--text-primary)' }} />
-                      <button onClick={handleAssignTask} disabled={saving || !assignForm.title.trim() || !assignForm.assignedTo || !assignForm.dueDate}
-                        style={{ padding: '5px 11px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: '12px', cursor: 'pointer', fontWeight: 600, opacity: (saving || !assignForm.title.trim() || !assignForm.assignedTo || !assignForm.dueDate) ? 0.5 : 1 }}>Save</button>
-                      <button onClick={() => setShowAssignForm(false)} style={{ padding: '5px 8px', background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}><X size={12} /></button>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-                      <select value={recurringForm.taskId} onChange={e => setRecurringForm(p => ({ ...p, taskId: e.target.value }))}
-                        style={{ flex: '2 1 180px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', background: 'var(--bg-card)', color: 'var(--text-primary)' }}>
-                        <option value="">Select recurring task…</option>
-                        {taskDefs.map(t => <option key={t.id} value={t.id}>{t.title} ({t.frequency})</option>)}
-                      </select>
-                      <select value={recurringForm.assignedTo} onChange={e => setRecurringForm(p => ({ ...p, assignedTo: e.target.value }))}
-                        style={{ flex: '1 1 130px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', background: 'var(--bg-card)', color: 'var(--text-primary)' }}>
-                        <option value="">Assign to…</option>
-                        {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
-                      </select>
-                      <button onClick={handleAssignRecurring} disabled={saving || !recurringForm.taskId || !recurringForm.assignedTo}
-                        style={{ padding: '5px 11px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: '12px', cursor: 'pointer', fontWeight: 600, opacity: (saving || !recurringForm.taskId || !recurringForm.assignedTo) ? 0.5 : 1 }}>Assign</button>
-                      <button onClick={() => setShowAssignForm(false)} style={{ padding: '5px 8px', background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}><X size={12} /></button>
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* Task list */}
               <div style={{ padding: '6px 14px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
@@ -533,20 +422,15 @@ export default function Dashboard({ profile, userRole, userId }) {
                         </>
                       ) : (
                         <>
-                          <input
-                            type="checkbox"
-                            checked={done}
-                            onChange={() => handleToggleMyTaskDone(task)}
-                            style={{ width: 13, height: 13, flexShrink: 0, cursor: 'pointer', accentColor: 'var(--purple-primary)' }}
-                          />
                           <span style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', flex: 1, lineHeight: 1.4, textDecoration: done ? 'line-through' : 'none' }}>{task.title}</span>
                           {canEdit && task.assignee?.full_name && (
                             <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>{task.assignee.full_name}</span>
                           )}
+                          {task.due_date && <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(task.due_date)}</span>}
                           <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: 8, background: statusBadge.bg, color: statusBadge.color, flexShrink: 0, whiteSpace: 'nowrap' }}>{statusBadge.label}</span>
                           {canEdit && (
                             <>
-                              <button onClick={() => { setEditingTask(task.id); setEditForm({ title: task.title, assignedTo: task.assigned_to, dueDate: task.due_date }); setShowAssignForm(false); }}
+                              <button onClick={() => { setEditingTask(task.id); setEditForm({ title: task.title, assignedTo: task.assigned_to, dueDate: task.due_date }); }}
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px', display: 'flex', flexShrink: 0 }}><Pencil size={11} /></button>
                               <button onClick={() => handleDeleteTask(task.id)}
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px', display: 'flex', flexShrink: 0 }}
@@ -598,9 +482,10 @@ export default function Dashboard({ profile, userRole, userId }) {
                               {!taskFreq && c && (
                                 <span style={{ padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 600, background: c.bg, color: c.text, flexShrink: 0 }}>{a.task?.frequency}</span>
                               )}
+                              {a.cycle_end && <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(a.cycle_end)}</span>}
                               <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: 8, background: statusBadge.bg, color: statusBadge.color, flexShrink: 0, whiteSpace: 'nowrap' }}>{statusBadge.label}</span>
                               {canEdit && (
-                                <button onClick={() => { setEditingAssignment(a.id); setReassignTo(a.assigned_to); setEditingTask(null); setShowAssignForm(false); }}
+                                <button onClick={() => { setEditingAssignment(a.id); setReassignTo(a.assigned_to); setEditingTask(null); }}
                                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px', display: 'flex', flexShrink: 0 }}><Pencil size={11} /></button>
                               )}
                             </>
@@ -648,7 +533,7 @@ export default function Dashboard({ profile, userRole, userId }) {
             <h2 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>Lab Dashboard</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
-            {/* Row: Out today + Next week out + Meetings */}
+            {/* Row 1: Out today + Next week out */}
             <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
 
               {/* Out of Office Today */}
@@ -699,12 +584,15 @@ export default function Dashboard({ profile, userRole, userId }) {
                 )}
               </div>
 
-              {/* Next Lab Meeting + Next Ad-hoc Meeting */}
+            </div>
+
+            {/* Row 2: Next Lab Meeting + Next Ad-hoc Meeting */}
+            <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
               {[
                 { label: 'Next Lab Meeting', meetings: labMeetings },
                 { label: 'Next Ad-hoc Meeting', meetings: adhocMeetings },
               ].map(({ label, meetings }) => (
-                <div key={label} style={{ flex: '1 1 160px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                <div key={label} style={{ flex: '1 1 0', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
                   <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
                     <Calendar size={13} color="var(--purple-primary)" />
                     <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>{label}</span>
@@ -746,24 +634,19 @@ export default function Dashboard({ profile, userRole, userId }) {
                     const done = task.status === 'done';
                     const todayStr = new Date().toISOString().split('T')[0];
                     const overdue = !done && task.due_date && task.due_date < todayStr;
+                    const statusBadge = done
+                      ? { label: 'Completed', bg: '#E8F8F0', color: '#27AE60' }
+                      : overdue
+                      ? { label: 'Late', bg: '#FDEDEC', color: '#E74C3C' }
+                      : { label: 'Not Completed', bg: 'var(--bg-secondary)', color: 'var(--text-muted)' };
                     return (
                       <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', opacity: done ? 0.7 : 1 }}>
-                        <div style={{ width: 16, height: 16, borderRadius: 4, border: `1.5px solid ${done ? '#27AE60' : 'var(--border)'}`, background: done ? '#27AE60' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          {done && <Check size={10} color="white" strokeWidth={3} />}
-                        </div>
                         <span style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', flex: 1, lineHeight: 1.4, textDecoration: done ? 'line-through' : 'none' }}>{task.title}</span>
-                        {done && task.assignee?.full_name && (
-                          <span style={{ fontSize: '11px', color: '#27AE60', flexShrink: 0, whiteSpace: 'nowrap' }}>✓ {task.assignee.full_name}</span>
-                        )}
-                        {!done && task.assignee?.full_name && (
+                        {task.assignee?.full_name && (
                           <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{task.assignee.full_name}</span>
                         )}
-                        {!done && (
-                          <span style={{ fontSize: '11px', color: overdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                            {formatDate(task.due_date)}
-                          </span>
-                        )}
-                        {overdue && <AlertTriangle size={11} color="#E74C3C" style={{ flexShrink: 0 }} />}
+                        {task.due_date && <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(task.due_date)}</span>}
+                        <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: 8, background: statusBadge.bg, color: statusBadge.color, flexShrink: 0, whiteSpace: 'nowrap' }}>{statusBadge.label}</span>
                       </div>
                     );
                   })}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { CheckCircle, XCircle, AlertTriangle, Upload, Clock, Search, ChevronDown, Bell, Trash2, Plus, Check, Globe } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, Upload, Clock, Search, ChevronDown, Bell, Trash2, Plus, Check, Globe, Pencil, X } from 'lucide-react';
 import {
   getMaintCycleKey, getMaintNextDue, getMaintKey,
   isMaintParentDone, isMaintFreqDone,
@@ -298,6 +298,12 @@ export default function Tasks2({ userRole }) {
   const [qaSubmitting, setQaSubmitting] = useState(false);
   const [qaDone, setQaDone] = useState(false);
 
+  // ── Task definition editor state ─────────────────────────────────────────
+  const [editingTaskDef, setEditingTaskDef] = useState(null);
+  const [taskDefForm, setTaskDefForm] = useState({});
+  const [taskDefSaving, setTaskDefSaving] = useState(false);
+  const [confirmDeleteDef, setConfirmDeleteDef] = useState(null);
+
   // ── One-off Tasks state ───────────────────────────────────────────────────
   const [oneOffTasks, setOneOffTasks] = useState([]);
   const [oneOffLoading, setOneOffLoading] = useState(false);
@@ -374,6 +380,194 @@ export default function Tasks2({ userRole }) {
     setVatExisting(respMap);
     setVatLoading(false);
     setVatLoaded(true);
+  }
+
+  function openTaskDefEditor(task, defaults) {
+    const src = task || {};
+    const opts = src.response_options || [];
+    setTaskDefForm({
+      title: src.title || '',
+      category: src.category || defaults?.category || 'MISC',
+      frequency: src.frequency || defaults?.frequency || 'weekly',
+      group_name: src.group_name || defaults?.group_name || '',
+      sort_order: src.sort_order ?? 0,
+      sop_trigger: src.sop_trigger || false,
+      sop_url: src.conditional_text || '',
+      respYes: opts.length ? opts.includes('yes') : (src.response_type === 'yes_no' || src.response_type === 'yes_no_na' || !src.id),
+      respNo: opts.length ? opts.includes('no') : (src.response_type === 'yes_no' || src.response_type === 'yes_no_na' || !src.id),
+      respNa: opts.length ? opts.includes('na') : src.response_type === 'yes_no_na',
+      respFillIn: opts.includes('fill_in'),
+      customOptions: opts.filter(o => o.startsWith('custom:')).map(o => o.slice(7)),
+      subTasks: (src.sub_tasks || []).map(s => s.title || s),
+    });
+    setEditingTaskDef(task || { _new: true, ...defaults });
+    setConfirmDeleteDef(null);
+  }
+
+  async function handleSaveTaskDef() {
+    if (!taskDefForm.title.trim()) return;
+    setTaskDefSaving(true);
+    const response_options = [
+      ...(taskDefForm.respYes ? ['yes'] : []),
+      ...(taskDefForm.respNo ? ['no'] : []),
+      ...(taskDefForm.respNa ? ['na'] : []),
+      ...(taskDefForm.respFillIn ? ['fill_in'] : []),
+      ...taskDefForm.customOptions.filter(o => o.trim()).map(o => `custom:${o.trim()}`),
+    ];
+    const response_type =
+      taskDefForm.respYes && taskDefForm.respNo && taskDefForm.respNa ? 'yes_no_na' :
+      taskDefForm.respYes && taskDefForm.respNo ? 'yes_no' :
+      taskDefForm.respFillIn && !taskDefForm.respYes && !taskDefForm.respNo ? 'text' : 'yes_no';
+    const subTasksClean = taskDefForm.subTasks.map(s => s.trim()).filter(Boolean);
+    const payload = {
+      title: taskDefForm.title.trim(),
+      category: taskDefForm.category,
+      frequency: taskDefForm.frequency,
+      group_name: taskDefForm.group_name.trim() || null,
+      sort_order: parseInt(taskDefForm.sort_order) || 0,
+      sop_trigger: taskDefForm.sop_trigger,
+      conditional_text: taskDefForm.sop_url.trim() || null,
+      response_type,
+      response_options: response_options.length ? response_options : null,
+      sub_tasks: subTasksClean.length ? subTasksClean.map((t, i) => ({ id: i, title: t })) : null,
+      status: 'published',
+    };
+    if (editingTaskDef?.id) {
+      await supabase.from('tasks_definitions').update(payload).eq('id', editingTaskDef.id);
+    } else {
+      await supabase.from('tasks_definitions').insert([payload]);
+    }
+    setTaskDefSaving(false);
+    setEditingTaskDef(null);
+    setVatLoaded(false);
+    loadVatData();
+  }
+
+  async function handleDeleteTaskDef(id) {
+    await supabase.from('tasks_definitions').update({ status: 'archived' }).eq('id', id);
+    setConfirmDeleteDef(null);
+    setEditingTaskDef(null);
+    setVatLoaded(false);
+    loadVatData();
+  }
+
+  function renderTaskDefModal() {
+    if (!editingTaskDef) return null;
+    const f = taskDefForm;
+    const tdf = v => setTaskDefForm(p => ({ ...p, ...v }));
+    const isNew = !!editingTaskDef._new;
+    const inputStyle = { width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '13px', background: 'var(--bg-card)', color: 'var(--text-primary)', boxSizing: 'border-box', outline: 'none' };
+    const toggleBtn = (active, onClick, label) => (
+      <button onClick={onClick} style={{ padding: '5px 12px', borderRadius: 10, border: `1.5px solid ${active ? 'var(--purple-primary)' : 'var(--border)'}`, background: active ? 'var(--purple-primary)' : 'transparent', color: active ? 'white' : 'var(--text-secondary)', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>{label}</button>
+    );
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{isNew ? 'New Task' : 'Edit Task'}</span>
+            <button onClick={() => setEditingTaskDef(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}><X size={18} /></button>
+          </div>
+          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Title */}
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Title *</label>
+              <input value={f.title} onChange={e => tdf({ title: e.target.value })} placeholder="Task title…" style={inputStyle} />
+            </div>
+            {/* Category + Frequency */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Category</label>
+                <select value={f.category} onChange={e => tdf({ category: e.target.value })} style={inputStyle}>
+                  <option value="MISC">MISC</option>
+                  <option value="PM">PM</option>
+                  <option value="Equipment">Equipment</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Frequency</label>
+                <select value={f.frequency} onChange={e => tdf({ frequency: e.target.value })} style={inputStyle}>
+                  {ALL_FREQS.map(fr => <option key={fr} value={fr}>{fr.charAt(0).toUpperCase() + fr.slice(1)}</option>)}
+                </select>
+              </div>
+            </div>
+            {/* Group + Sort */}
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Group Name</label>
+                <input value={f.group_name} onChange={e => tdf({ group_name: e.target.value })} placeholder="Optional group header…" style={inputStyle} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Sort Order</label>
+                <input type="number" value={f.sort_order} onChange={e => tdf({ sort_order: e.target.value })} style={inputStyle} />
+              </div>
+            </div>
+            {/* Response Options */}
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>Response Options</label>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                {toggleBtn(f.respYes, () => tdf({ respYes: !f.respYes }), 'Yes')}
+                {toggleBtn(f.respNo, () => tdf({ respNo: !f.respNo }), 'No')}
+                {toggleBtn(f.respNa, () => tdf({ respNa: !f.respNa }), 'N/A')}
+                {toggleBtn(f.respFillIn, () => tdf({ respFillIn: !f.respFillIn }), 'Fill In')}
+              </div>
+              {f.customOptions.map((opt, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                  <input value={opt} onChange={e => { const a = [...f.customOptions]; a[i] = e.target.value; tdf({ customOptions: a }); }} placeholder={`Custom option ${i + 1}…`} style={{ ...inputStyle, flex: 1 }} />
+                  <button onClick={() => { const a = f.customOptions.filter((_, j) => j !== i); tdf({ customOptions: a }); }} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--text-muted)', padding: '0 8px', display: 'flex', alignItems: 'center' }}><X size={13} /></button>
+                </div>
+              ))}
+              <button onClick={() => tdf({ customOptions: [...f.customOptions, ''] })} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', border: '1px dashed var(--border)', borderRadius: 'var(--radius-sm)', background: 'none', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer' }}>
+                <Plus size={12} /> Add another option
+              </button>
+            </div>
+            {/* Sub-tasks */}
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>Sub-tasks</label>
+              {f.subTasks.map((st, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                  <input value={st} onChange={e => { const a = [...f.subTasks]; a[i] = e.target.value; tdf({ subTasks: a }); }} placeholder={`Sub-task ${i + 1}…`} style={{ ...inputStyle, flex: 1 }} />
+                  <button onClick={() => tdf({ subTasks: f.subTasks.filter((_, j) => j !== i) })} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--text-muted)', padding: '0 8px', display: 'flex', alignItems: 'center' }}><X size={13} /></button>
+                </div>
+              ))}
+              <button onClick={() => tdf({ subTasks: [...f.subTasks, ''] })} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', border: '1px dashed var(--border)', borderRadius: 'var(--radius-sm)', background: 'none', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer' }}>
+                <Plus size={12} /> Add sub-task
+              </button>
+            </div>
+            {/* SOP */}
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>SOP</label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 8 }}>
+                <input type="checkbox" checked={f.sop_trigger} onChange={e => tdf({ sop_trigger: e.target.checked })} style={{ accentColor: 'var(--purple-primary)' }} />
+                <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>This task has an SOP</span>
+              </label>
+              {f.sop_trigger && (
+                <input value={f.sop_url} onChange={e => tdf({ sop_url: e.target.value })} placeholder="SOP URL or description…" style={inputStyle} />
+              )}
+            </div>
+          </div>
+          {/* Footer */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderTop: '1px solid var(--border)', gap: 10 }}>
+            <div>
+              {!isNew && (
+                confirmDeleteDef === editingTaskDef?.id ? (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={() => handleDeleteTaskDef(editingTaskDef.id)} style={{ padding: '6px 12px', background: 'var(--danger)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Confirm Delete</button>
+                    <button onClick={() => setConfirmDeleteDef(null)} style={{ padding: '6px 10px', background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 12, cursor: 'pointer', color: 'var(--text-muted)' }}>Cancel</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setConfirmDeleteDef(editingTaskDef?.id)} style={{ padding: '6px 12px', background: 'none', border: '1px solid var(--danger)', borderRadius: 'var(--radius-sm)', fontSize: 12, color: 'var(--danger)', cursor: 'pointer' }}>Archive Task</button>
+                )
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setEditingTaskDef(null)} style={{ padding: '7px 14px', background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13, cursor: 'pointer', color: 'var(--text-secondary)' }}>Cancel</button>
+              <button onClick={handleSaveTaskDef} disabled={taskDefSaving || !taskDefForm.title.trim()} style={{ padding: '7px 18px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: (taskDefSaving || !taskDefForm.title.trim()) ? 0.6 : 1 }}>{taskDefSaving ? 'Saving…' : 'Save Task'}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   function toggleMaintCheck(equipId, freqId, resetFreq, parentId, subId, value) {
@@ -1195,8 +1389,11 @@ export default function Tasks2({ userRole }) {
                             )}
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', lineHeight: 1.5, margin: 0 }}>{task.title}</p>
-                            {task.sop_trigger && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px', padding: '2px 7px', background: '#FEF0F0', color: 'var(--danger)', borderRadius: '12px', fontSize: '10px', fontWeight: 600 }}><AlertTriangle size={9} /> SOP</span>}
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                              <p style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', lineHeight: 1.5, margin: 0, flex: 1 }}>{task.title}</p>
+                              <button onClick={() => openTaskDefEditor(task)} title="Edit task" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '1px 3px', display: 'flex', flexShrink: 0, opacity: 0.5 }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}><Pencil size={12} /></button>
+                            </div>
+                            {task.sop_trigger && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px', padding: '2px 7px', background: '#FEF0F0', color: 'var(--danger)', borderRadius: '12px', fontSize: '10px', fontWeight: 600 }}><AlertTriangle size={9} /> {task.conditional_text ? <a href={task.conditional_text} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--danger)', textDecoration: 'underline' }}>SOP</a> : 'SOP'}</span>}
                             {vatExisting[task.id] && (
                               <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
                                 <span style={{ color: 'var(--success)' }}>✓</span> Done by {vatExisting[task.id].assignment?.profile?.full_name || '?'} on {new Date(vatExisting[task.id].responded_at).toLocaleDateString()}
@@ -1205,6 +1402,20 @@ export default function Tasks2({ userRole }) {
                             {resp?.response && (
                               <textarea value={resp?.notes || ''} onChange={e => handleVatNotes(task.id, e.target.value)} placeholder="Notes (optional)" rows={1}
                                 style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />
+                            )}
+                            {task.sub_tasks && task.sub_tasks.length > 0 && (
+                              <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                                {task.sub_tasks.map((st, si) => {
+                                  const stKey = `${task.id}_sub_${st.id}`;
+                                  const stDone = vatResponses[stKey]?.response === 'checked';
+                                  return (
+                                    <div key={si} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
+                                      <button onClick={() => handleVatResponse(stKey, stDone ? '' : 'checked')} style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${stDone ? 'var(--purple-primary)' : 'var(--border)'}`, background: stDone ? 'var(--purple-primary)' : 'transparent', color: stDone ? 'white' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}><Check size={11} /></button>
+                                      <span style={{ fontSize: 12, color: stDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: stDone ? 'line-through' : 'none' }}>{st.title}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             )}
                           </div>
                         </div>
@@ -1236,6 +1447,10 @@ export default function Tasks2({ userRole }) {
                 </div>
               );
             })}
+            {/* Add Task button */}
+            <button onClick={() => openTaskDefEditor(null, { category: vatCategory, frequency: vatFreq })} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, padding: '8px 14px', border: '1px dashed var(--border)', borderRadius: 'var(--radius-md)', background: 'none', color: 'var(--text-muted)', fontSize: 13, cursor: 'pointer', width: '100%', justifyContent: 'center' }}>
+              <Plus size={13} /> Add Task
+            </button>
           </>
         )}
 
@@ -2216,6 +2431,7 @@ export default function Tasks2({ userRole }) {
       due_date: oneOffForm.dueDate,
       show_on_public_dashboard: oneOffForm.showOnPublic,
       status: 'pending',
+      category: 'MISC',
     }));
     const { error: insertErr } = await supabase.from('sporadic_tasks').insert(rows);
     if (insertErr) {
@@ -2582,6 +2798,8 @@ export default function Tasks2({ userRole }) {
 
       {/* Quick-assign modal */}
       {renderQuickAssignModal()}
+      {/* Task definition editor modal */}
+      {renderTaskDefModal()}
     </div>
   );
 }

@@ -85,6 +85,8 @@ CREATE TABLE IF NOT EXISTS sporadic_tasks (
 -- Migration (run in Supabase SQL editor if table already exists):
 -- ALTER TABLE sporadic_tasks ADD COLUMN IF NOT EXISTS completed_at timestamptz;
 -- ALTER TABLE sporadic_tasks ADD COLUMN IF NOT EXISTS show_on_public_dashboard boolean DEFAULT false;
+-- ALTER TABLE tasks_definitions ADD COLUMN IF NOT EXISTS response_options jsonb;
+-- ALTER TABLE tasks_definitions ADD COLUMN IF NOT EXISTS sub_tasks jsonb;
 
 -- 6. vacation_requests
 CREATE TABLE IF NOT EXISTS vacation_requests (
