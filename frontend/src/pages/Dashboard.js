@@ -1,19 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle, Users, Mail, Phone, Plus, Pencil, Trash2, X, Check, Globe } from 'lucide-react';
+import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle, Plus, Pencil, Trash2, X, Check, Globe } from 'lucide-react';
 
-const ROLE_COLORS = {
-  admin:    { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
-  pm:       { bg: '#EBF5FB', text: '#2980B9', border: '#AED6F1' },
-  member:   { bg: '#EAF7F0', text: '#27AE60', border: '#A9DFBF' },
-  intern:   { bg: '#FEF9E7', text: '#F39C12', border: '#FAD7A0' },
-  external: { bg: '#F2F3F4', text: '#5D6D7E', border: '#CCD1D1' },
-};
-
-function getDisplayName(c) {
-  if (c.first_name || c.last_name) return [c.first_name, c.last_name].filter(Boolean).join(' ');
-  return c.full_name || '';
-}
 
 function formatDate(d) {
   if (!d) return '';
@@ -100,7 +88,6 @@ export default function Dashboard({ profile, userRole, userId }) {
   const [nextWeekOut, setNextWeekOut] = useState([]);
   const [labMeetings, setLabMeetings] = useState([]);
   const [adhocMeetings, setAdhocMeetings] = useState([]);
-  const [adminContacts, setAdminContacts] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
 
   // Personal data
@@ -176,8 +163,6 @@ export default function Dashboard({ profile, userRole, userId }) {
         : supabase.from('task_assignments')
             .select('*, task:tasks_definitions(title, frequency, category)')
             .eq('assigned_to', profile.id).eq('status', 'pending'),
-      // contacts – always fetch both
-      supabase.from('lab_contacts').select('*').eq('status', 'active').order('sort_order').order('last_name').order('first_name'),
       supabase.from('profiles').select('id, full_name, email, role').order('full_name'),
       // admin task mgmt helpers
       canEdit
@@ -189,7 +174,7 @@ export default function Dashboard({ profile, userRole, userId }) {
         : Promise.resolve({ data: [] }),
       // public one-off tasks
       supabase.from('sporadic_tasks')
-        .select('*, assignee:profiles!sporadic_tasks_assigned_to_fkey(full_name)')
+        .select('*, assignee:profiles!assigned_to(full_name)')
         .eq('show_on_public_dashboard', true)
         .neq('status', 'done')
         .order('due_date'),
@@ -201,7 +186,6 @@ export default function Dashboard({ profile, userRole, userId }) {
       { data: allMeetingData },
       { data: sporData },
       { data: assignData },
-      { data: contactData },
       { data: memberData },
       { data: taskDefData },
       { data: grantData },
@@ -222,7 +206,6 @@ export default function Dashboard({ profile, userRole, userId }) {
     const firstFreq = FREQ_ORDER.find(f => assigns.some(a => a.task?.frequency === f));
     setTaskFreq(prev => prev || firstFreq || null);
 
-    setAdminContacts((contactData || []).filter(c => c.role === 'external'));
     setTeamMembers(memberData || []);
     setMembers(memberData || []);
     setTaskDefs(taskDefData || []);
@@ -797,42 +780,6 @@ export default function Dashboard({ profile, userRole, userId }) {
               )}
             </div>
 
-            {adminContacts.length > 0 && (
-              <Card icon={<Users size={13} color="var(--purple-primary)" />} title="Admin Contacts">
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {adminContacts.map((contact, i) => {
-                    const name = getDisplayName(contact);
-                    const colors = ROLE_COLORS[contact.role] || ROLE_COLORS.member;
-                    return (
-                      <div key={contact.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
-                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: colors.bg, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <span style={{ fontSize: '12px', fontWeight: 700, color: colors.text }}>{name.charAt(0).toUpperCase()}</span>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{name}</span>
-                            {contact.title && <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{contact.title}</span>}
-                          </div>
-                          {contact.notes && <p style={{ margin: '1px 0 0', fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>{contact.notes}</p>}
-                        </div>
-                        <div style={{ display: 'flex', gap: '10px', flexShrink: 0, alignItems: 'center' }}>
-                          {contact.email && (
-                            <a href={`mailto:${contact.email}`} style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px', color: 'var(--purple-primary)', textDecoration: 'none' }}>
-                              <Mail size={11} /> {contact.email}
-                            </a>
-                          )}
-                          {contact.phone && (
-                            <a href={`tel:${contact.phone}`} style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px', color: 'var(--text-muted)', textDecoration: 'none' }}>
-                              <Phone size={11} /> {contact.phone}
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
-            )}
 
           </div>
           </div>
