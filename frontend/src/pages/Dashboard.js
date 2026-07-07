@@ -18,7 +18,6 @@ const FREQ_COLORS = {
   yearly:   { bg: '#FDEDEC', text: '#E74C3C' },
 };
 
-const SCORE_COLOR = s => s === null ? '#9ca3af' : s >= 90 ? '#22c55e' : s >= 70 ? '#f59e0b' : s >= 50 ? '#f97316' : '#ef4444';
 const PROD_PERIODS = [{ id: 'current', label: 'Currently' }, { id: '30d', label: 'Last 30d' }, { id: 'all', label: 'Since Joining' }];
 
 function PeriodPicker({ value, onChange }) {
@@ -35,32 +34,25 @@ function PeriodPicker({ value, onChange }) {
 }
 
 function MiniScoreRow({ row }) {
-  const { profile, score, onTime, late, missed, pending, matured } = row;
-  const col = SCORE_COLOR(score);
-  const hasData = matured > 0;
+  const { profile, score } = row;
+  const pct = score !== null ? score : 0;
+  const firstName = (profile.full_name || '').split(' ')[0];
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile.full_name}</div>
-        {hasData && (
-          <div style={{ display: 'flex', gap: 6, marginTop: 3, fontSize: 10, color: 'var(--text-muted)' }}>
-            {onTime > 0 && <span style={{ color: '#22c55e' }}>✓{onTime}</span>}
-            {late > 0 && <span style={{ color: '#f59e0b' }}>⚠{late}</span>}
-            {missed > 0 && <span style={{ color: '#ef4444' }}>✗{missed}</span>}
-            {pending > 0 && <span>⏳{pending}</span>}
-          </div>
-        )}
-        {matured > 0 && (
-          <div style={{ height: 3, borderRadius: 2, background: 'var(--border)', overflow: 'hidden', display: 'flex', marginTop: 4 }}>
-            <div style={{ flex: onTime, background: '#22c55e', minWidth: onTime > 0 ? 1 : 0 }} />
-            <div style={{ flex: late,   background: '#f59e0b', minWidth: late   > 0 ? 1 : 0 }} />
-            <div style={{ flex: missed, background: '#ef4444', minWidth: missed > 0 ? 1 : 0 }} />
-          </div>
-        )}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', width: 72, overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>{firstName}</div>
+      <div style={{ flex: 1, height: 10, borderRadius: 5, background: 'var(--border)', overflow: 'hidden', position: 'relative' }}>
+        <div style={{
+          width: `${pct}%`,
+          height: '100%',
+          borderRadius: 5,
+          background: score === null
+            ? 'var(--border)'
+            : `hsl(${Math.round(pct * 1.2)}, 80%, 45%)`,
+          transition: 'width 0.4s ease',
+        }} />
       </div>
-      <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 38 }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: col, lineHeight: 1 }}>{score !== null ? score : '—'}</div>
-        <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>/100</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', width: 26, textAlign: 'right', flexShrink: 0 }}>
+        {score !== null ? score : '—'}
       </div>
     </div>
   );
