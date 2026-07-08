@@ -1380,32 +1380,50 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     };
     const dateIsOverdue = d => d && d !== 'none' && d < today;
 
-    const handleMySub = stKey => setMyTaskSubResponses(p => ({ ...p, [stKey]: !p[stKey] }));
+    // Build task_def_id → occurrence map
+    const occByDefId = {};
+    myTaskOccs.forEach(occ => { if (occ.task_def?.id) occByDefId[occ.task_def.id] = occ; });
+    const myDefIds = new Set(Object.keys(occByDefId));
 
-    // Recurring occs: group by date → category → group_name
-    const occsByDate = {};
-    const occDateOrder = [];
-    myTaskOccs
-      .filter(o => myTaskStatusFilter === 'all' || classifyOcc(o) === myTaskStatusFilter)
-      .slice()
-      .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''))
-      .forEach(occ => {
-        const date = occ.due_date || 'none';
-        const cat  = occ.task_def?.category || 'General';
-        const grp  = occ.task_def?.group_name || occ.task_def?.title || '—';
-        if (!occsByDate[date]) { occsByDate[date] = {}; occDateOrder.push(date); }
-        if (!occsByDate[date][cat]) occsByDate[date][cat] = {};
-        if (!occsByDate[date][cat][grp]) occsByDate[date][cat][grp] = [];
-        occsByDate[date][cat][grp].push(occ);
-      });
+    // Find complete groups from vatTasks that include at least one assigned task
+    const myGroupKeys = new Set();
+    vatTasks.forEach(t => { if (myDefIds.has(t.id)) myGroupKeys.add(t.group_name || t.title || t.id); });
 
-    // One-offs: group by date → category (no group_name)
+    // Build ordered group list preserving vatTasks sort_order
+    const groupMap = new Map(); // groupKey → { groupName, category, tasks[], dueDate }
+    vatTasks.forEach(t => {
+      const gKey = t.group_name || t.title || t.id;
+      if (!myGroupKeys.has(gKey)) return;
+      if (!groupMap.has(gKey)) {
+        const groupOccDates = vatTasks
+          .filter(vt => (vt.group_name || vt.title || vt.id) === gKey && myDefIds.has(vt.id))
+          .map(vt => occByDefId[vt.id]?.due_date).filter(Boolean).sort();
+        groupMap.set(gKey, { groupName: t.group_name || '', category: t.category || 'MISC', tasks: [], dueDate: groupOccDates[0] || 'none' });
+      }
+      groupMap.get(gKey).tasks.push(t);
+    });
+
+    // Apply status filter: keep group if any assigned task matches
+    const filteredGroups = [...groupMap.values()].filter(g => {
+      if (myTaskStatusFilter === 'all') return true;
+      return g.tasks.some(t => { const occ = occByDefId[t.id]; return occ && classifyOcc(occ) === myTaskStatusFilter; });
+    });
+
+    // Group by date → category
+    const groupsByDate = {};
+    filteredGroups.forEach(g => {
+      const date = g.dueDate;
+      if (!groupsByDate[date]) groupsByDate[date] = {};
+      if (!groupsByDate[date][g.category]) groupsByDate[date][g.category] = [];
+      groupsByDate[date][g.category].push(g);
+    });
+
+    // One-offs: group by date → category
     const oneOffsByDate = {};
     const oneOffDateOrder = [];
     myTaskOneOffs
       .filter(t => myTaskStatusFilter === 'all' || classifyOneOff(t) === myTaskStatusFilter)
-      .slice()
-      .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''))
+      .slice().sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''))
       .forEach(t => {
         const date = t.due_date || 'none';
         const cat  = t.category || 'General';
@@ -1414,108 +1432,13 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         oneOffsByDate[date][cat].push(t);
       });
 
-    const allDates = [...new Set([...occDateOrder, ...oneOffDateOrder])].sort((a, b) => {
+    const allDates = [...new Set([...Object.keys(groupsByDate), ...oneOffDateOrder])].sort((a, b) => {
       if (a === 'none') return 1; if (b === 'none') return -1;
       return a.localeCompare(b);
     });
 
     const overdueCt  = myTaskOccs.filter(o => classifyOcc(o) === 'overdue').length + myTaskOneOffs.filter(t => classifyOneOff(t) === 'overdue').length;
     const upcomingCt = myTaskOccs.filter(o => classifyOcc(o) === 'upcoming').length + myTaskOneOffs.filter(t => classifyOneOff(t) === 'upcoming').length;
-    const totalFiltered = allDates.length;
-
-    // Render a single recurring task occurrence using the exact same state/handlers as the Tasks tab
-    const renderOccTask = occ => {
-      const task = occ.task_def || {};
-      const resp = vatResponses[task.id];
-      const respVal = resp?.response || '';
-      const done = respVal === 'yes' || respVal === 'checked';
-      const isDone = classifyOcc(occ) === 'ontime' || classifyOcc(occ) === 'late';
-
-      const subTasks = task.sub_tasks || [];
-      const subTrigger = subTasks[0]?.trigger || 'always';
-      const showSubs = subTasks.length > 0 && (() => {
-        if (subTrigger === 'always') return true;
-        if (subTrigger.startsWith('custom:')) return respVal === subTrigger.slice(7);
-        return respVal === subTrigger;
-      })();
-
-      return (
-        <div key={occ.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px' }}>
-            {/* Response buttons — identical to Tasks tab */}
-            <div style={{ display: 'flex', gap: '5px', flexShrink: 0, marginTop: '2px' }}>
-              {(task.response_type === 'yes_no' || task.response_type === 'yes_no_na') ? (
-                <>
-                  <button onClick={() => handleVatResponse(task.id, respVal === 'yes' ? '' : 'yes')} title="Yes" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: respVal === 'yes' ? 'var(--success)' : 'var(--border)', background: respVal === 'yes' ? 'var(--success)' : 'transparent', color: respVal === 'yes' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
-                  <button onClick={() => handleVatResponse(task.id, respVal === 'no' ? '' : 'no')} title="No" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: respVal === 'no' ? 'var(--danger)' : 'var(--border)', background: respVal === 'no' ? 'var(--danger)' : 'transparent', color: respVal === 'no' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><XCircle size={13} /></button>
-                  {task.response_type === 'yes_no_na' && <button onClick={() => handleVatResponse(task.id, respVal === 'na' ? '' : 'na')} style={{ padding: '0 7px', height: '26px', borderRadius: '13px', border: '2px solid', borderColor: respVal === 'na' ? 'var(--text-muted)' : 'var(--border)', background: respVal === 'na' ? 'var(--text-muted)' : 'transparent', color: respVal === 'na' ? 'white' : 'var(--text-muted)', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}>N/A</button>}
-                </>
-              ) : task.response_type === 'checkbox' ? (
-                <button onClick={() => handleVatResponse(task.id, respVal === 'checked' ? '' : 'checked')} style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid', borderColor: respVal === 'checked' ? 'var(--purple-primary)' : 'var(--border)', background: respVal === 'checked' ? 'var(--purple-primary)' : 'transparent', color: respVal === 'checked' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
-              ) : task.response_options?.length ? (
-                task.response_options.map(opt => {
-                  const val = opt.startsWith('custom:') ? opt.slice(7) : opt;
-                  const activeColor = opt === 'yes' ? 'var(--success)' : opt === 'no' ? 'var(--danger)' : opt === 'na' ? 'var(--text-muted)' : 'var(--purple-primary)';
-                  const active = respVal === val;
-                  const isNa = opt === 'na';
-                  return (
-                    <button key={opt} onClick={() => handleVatResponse(task.id, active ? '' : val)} title={val}
-                      style={{ minWidth: '26px', height: '26px', padding: '0 6px', borderRadius: isNa ? '13px' : '50%', border: `2px solid ${active ? activeColor : 'var(--border)'}`, background: active ? activeColor : 'transparent', color: active ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: isNa ? '10px' : '13px', fontWeight: 600 }}>
-                      {opt === 'yes' ? <CheckCircle size={13} /> : opt === 'no' ? <XCircle size={13} /> : val.slice(0, 4)}
-                    </button>
-                  );
-                })
-              ) : (
-                <label style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                  <Upload size={13} />
-                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={() => {}} />
-                </label>
-              )}
-            </div>
-
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                <p style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', lineHeight: 1.5, margin: 0, flex: 1 }}>{task.title}</p>
-                <button onClick={() => openTaskDefEditor(task)} title="Edit task" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '1px 3px', display: 'flex', flexShrink: 0, opacity: 0.5 }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}><Pencil size={12} /></button>
-              </div>
-
-              {task.sop_trigger && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px', padding: '2px 7px', background: '#FEF0F0', color: 'var(--danger)', borderRadius: '12px', fontSize: '10px', fontWeight: 600 }}>
-                  <AlertTriangle size={9} />
-                  {task.conditional_text ? <a href={task.conditional_text} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--danger)', textDecoration: 'underline' }}>SOP</a> : 'SOP'}
-                </span>
-              )}
-
-              {vatExisting[task.id] && (
-                <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
-                  <span style={{ color: 'var(--success)' }}>✓</span> Done by {vatExisting[task.id].assignment?.profile?.full_name || '?'} on {new Date(vatExisting[task.id].responded_at).toLocaleDateString()}
-                </div>
-              )}
-
-              {respVal && (
-                <textarea value={resp?.notes || ''} onChange={e => handleVatNotes(task.id, e.target.value)} placeholder="Notes (optional)" rows={1}
-                  style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />
-              )}
-
-              {showSubs && (
-                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-                  {subTasks.map((st, si) => {
-                    const stKey = `${task.id}_sub_${st.id}`;
-                    const stDone = vatResponses[stKey]?.response === 'checked';
-                    return (
-                      <div key={si} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
-                        <button onClick={() => handleVatResponse(stKey, stDone ? '' : 'checked')} style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${stDone ? 'var(--purple-primary)' : 'var(--border)'}`, background: stDone ? 'var(--purple-primary)' : 'transparent', color: stDone ? 'white' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}><Check size={11} /></button>
-                        <span style={{ fontSize: 12, color: stDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: stDone ? 'line-through' : 'none' }}>{st.title}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    };
 
     // Render a one-off task card
     const renderOneOffTask = t => {
@@ -1553,6 +1476,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       );
     };
 
+    const isEmpty = allDates.length === 0;
+
     return (
       <div>
         {/* Header */}
@@ -1575,13 +1500,13 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
         {myTaskLoading ? (
           <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
-        ) : totalFiltered === 0 ? (
+        ) : isEmpty ? (
           <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>No tasks match this filter.</div>
         ) : (
           allDates.map(date => {
-            const occCatMap    = occsByDate[date] || {};
-            const oneOffCatMap = oneOffsByDate[date] || {};
-            const allCats      = [...new Set([...Object.keys(occCatMap), ...Object.keys(oneOffCatMap)])].sort();
+            const catMapForDate = groupsByDate[date] || {};
+            const oneOffCatMap  = oneOffsByDate[date] || {};
+            const allCats = [...new Set([...Object.keys(catMapForDate), ...Object.keys(oneOffCatMap)])].sort();
             if (allCats.length === 0) return null;
             const isOverdue = dateIsOverdue(date);
 
@@ -1606,19 +1531,114 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10, paddingLeft: 2 }}>{cat}</div>
                     )}
 
-                    {/* Recurring groups within this category */}
-                    {Object.entries(occCatMap[cat] || {}).map(([groupName, occs]) => (
-                      <div key={groupName} style={{ marginBottom: 4 }}>
-                        {groupName && (
-                          <div style={{ padding: '10px 2px 6px', borderBottom: '2px solid var(--purple-primary)', marginBottom: '8px' }}>
-                            <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--purple-primary)' }}>{groupName}</span>
-                          </div>
-                        )}
-                        {occs.map(occ => renderOccTask(occ))}
-                      </div>
-                    ))}
+                    {/* Complete task groups — exact same markup as Tasks tab */}
+                    {(catMapForDate[cat] || []).map(({ groupName, tasks: groupTasks }) => {
+                      const isLiveCellGroup = groupName === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time';
+                      const lcParent = isLiveCellGroup ? groupTasks.find(t => t.response_type === 'yes_no') : null;
+                      const lcParentResp = lcParent ? vatResponses[lcParent.id]?.response : null;
+                      const lcSubTasks = isLiveCellGroup ? groupTasks.filter(t => t.response_type === 'checkbox') : [];
+                      const lcAllChecked = lcSubTasks.length > 0 && lcSubTasks.every(t => vatResponses[t.id]?.response === 'checked');
 
-                    {/* One-off tasks within this category (no group header) */}
+                      return (
+                        <div key={groupName || 'ungrouped'} style={{ marginBottom: '4px' }}>
+                          {groupName && (
+                            <div style={{ padding: '12px 2px 6px', borderBottom: '2px solid var(--purple-primary)', marginBottom: '8px' }}>
+                              <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--purple-primary)' }}>{groupName}</span>
+                            </div>
+                          )}
+                          {groupTasks.map(task => {
+                            if (isLiveCellGroup && task.response_type === 'checkbox' && lcParentResp !== 'yes') return null;
+                            const resp = vatResponses[task.id];
+                            const done = resp?.response === 'yes' || resp?.response === 'checked';
+                            if (task.response_type === 'placeholder') {
+                              return <div key={task.id} style={{ padding: '8px 14px', color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>Tasks to be defined.</div>;
+                            }
+                            return (
+                              <div key={task.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px' }}>
+                                  <div style={{ display: 'flex', gap: '5px', flexShrink: 0, marginTop: '2px' }}>
+                                    {(task.response_type === 'yes_no' || task.response_type === 'yes_no_na') ? (
+                                      <>
+                                        <button onClick={() => handleVatResponse(task.id, resp?.response === 'yes' ? '' : 'yes')} title="Yes" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'yes' ? 'var(--success)' : 'var(--border)', background: resp?.response === 'yes' ? 'var(--success)' : 'transparent', color: resp?.response === 'yes' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
+                                        <button onClick={() => handleVatResponse(task.id, resp?.response === 'no' ? '' : 'no')} title="No" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'no' ? 'var(--danger)' : 'var(--border)', background: resp?.response === 'no' ? 'var(--danger)' : 'transparent', color: resp?.response === 'no' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><XCircle size={13} /></button>
+                                        {task.response_type === 'yes_no_na' && <button onClick={() => handleVatResponse(task.id, resp?.response === 'na' ? '' : 'na')} style={{ padding: '0 7px', height: '26px', borderRadius: '13px', border: '2px solid', borderColor: resp?.response === 'na' ? 'var(--text-muted)' : 'var(--border)', background: resp?.response === 'na' ? 'var(--text-muted)' : 'transparent', color: resp?.response === 'na' ? 'white' : 'var(--text-muted)', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}>N/A</button>}
+                                      </>
+                                    ) : task.response_type === 'checkbox' ? (
+                                      <button onClick={() => handleVatResponse(task.id, resp?.response === 'checked' ? '' : 'checked')} style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid', borderColor: resp?.response === 'checked' ? 'var(--purple-primary)' : 'var(--border)', background: resp?.response === 'checked' ? 'var(--purple-primary)' : 'transparent', color: resp?.response === 'checked' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
+                                    ) : (
+                                      <label style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                                        <Upload size={13} />
+                                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={() => {}} />
+                                      </label>
+                                    )}
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                                      <p style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', lineHeight: 1.5, margin: 0, flex: 1 }}>{task.title}</p>
+                                      <button onClick={() => openTaskDefEditor(task)} title="Edit task" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '1px 3px', display: 'flex', flexShrink: 0, opacity: 0.5 }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}><Pencil size={12} /></button>
+                                    </div>
+                                    {task.sop_trigger && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px', padding: '2px 7px', background: '#FEF0F0', color: 'var(--danger)', borderRadius: '12px', fontSize: '10px', fontWeight: 600 }}><AlertTriangle size={9} /> {task.conditional_text ? <a href={task.conditional_text} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--danger)', textDecoration: 'underline' }}>SOP</a> : 'SOP'}</span>}
+                                    {vatExisting[task.id] && (
+                                      <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                                        <span style={{ color: 'var(--success)' }}>✓</span> Done by {vatExisting[task.id].assignment?.profile?.full_name || '?'} on {new Date(vatExisting[task.id].responded_at).toLocaleDateString()}
+                                      </div>
+                                    )}
+                                    {resp?.response && (
+                                      <textarea value={resp?.notes || ''} onChange={e => handleVatNotes(task.id, e.target.value)} placeholder="Notes (optional)" rows={1}
+                                        style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />
+                                    )}
+                                    {task.sub_tasks && task.sub_tasks.length > 0 && (() => {
+                                      const trigger = task.sub_tasks[0]?.trigger || 'always';
+                                      if (trigger === 'always') return true;
+                                      const mainResp = resp?.response;
+                                      if (trigger.startsWith('custom:')) return mainResp === trigger.slice(7);
+                                      return mainResp === trigger;
+                                    })() && (
+                                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                                        {task.sub_tasks.map((st, si) => {
+                                          const stKey = `${task.id}_sub_${st.id}`;
+                                          const stDone = vatResponses[stKey]?.response === 'checked';
+                                          return (
+                                            <div key={si} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
+                                              <button onClick={() => handleVatResponse(stKey, stDone ? '' : 'checked')} style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${stDone ? 'var(--purple-primary)' : 'var(--border)'}`, background: stDone ? 'var(--purple-primary)' : 'transparent', color: stDone ? 'white' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}><Check size={11} /></button>
+                                              <span style={{ fontSize: 12, color: stDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: stDone ? 'line-through' : 'none' }}>{st.title}</span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {/* Live Cell group: contextual status messages */}
+                          {isLiveCellGroup && !lcParentResp && (
+                            <div style={{ padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '4px' }}>
+                              Select Yes or No above to continue.
+                            </div>
+                          )}
+                          {isLiveCellGroup && lcParentResp === 'no' && (
+                            <div style={{ padding: '10px 14px', background: '#EAF7F0', borderRadius: 'var(--radius-md)', border: '1px solid #A9DFBF', fontSize: '13px', color: '#27AE60', fontWeight: 500, marginTop: '4px' }}>
+                              ✓ No new live cell material this week — protocol steps not required.
+                            </div>
+                          )}
+                          {isLiveCellGroup && lcParentResp === 'yes' && !lcAllChecked && (
+                            <div style={{ padding: '8px 14px', fontSize: '12px', color: 'var(--danger)', fontWeight: 500, marginTop: '2px' }}>
+                              All protocol steps must be confirmed to complete this task.
+                            </div>
+                          )}
+                          {isLiveCellGroup && lcParentResp === 'yes' && lcAllChecked && (
+                            <div style={{ padding: '10px 14px', background: '#EAF7F0', borderRadius: 'var(--radius-md)', border: '1px solid #A9DFBF', fontSize: '13px', color: '#27AE60', fontWeight: 500, marginTop: '4px' }}>
+                              ✓ All quarantine protocol steps confirmed.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* One-off tasks within this category */}
                     {(oneOffCatMap[cat] || []).map(t => renderOneOffTask(t))}
                   </div>
                 ))}
