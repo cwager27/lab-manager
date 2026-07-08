@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { CheckCircle, XCircle, AlertTriangle, Upload, Clock, Search, ChevronDown, Bell, Trash2, Plus, Check, Globe, Pencil, X } from 'lucide-react';
 import {
@@ -292,6 +292,9 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const [myTaskResponses, setMyTaskResponses] = useState({});
   const [myTaskNotes, setMyTaskNotes] = useState({});
   const [myTaskSubResponses, setMyTaskSubResponses] = useState({});
+  // Tracks occurrence IDs already auto-persisted as 'done' to avoid duplicate DB writes
+  const persistedCompletionsRef = useRef(new Set());
+
   // PM reminder counts keyed by occurrence ID, persisted in localStorage
   const [pmReminders, setPmReminders] = useState(() => {
     try { return JSON.parse(localStorage.getItem('lab_pm_reminders') || '{}'); } catch { return {}; }
@@ -346,6 +349,58 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   useEffect(() => { if (tab === 'productivity') loadProductivity(prodPeriod); }, [tab, prodPeriod]); // eslint-disable-line
   useEffect(() => { if (tab === 'oneoff') loadOneOffTab(); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (tab === 'my-tasks' && userId) { loadMyTasks(); if (!vatLoaded) loadVatData(); } }, [tab, userId]); // eslint-disable-line
+
+  // Auto-persist completed task groups to DB
+  useEffect(() => {
+    if (!myTaskOccs.length || !vatTasks.length) return;
+    const occByDefId = {};
+    myTaskOccs.forEach(occ => { if (occ.task_def?.id) occByDefId[occ.task_def.id] = occ; });
+    const myDefIds = new Set(Object.keys(occByDefId));
+    const myGroupKeys = new Set();
+    vatTasks.forEach(t => { if (myDefIds.has(t.id)) myGroupKeys.add(t.group_name || t.title || t.id); });
+    const groupMap = new Map();
+    vatTasks.forEach(t => {
+      const gKey = t.group_name || t.title || t.id;
+      if (!myGroupKeys.has(gKey)) return;
+      if (!groupMap.has(gKey)) groupMap.set(gKey, { groupName: t.group_name || '', tasks: [] });
+      groupMap.get(gKey).tasks.push(t);
+    });
+    const toUpdate = [];
+    groupMap.forEach(group => {
+      const isLiveCell = group.groupName === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time';
+      let complete = false;
+      if (isLiveCell) {
+        const lcParent = group.tasks.find(t => t.response_type === 'yes_no');
+        const lcResp = lcParent ? vatResponses[lcParent.id]?.response : null;
+        if (lcResp === 'no') complete = true;
+        else if (lcResp === 'yes') complete = group.tasks.filter(t => t.response_type === 'checkbox').every(t => vatResponses[t.id]?.response === 'checked');
+      } else {
+        complete = group.tasks.every(t => {
+          if (!myDefIds.has(t.id)) return true;
+          const r = vatResponses[t.id]?.response;
+          if (!r) return false;
+          if (!t.sub_tasks?.length) return true;
+          const trigger = t.sub_tasks[0]?.trigger || 'always';
+          const triggered = trigger === 'always' || (trigger.startsWith('custom:') ? r === trigger.slice(7) : r === trigger);
+          return !triggered || t.sub_tasks.every(st => vatResponses[`${t.id}_sub_${st.id}`]?.response === 'checked');
+        });
+      }
+      if (complete) {
+        group.tasks.forEach(t => {
+          const occ = occByDefId[t.id];
+          if (occ && occ.status !== 'done' && !persistedCompletionsRef.current.has(occ.id)) {
+            persistedCompletionsRef.current.add(occ.id);
+            toUpdate.push(occ.id);
+          }
+        });
+      }
+    });
+    if (toUpdate.length > 0) {
+      const now = new Date().toISOString();
+      toUpdate.forEach(id => supabase.from('task_occurrences').update({ status: 'done', completed_at: now }).eq('id', id));
+      setMyTaskOccs(prev => prev.map(occ => toUpdate.includes(occ.id) ? { ...occ, status: 'done', completed_at: now } : occ));
+    }
+  }, [vatResponses]); // eslint-disable-line
 
   useEffect(() => {
     localStorage.setItem('lab_maint_checks', JSON.stringify(maintChecks));
@@ -1385,6 +1440,32 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     myTaskOccs.forEach(occ => { if (occ.task_def?.id) occByDefId[occ.task_def.id] = occ; });
     const myDefIds = new Set(Object.keys(occByDefId));
 
+    // Completion helpers
+    const isTaskComplete = task => {
+      const r = vatResponses[task.id]?.response;
+      if (!r) return false;
+      if (!task.sub_tasks?.length) return true;
+      const trigger = task.sub_tasks[0]?.trigger || 'always';
+      const triggered = trigger === 'always' || (trigger.startsWith('custom:') ? r === trigger.slice(7) : r === trigger);
+      return !triggered || task.sub_tasks.every(st => vatResponses[`${task.id}_sub_${st.id}`]?.response === 'checked');
+    };
+    const isGroupComplete = (groupTasks, groupName) => {
+      const isLiveCell = groupName === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time';
+      if (isLiveCell) {
+        const lcParent = groupTasks.find(t => t.response_type === 'yes_no');
+        const lcResp = lcParent ? vatResponses[lcParent.id]?.response : null;
+        if (!lcResp) return false;
+        if (lcResp === 'no') return true;
+        return groupTasks.filter(t => t.response_type === 'checkbox').every(t => vatResponses[t.id]?.response === 'checked');
+      }
+      return groupTasks.every(t => !myDefIds.has(t.id) || isTaskComplete(t));
+    };
+    const classifyGroup = g => {
+      if (isGroupComplete(g.tasks, g.groupName)) return 'ontime';
+      if (g.tasks.some(t => { const occ = occByDefId[t.id]; return occ && occ.status !== 'done' && occ.due_date < today; })) return 'overdue';
+      return 'upcoming';
+    };
+
     // Find complete groups from vatTasks that include at least one assigned task
     const myGroupKeys = new Set();
     vatTasks.forEach(t => { if (myDefIds.has(t.id)) myGroupKeys.add(t.group_name || t.title || t.id); });
@@ -1403,10 +1484,10 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       groupMap.get(gKey).tasks.push(t);
     });
 
-    // Apply status filter: keep group if any assigned task matches
+    // Apply status filter using group-level classification
     const filteredGroups = [...groupMap.values()].filter(g => {
       if (myTaskStatusFilter === 'all') return true;
-      return g.tasks.some(t => { const occ = occByDefId[t.id]; return occ && classifyOcc(occ) === myTaskStatusFilter; });
+      return classifyGroup(g) === myTaskStatusFilter;
     });
 
     // Group by date → category
@@ -1533,6 +1614,48 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
                     {/* Complete task groups — exact same markup as Tasks tab */}
                     {(catMapForDate[cat] || []).map(({ groupName, tasks: groupTasks }) => {
+                      const groupDone = isGroupComplete(groupTasks, groupName);
+
+                      // ── Completed: show only the parent task as a summary ──
+                      if (groupDone) {
+                        const parentTask = groupTasks.find(t => t.response_type === 'yes_no' || t.response_type === 'yes_no_na') || groupTasks[0];
+                        const parentResp = parentTask ? vatResponses[parentTask.id]?.response : null;
+                        return (
+                          <div key={groupName || 'ungrouped'} style={{ marginBottom: '4px', opacity: 0.8 }}>
+                            {groupName && (
+                              <div style={{ padding: '12px 2px 6px', borderBottom: '2px solid var(--success)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--success)' }}>{groupName}</span>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--success)', background: '#EAF7F0', padding: '2px 8px', borderRadius: 10, border: '1px solid #A9DFBF' }}>✓ Completed</span>
+                              </div>
+                            )}
+                            {parentTask && (
+                              <div style={{ background: 'var(--bg-card)', border: '1px solid #A9DFBF', borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px' }}>
+                                  <div style={{ display: 'flex', gap: '5px', flexShrink: 0, marginTop: '2px' }}>
+                                    {(parentTask.response_type === 'yes_no' || parentTask.response_type === 'yes_no_na') ? (
+                                      parentResp === 'yes' ? (
+                                        <div style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid var(--success)', background: 'var(--success)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CheckCircle size={13} /></div>
+                                      ) : parentResp === 'no' ? (
+                                        <div style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid var(--danger)', background: 'var(--danger)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><XCircle size={13} /></div>
+                                      ) : (
+                                        <div style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid var(--success)', background: 'var(--success)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CheckCircle size={13} /></div>
+                                      )
+                                    ) : (
+                                      <div style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid var(--success)', background: 'var(--success)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CheckCircle size={13} /></div>
+                                    )}
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', textDecoration: 'line-through', lineHeight: 1.5, margin: 0 }}>{parentTask.title}</p>
+                                    {!groupName && <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, color: 'var(--success)' }}>✓ Completed</div>}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      // ── Incomplete: full group rendering identical to Tasks tab ──
                       const isLiveCellGroup = groupName === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time';
                       const lcParent = isLiveCellGroup ? groupTasks.find(t => t.response_type === 'yes_no') : null;
                       const lcParentResp = lcParent ? vatResponses[lcParent.id]?.response : null;
