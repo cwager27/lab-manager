@@ -200,7 +200,7 @@ function pickerFor(freq, value, onChange) {
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function Tasks2({ userRole }) {
+export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const [tab, setTab] = useState('view-all');
 
   // Shared data
@@ -274,6 +274,24 @@ export default function Tasks2({ userRole }) {
   const [prodPeriod, setProdPeriod] = useState('current');
   const [prodRows, setProdRows] = useState([]);
   const [prodLoading, setProdLoading] = useState(false);
+  const [prodSelected, setProdSelected] = useState(new Set());
+  const [prodDropdownOpen, setProdDropdownOpen] = useState(false);
+  const [prodDetailPerson, setProdDetailPerson] = useState(null);
+  const [prodDetailTasks, setProdDetailTasks] = useState([]);
+  const [prodDetailLoading, setProdDetailLoading] = useState(false);
+  const [prodDetailHistoryPeriod, setProdDetailHistoryPeriod] = useState('all');
+  const [prodDetailColorFilter, setProdDetailColorFilter] = useState(new Set());
+  const [prodDetail3MoFilter, setProdDetail3MoFilter] = useState(null);
+
+  // ── My Tasks state ────────────────────────────────────────────────────────
+  const [myTaskOccs, setMyTaskOccs] = useState([]);
+  const [myTaskOneOffs, setMyTaskOneOffs] = useState([]);
+  const [myTaskLoading, setMyTaskLoading] = useState(false);
+  const [myTaskStatusFilter, setMyTaskStatusFilter] = useState('all');
+  const [myTaskExpanded, setMyTaskExpanded] = useState(new Set());
+  const [myTaskResponses, setMyTaskResponses] = useState({});
+  const [myTaskNotes, setMyTaskNotes] = useState({});
+  const [myTaskSubResponses, setMyTaskSubResponses] = useState({});
   // PM reminder counts keyed by occurrence ID, persisted in localStorage
   const [pmReminders, setPmReminders] = useState(() => {
     try { return JSON.parse(localStorage.getItem('lab_pm_reminders') || '{}'); } catch { return {}; }
@@ -327,6 +345,7 @@ export default function Tasks2({ userRole }) {
   useEffect(() => { if (tab === 'assigned') loadReport(reportPeriod, assignedFrom, assignedTo); }, [tab, reportPeriod, assignedFrom, assignedTo]); // eslint-disable-line
   useEffect(() => { if (tab === 'productivity') loadProductivity(prodPeriod); }, [tab, prodPeriod]); // eslint-disable-line
   useEffect(() => { if (tab === 'oneoff') loadOneOffTab(); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (tab === 'my-tasks' && userId) { loadMyTasks(); if (!vatLoaded) loadVatData(); } }, [tab, userId]); // eslint-disable-line
 
   useEffect(() => {
     localStorage.setItem('lab_maint_checks', JSON.stringify(maintChecks));
@@ -390,6 +409,7 @@ export default function Tasks2({ userRole }) {
       category: src.category || defaults?.category || 'MISC',
       frequency: src.frequency || defaults?.frequency || 'weekly',
       group_name: src.group_name || defaults?.group_name || '',
+      newGroupMode: false,
       sort_order: src.sort_order ?? 0,
       sop_trigger: src.sop_trigger || false,
       sop_url: src.conditional_text || '',
@@ -399,6 +419,7 @@ export default function Tasks2({ userRole }) {
       respFillIn: opts.includes('fill_in'),
       customOptions: opts.filter(o => o.startsWith('custom:')).map(o => o.slice(7)),
       subTasks: (src.sub_tasks || []).map(s => s.title || s),
+      subTaskTrigger: src.sub_tasks?.[0]?.trigger || 'always',
     });
     setEditingTaskDef(task || { _new: true, ...defaults });
     setConfirmDeleteDef(null);
@@ -429,7 +450,7 @@ export default function Tasks2({ userRole }) {
       conditional_text: taskDefForm.sop_url.trim() || null,
       response_type,
       response_options: response_options.length ? response_options : null,
-      sub_tasks: subTasksClean.length ? subTasksClean.map((t, i) => ({ id: i, title: t })) : null,
+      sub_tasks: subTasksClean.length ? subTasksClean.map((t, i) => ({ id: i, title: t, trigger: taskDefForm.subTaskTrigger })) : null,
       status: 'published',
     };
     if (editingTaskDef?.id) {
@@ -472,7 +493,7 @@ export default function Tasks2({ userRole }) {
             {/* Title */}
             <div>
               <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Title *</label>
-              <input value={f.title} onChange={e => tdf({ title: e.target.value })} placeholder="Task title…" style={inputStyle} />
+              <input value={f.title} onChange={e => tdf({ title: e.target.value })} onBlur={e => tdf({ title: e.target.value.trim().replace(/\b\w/g, c => c.toUpperCase()) })} placeholder="Task title…" style={inputStyle} />
             </div>
             {/* Category + Frequency */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -491,17 +512,38 @@ export default function Tasks2({ userRole }) {
                 </select>
               </div>
             </div>
-            {/* Group + Sort */}
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Group Name</label>
-                <input value={f.group_name} onChange={e => tdf({ group_name: e.target.value })} placeholder="Optional group header…" style={inputStyle} />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Sort Order</label>
-                <input type="number" value={f.sort_order} onChange={e => tdf({ sort_order: e.target.value })} style={inputStyle} />
-              </div>
+            {/* Group */}
+            {(() => {
+              const existingGroups = [...new Set(vatTasks.filter(t => t.group_name && t.category === f.category && t.frequency === f.frequency).map(t => t.group_name))].sort();
+              const showNewInput = f.newGroupMode;
+              const selectVal = showNewInput ? '__new__' : (f.group_name || '');
+              return (
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Group Name</label>
+              <select value={selectVal} onChange={e => {
+                if (e.target.value === '__new__') {
+                  tdf({ group_name: '', newGroupMode: true });
+                } else {
+                  tdf({ group_name: e.target.value, newGroupMode: false });
+                }
+              }} style={inputStyle}>
+                <option value="">No group</option>
+                {existingGroups.map(g => <option key={g} value={g}>{g}</option>)}
+                <option value="__new__">+ Add new group…</option>
+              </select>
+              {showNewInput && (
+                <input
+                  value={f.group_name}
+                  onChange={e => tdf({ group_name: e.target.value })}
+                  onBlur={e => tdf({ group_name: e.target.value.trim().replace(/\b\w/g, c => c.toUpperCase()) })}
+                  placeholder="New group name…"
+                  autoFocus
+                  style={{ ...inputStyle, marginTop: 6 }}
+                />
+              )}
             </div>
+              );
+            })()}
             {/* Response Options */}
             <div>
               <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>Response Options</label>
@@ -509,7 +551,6 @@ export default function Tasks2({ userRole }) {
                 {toggleBtn(f.respYes, () => tdf({ respYes: !f.respYes }), 'Yes')}
                 {toggleBtn(f.respNo, () => tdf({ respNo: !f.respNo }), 'No')}
                 {toggleBtn(f.respNa, () => tdf({ respNa: !f.respNa }), 'N/A')}
-                {toggleBtn(f.respFillIn, () => tdf({ respFillIn: !f.respFillIn }), 'Fill In')}
               </div>
               {f.customOptions.map((opt, i) => (
                 <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
@@ -524,6 +565,20 @@ export default function Tasks2({ userRole }) {
             {/* Sub-tasks */}
             <div>
               <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>Sub-tasks</label>
+              {f.subTasks.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Show sub-tasks when main answer is</span>
+                  <select value={f.subTaskTrigger} onChange={e => tdf({ subTaskTrigger: e.target.value })} style={{ ...inputStyle, flex: 1, padding: '4px 8px' }}>
+                    <option value="always">Always</option>
+                    {f.respYes && <option value="yes">Yes</option>}
+                    {f.respNo && <option value="no">No</option>}
+                    {f.respNa && <option value="na">N/A</option>}
+                    {f.customOptions.filter(o => o.trim()).map(o => (
+                      <option key={o} value={`custom:${o.trim()}`}>{o.trim()}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               {f.subTasks.map((st, i) => (
                 <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
                   <input value={st} onChange={e => { const a = [...f.subTasks]; a[i] = e.target.value; tdf({ subTasks: a }); }} placeholder={`Sub-task ${i + 1}…`} style={{ ...inputStyle, flex: 1 }} />
@@ -919,52 +974,80 @@ export default function Tasks2({ userRole }) {
     setProdLoading(false);
   }
 
+  async function loadMyTasks() {
+    if (!userId) return;
+    setMyTaskLoading(true);
+    const [{ data: occs }, { data: oneOffs }] = await Promise.all([
+      supabase
+        .from('task_occurrences')
+        .select('id, due_date, status, completed_at, notes, task_def:tasks_definitions(id, title, category, group_name, frequency, sop_trigger, conditional_text, response_options, sub_tasks, response_type)')
+        .eq('assigned_to', userId)
+        .order('due_date', { ascending: true }),
+      supabase
+        .from('sporadic_tasks')
+        .select('*, assigner:profiles!assigned_by(full_name)')
+        .eq('assigned_to', userId)
+        .order('due_date', { ascending: true }),
+    ]);
+    setMyTaskOccs(occs || []);
+    setMyTaskOneOffs(oneOffs || []);
+    setMyTaskLoading(false);
+  }
+
+  async function loadPersonDetail(profileId) {
+    setProdDetailLoading(true);
+    setProdDetailTasks([]);
+    const { data } = await supabase
+      .from('task_occurrences')
+      .select('id, due_date, status, completed_at, task_definition_id, task_def:tasks_definitions(title, category, group_name, frequency)')
+      .eq('assigned_to', profileId)
+      .order('due_date', { ascending: false });
+    setProdDetailTasks(data || []);
+    setProdDetailLoading(false);
+  }
+
   function renderProductivity() {
+    if (prodDetailPerson) return renderPersonDetail();
+
     const scoreColor = s => s === null ? 'var(--text-muted)' : s >= 90 ? '#22c55e' : s >= 70 ? '#f59e0b' : s >= 50 ? '#f97316' : '#ef4444';
 
-    function ScoreBlock({ label, stats }) {
+    const periods = [
+      { id: 'current', label: 'Currently' },
+      { id: '30d',     label: 'Last 30 Days' },
+      { id: 'all',     label: 'Since Joining' },
+    ];
+
+    const thStyle = { padding: '9px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center', borderBottom: '2px solid var(--border)', background: 'var(--bg-secondary)', whiteSpace: 'nowrap' };
+    const thLeftStyle = { ...thStyle, textAlign: 'left' };
+    const tdStyle = { padding: '10px 12px', fontSize: 13, textAlign: 'center', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' };
+    const tdLeftStyle = { ...tdStyle, textAlign: 'left' };
+
+    const ScoreCell = ({ stats }) => {
       const { onTime, late, missed, pending, matured, score } = stats;
       const col = scoreColor(score);
       return (
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>{label}</div>
-          {score === null && matured === 0 ? (
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No completed data</div>
-          ) : (
-            <>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 8 }}>
-                <span style={{ fontSize: 32, fontWeight: 800, color: col, lineHeight: 1 }}>{score !== null ? score : '—'}</span>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/ 100</span>
-              </div>
-              {matured > 0 && (
-                <div style={{ height: 5, borderRadius: 3, background: 'var(--bg-secondary)', overflow: 'hidden', display: 'flex', marginBottom: 8 }}>
-                  <div style={{ flex: onTime, background: '#22c55e', minWidth: onTime > 0 ? 2 : 0 }} />
-                  <div style={{ flex: late,   background: '#f59e0b', minWidth: late   > 0 ? 2 : 0 }} />
-                  <div style={{ flex: missed, background: '#ef4444', minWidth: missed > 0 ? 2 : 0 }} />
-                </div>
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 10px', fontSize: 11 }}>
-                <span style={{ color: '#22c55e' }}>✓ On time: <strong>{onTime}</strong></span>
-                <span style={{ color: '#ef4444' }}>✗ Missed: <strong>{missed}</strong></span>
-                <span style={{ color: '#f59e0b' }}>⚠ Late: <strong>{late}</strong></span>
-                <span style={{ color: 'var(--text-muted)' }}>⏳ Pending: <strong>{pending}</strong></span>
-              </div>
-            </>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 18, fontWeight: 800, color: col, lineHeight: 1 }}>{score !== null ? score : '—'}</span>
+          {matured > 0 && (
+            <div style={{ width: 48, height: 4, borderRadius: 2, background: 'var(--bg-secondary)', overflow: 'hidden', display: 'flex' }}>
+              <div style={{ flex: onTime, background: '#22c55e', minWidth: onTime > 0 ? 1 : 0 }} />
+              <div style={{ flex: late,   background: '#f59e0b', minWidth: late   > 0 ? 1 : 0 }} />
+              <div style={{ flex: missed, background: '#ef4444', minWidth: missed > 0 ? 1 : 0 }} />
+            </div>
           )}
+          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{score !== null ? '/ 100' : 'no data'}</span>
         </div>
       );
-    }
+    };
 
-    const periods = [
-      { id: 'current',  label: 'Currently' },
-      { id: '30d',      label: 'Last 30 Days' },
-      { id: 'all',      label: 'Since Joining' },
-    ];
+    const CountCell = ({ value, color }) => (
+      <span style={{ fontWeight: 600, color: color || 'var(--text-primary)', fontSize: 13 }}>{value}</span>
+    );
 
     return (
       <div>
         {/* Period picker */}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
           {periods.map(({ id, label }) => (
             <button key={id} onClick={() => setProdPeriod(id)}
               style={{ padding: '7px 18px', borderRadius: 20, border: `1.5px solid ${prodPeriod === id ? 'var(--purple-primary)' : 'var(--border)'}`, background: prodPeriod === id ? 'var(--purple-primary)' : 'transparent', color: prodPeriod === id ? '#fff' : 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
@@ -973,53 +1056,575 @@ export default function Tasks2({ userRole }) {
           ))}
         </div>
 
+        {/* Name filter dropdown */}
+        {!prodLoading && prodRows.length > 0 && (
+          <div style={{ position: 'relative', display: 'inline-block', marginBottom: 16 }}>
+            <button
+              onClick={() => setProdDropdownOpen(o => !o)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', border: '1.5px solid var(--border)', borderRadius: 8, background: 'var(--bg-card)', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', minWidth: 180 }}>
+              <span style={{ flex: 1, textAlign: 'left' }}>
+                {prodSelected.size === 0 ? 'All members' : prodSelected.size === 1 ? prodRows.find(r => prodSelected.has(r.profile.id))?.profile.full_name : `${prodSelected.size} members`}
+              </span>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>▼</span>
+            </button>
+            {prodDropdownOpen && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 200, marginTop: 4, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', minWidth: 220 }}>
+                <div
+                  onClick={() => { setProdSelected(new Set()); setProdDropdownOpen(false); }}
+                  style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', fontWeight: prodSelected.size === 0 ? 700 : 400, color: prodSelected.size === 0 ? 'var(--purple-primary)' : 'var(--text-primary)', borderBottom: '1px solid var(--border)', background: prodSelected.size === 0 ? '#f5eefb' : 'transparent' }}>
+                  All members
+                </div>
+                {prodRows.map(({ profile }) => {
+                  const sel = prodSelected.has(profile.id);
+                  return (
+                    <div key={profile.id}
+                      onClick={() => {
+                        const next = new Set(prodSelected);
+                        sel ? next.delete(profile.id) : next.add(profile.id);
+                        setProdSelected(next);
+                      }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', fontSize: 13, cursor: 'pointer', background: sel ? '#f5eefb' : 'transparent', color: sel ? 'var(--purple-primary)' : 'var(--text-primary)', fontWeight: sel ? 600 : 400 }}>
+                      <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${sel ? 'var(--purple-primary)' : 'var(--border)'}`, background: sel ? 'var(--purple-primary)' : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {sel && <span style={{ color: 'white', fontSize: 10, lineHeight: 1 }}>✓</span>}
+                      </div>
+                      {profile.full_name}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {prodLoading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
-            {prodRows.map(({ profile, recurring, oneOff, combined, pmReminders: pmCount }) => {
-              const col = scoreColor(combined.score);
-              return (
-                <div key={profile.id} style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--bg-card)', overflow: 'hidden' }}>
-                  {/* Header */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 14 }}>{profile.full_name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
-                        {combined.onTime + combined.late + combined.missed + combined.pending} tasks total
+          <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={{ ...thLeftStyle, borderRight: '1px solid var(--border)' }} rowSpan={2}>Name</th>
+                  <th style={{ ...thStyle, borderRight: '1px solid var(--border)' }} rowSpan={2}>Overall<br />Score</th>
+                  <th style={{ ...thStyle, borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }} colSpan={4}>Recurring Tasks</th>
+                  <th style={{ ...thStyle, borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }} colSpan={4}>One-off Tasks</th>
+                  <th style={thStyle} rowSpan={2}>PM<br />Reminders</th>
+                </tr>
+                <tr>
+                  {['Score', 'On Time', 'Late', 'Missed'].map((h, i) => (
+                    <th key={`r-${h}`} style={{ ...thStyle, borderRight: i === 3 ? '1px solid var(--border)' : undefined }}>{h}</th>
+                  ))}
+                  {['Score', 'On Time', 'Late', 'Missed'].map((h, i) => (
+                    <th key={`o-${h}`} style={{ ...thStyle, borderRight: i === 3 ? '1px solid var(--border)' : undefined }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {prodRows.filter(r => prodSelected.size === 0 || prodSelected.has(r.profile.id)).map(({ profile, recurring, oneOff, combined, pmReminders: pmCount }, idx) => (
+                  <tr key={profile.id} style={{ background: idx % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-secondary)', cursor: 'pointer' }}
+                    onClick={() => { setProdDetailPerson({ profile }); loadPersonDetail(profile.id); }}>
+                    <td style={{ ...tdLeftStyle, fontWeight: 600, borderRight: '1px solid var(--border)' }}>
+                      <span style={{ color: 'var(--purple-primary)', textDecoration: 'underline dotted' }}>{profile.full_name}</span>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
+                        {combined.onTime + combined.late + combined.missed + combined.pending} total · click to expand
                       </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 34, fontWeight: 800, color: col, lineHeight: 1 }}>{combined.score !== null ? combined.score : '—'}</div>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>overall / 100</div>
-                    </div>
-                  </div>
-
-                  {/* Body */}
-                  <div style={{ padding: '14px 16px' }}>
-                    {/* Recurring + One-off side by side */}
-                    <div style={{ display: 'flex', gap: 16, paddingBottom: 14, borderBottom: '1px solid var(--border)', marginBottom: 14 }}>
-                      <ScoreBlock label="Recurring" stats={recurring} />
-                      <div style={{ width: 1, background: 'var(--border)', flexShrink: 0 }} />
-                      <ScoreBlock label="One-off" stats={oneOff} />
-                    </div>
-
-                    {/* Reminders row */}
-                    <div style={{ display: 'flex', gap: 20 }}>
-                      <div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>PM reminders</div>
-                        <div style={{ fontSize: 20, fontWeight: 700, color: pmCount > 0 ? '#f59e0b' : 'var(--text-muted)' }}>{pmCount}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>System reminders</div>
-                        <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-muted)' }}>—</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                    </td>
+                    <td style={{ ...tdStyle, borderRight: '1px solid var(--border)' }}>
+                      <ScoreCell stats={combined} />
+                    </td>
+                    <td style={tdStyle}><ScoreCell stats={recurring} /></td>
+                    <td style={tdStyle}><CountCell value={recurring.onTime} color="#22c55e" /></td>
+                    <td style={tdStyle}><CountCell value={recurring.late}   color="#f59e0b" /></td>
+                    <td style={{ ...tdStyle, borderRight: '1px solid var(--border)' }}><CountCell value={recurring.missed} color={recurring.missed > 0 ? '#ef4444' : 'var(--text-muted)'} /></td>
+                    <td style={tdStyle}><ScoreCell stats={oneOff} /></td>
+                    <td style={tdStyle}><CountCell value={oneOff.onTime} color="#22c55e" /></td>
+                    <td style={tdStyle}><CountCell value={oneOff.late}   color="#f59e0b" /></td>
+                    <td style={{ ...tdStyle, borderRight: '1px solid var(--border)' }}><CountCell value={oneOff.missed} color={oneOff.missed > 0 ? '#ef4444' : 'var(--text-muted)'} /></td>
+                    <td style={tdStyle}>
+                      <span style={{ fontWeight: 600, fontSize: 15, color: pmCount > 0 ? '#f59e0b' : 'var(--text-muted)' }}>{pmCount}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderPersonDetail() {
+    const today = new Date().toISOString().split('T')[0];
+    const scoreColor = s => s === null ? 'var(--text-muted)' : s >= 90 ? '#22c55e' : s >= 70 ? '#f59e0b' : s >= 50 ? '#f97316' : '#ef4444';
+
+    const classify = occ => {
+      if (occ.status !== 'done' && occ.due_date >= today) return 'upcoming';
+      if (occ.status === 'done' && occ.completed_at && occ.completed_at.slice(0, 10) <= occ.due_date) return 'green';
+      if (occ.status === 'done') return 'yellow';
+      return 'red';
+    };
+
+    const taskLabel = occ => occ.task_def?.group_name || occ.task_def?.title || '—';
+
+    const periodCutoff = period => {
+      if (period === 'all') return '2020-01-01';
+      const d = new Date();
+      if (period === '30d')  { d.setDate(d.getDate() - 30); }
+      if (period === '3mo')  { d.setMonth(d.getMonth() - 3); }
+      if (period === '6mo')  { d.setMonth(d.getMonth() - 6); }
+      if (period === 'year') { d.setFullYear(d.getFullYear() - 1); }
+      return d.toISOString().split('T')[0];
+    };
+
+    const historyPeriods = [
+      { id: 'all',  label: 'All Time' },
+      { id: 'year', label: 'This Year' },
+      { id: '6mo',  label: 'Last 6 Months' },
+      { id: '3mo',  label: 'Last 3 Months' },
+      { id: '30d',  label: 'Last 30 Days' },
+    ];
+
+    const STATUS_META = {
+      green:  { label: 'On Time',  bg: '#f0fdf4', color: '#22c55e', border: '#86efac' },
+      yellow: { label: 'Late',     bg: '#fffbeb', color: '#f59e0b', border: '#fcd34d' },
+      red:    { label: 'Missed',   bg: '#fef2f2', color: '#ef4444', border: '#fca5a5' },
+    };
+
+    const cutoff = periodCutoff(prodDetailHistoryPeriod);
+    const historyTasks = prodDetailTasks
+      .filter(o => classify(o) !== 'upcoming' && o.due_date >= cutoff)
+      .filter(o => prodDetailColorFilter.size === 0 || prodDetailColorFilter.has(classify(o)));
+
+    const upcomingTasks = prodDetailTasks.filter(o => classify(o) === 'upcoming');
+
+    const threeMoCutoff = periodCutoff('3mo');
+    const threeMoTasks  = prodDetailTasks.filter(o => classify(o) !== 'upcoming' && o.due_date >= threeMoCutoff);
+    const threeMoGreen  = threeMoTasks.filter(o => classify(o) === 'green');
+    const threeMoYellow = threeMoTasks.filter(o => classify(o) === 'yellow');
+    const threeMoRed    = threeMoTasks.filter(o => classify(o) === 'red');
+    const threeMoTotal  = threeMoTasks.length;
+    const pct = n => threeMoTotal > 0 ? Math.round(n / threeMoTotal * 100) : 0;
+
+    const threeMoFiltered = prodDetail3MoFilter === 'green' ? threeMoGreen : prodDetail3MoFilter === 'yellow' ? threeMoYellow : prodDetail3MoFilter === 'red' ? threeMoRed : [];
+
+    const sectionLabel = { fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 };
+    const pill = (active, color, bg, border, label, onClick) => (
+      <button onClick={onClick} style={{ padding: '5px 13px', borderRadius: 20, border: `1.5px solid ${active ? border : 'var(--border)'}`, background: active ? bg : 'transparent', color: active ? color : 'var(--text-muted)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{label}</button>
+    );
+
+    const TaskRow = ({ occ }) => {
+      const cls = classify(occ);
+      const meta = STATUS_META[cls] || {};
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+          <div style={{ width: 10, height: 10, borderRadius: '50%', background: meta.color || 'var(--border)', flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{taskLabel(occ)}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{occ.task_def?.category} · {occ.task_def?.frequency}</div>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Due {occ.due_date}</div>
+          <div style={{ padding: '2px 9px', borderRadius: 12, background: meta.bg, color: meta.color, fontSize: 11, fontWeight: 600, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap' }}>{meta.label}</div>
+        </div>
+      );
+    };
+
+    const { profile } = prodDetailPerson;
+
+    return (
+      <div>
+        {/* Back button + person header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+          <button
+            onClick={() => { setProdDetailPerson(null); setProdDetailTasks([]); setProdDetail3MoFilter(null); setProdDetailColorFilter(new Set()); setProdDetailHistoryPeriod('all'); }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', border: '1.5px solid var(--border)', borderRadius: 8, background: 'var(--bg-card)', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
+            ← Back
+          </button>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>{profile.full_name}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{prodDetailTasks.length} total task occurrences</div>
+          </div>
+        </div>
+
+        {prodDetailLoading ? (
+          <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+
+            {/* ── LAST 3 MONTH REVIEW ── */}
+            <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ padding: '14px 18px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                <div style={sectionLabel}>Last 3 Month Review</div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  {[['green', threeMoGreen], ['yellow', threeMoYellow], ['red', threeMoRed]].map(([key, arr]) => {
+                    const m = STATUS_META[key];
+                    const active = prodDetail3MoFilter === key;
+                    return (
+                      <button key={key} onClick={() => setProdDetail3MoFilter(active ? null : key)}
+                        style={{ flex: 1, padding: '14px 12px', border: `2px solid ${active ? m.color : m.border}`, borderRadius: 10, background: active ? m.bg : 'var(--bg-card)', cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' }}>
+                        <div style={{ fontSize: 30, fontWeight: 800, color: m.color, lineHeight: 1 }}>{pct(arr.length)}%</div>
+                        <div style={{ fontSize: 12, color: m.color, fontWeight: 600, marginTop: 4 }}>{m.label}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{arr.length} task{arr.length !== 1 ? 's' : ''}</div>
+                        {threeMoTotal > 0 && (
+                          <div style={{ marginTop: 8, height: 4, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
+                            <div style={{ width: `${pct(arr.length)}%`, height: '100%', background: m.color, borderRadius: 2 }} />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                {threeMoTotal === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 8 }}>No completed tasks in the last 3 months.</div>}
+              </div>
+              {prodDetail3MoFilter && (
+                <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+                  {threeMoFiltered.length === 0
+                    ? <div style={{ padding: '16px 18px', fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No tasks.</div>
+                    : threeMoFiltered.map(occ => <TaskRow key={occ.id} occ={occ} />)}
+                </div>
+              )}
+            </div>
+
+            {/* ── UPCOMING ── */}
+            <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ padding: '14px 18px', background: 'var(--bg-secondary)', borderBottom: upcomingTasks.length > 0 ? '1px solid var(--border)' : 'none' }}>
+                <div style={sectionLabel}>Upcoming</div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{upcomingTasks.length} task{upcomingTasks.length !== 1 ? 's' : ''} not yet due</div>
+              </div>
+              {upcomingTasks.length === 0
+                ? <div style={{ padding: '16px 18px', fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No upcoming tasks.</div>
+                : (
+                  <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+                    {upcomingTasks.map(occ => (
+                      <div key={occ.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--purple-primary)', flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{taskLabel(occ)}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{occ.task_def?.category} · {occ.task_def?.frequency}</div>
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Due {occ.due_date}</div>
+                        <div style={{ padding: '2px 9px', borderRadius: 12, background: '#f5eefb', color: 'var(--purple-primary)', fontSize: 11, fontWeight: 600, border: '1px solid #d4b8f0', whiteSpace: 'nowrap' }}>Upcoming</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </div>
+
+            {/* ── HISTORY ── */}
+            <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ padding: '14px 18px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                <div style={sectionLabel}>History</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                  {historyPeriods.map(({ id, label }) => (
+                    <button key={id} onClick={() => setProdDetailHistoryPeriod(id)}
+                      style={{ padding: '5px 13px', borderRadius: 20, border: `1.5px solid ${prodDetailHistoryPeriod === id ? 'var(--purple-primary)' : 'var(--border)'}`, background: prodDetailHistoryPeriod === id ? 'var(--purple-primary)' : 'transparent', color: prodDetailHistoryPeriod === id ? '#fff' : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {Object.entries(STATUS_META).map(([key, m]) => {
+                    const active = prodDetailColorFilter.has(key);
+                    return pill(active, m.color, m.bg, m.border, m.label, () => {
+                      const next = new Set(prodDetailColorFilter);
+                      active ? next.delete(key) : next.add(key);
+                      setProdDetailColorFilter(next);
+                    });
+                  })}
+                  {prodDetailColorFilter.size > 0 && (
+                    <button onClick={() => setProdDetailColorFilter(new Set())} style={{ padding: '5px 10px', borderRadius: 20, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer' }}>Clear</button>
+                  )}
+                </div>
+              </div>
+              {historyTasks.length === 0
+                ? <div style={{ padding: '16px 18px', fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No tasks for this period / filter.</div>
+                : (
+                  <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+                    {historyTasks.map(occ => <TaskRow key={occ.id} occ={occ} />)}
+                  </div>
+                )}
+            </div>
+
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderMyTasksTab() {
+    const today = new Date().toISOString().split('T')[0];
+
+    const classifyOcc = occ => {
+      if (occ.status === 'done') return occ.completed_at && occ.completed_at.slice(0, 10) <= occ.due_date ? 'ontime' : 'late';
+      if (occ.due_date < today) return 'overdue';
+      return 'upcoming';
+    };
+    const classifyOneOff = t => {
+      if (t.status === 'completed') return t.completed_at && t.completed_at.slice(0, 10) <= t.due_date ? 'ontime' : 'late';
+      if (t.due_date && t.due_date < today) return 'overdue';
+      return 'upcoming';
+    };
+
+    const FILTER_OPTIONS = [
+      { id: 'all',      label: 'All' },
+      { id: 'upcoming', label: 'Upcoming' },
+      { id: 'overdue',  label: 'Overdue' },
+      { id: 'ontime',   label: 'Completed On Time' },
+      { id: 'late',     label: 'Completed Late' },
+    ];
+
+    const dateLabel = d => {
+      if (!d || d === 'none') return 'No Due Date';
+      if (d === today) return 'Today';
+      const tom = new Date(); tom.setDate(tom.getDate() + 1);
+      if (d === tom.toISOString().split('T')[0]) return 'Tomorrow';
+      return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    };
+    const dateIsOverdue = d => d && d !== 'none' && d < today;
+
+    const handleMySub = stKey => setMyTaskSubResponses(p => ({ ...p, [stKey]: !p[stKey] }));
+
+    // Recurring occs: group by date → category → group_name
+    const occsByDate = {};
+    const occDateOrder = [];
+    myTaskOccs
+      .filter(o => myTaskStatusFilter === 'all' || classifyOcc(o) === myTaskStatusFilter)
+      .slice()
+      .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''))
+      .forEach(occ => {
+        const date = occ.due_date || 'none';
+        const cat  = occ.task_def?.category || 'General';
+        const grp  = occ.task_def?.group_name || occ.task_def?.title || '—';
+        if (!occsByDate[date]) { occsByDate[date] = {}; occDateOrder.push(date); }
+        if (!occsByDate[date][cat]) occsByDate[date][cat] = {};
+        if (!occsByDate[date][cat][grp]) occsByDate[date][cat][grp] = [];
+        occsByDate[date][cat][grp].push(occ);
+      });
+
+    // One-offs: group by date → category (no group_name)
+    const oneOffsByDate = {};
+    const oneOffDateOrder = [];
+    myTaskOneOffs
+      .filter(t => myTaskStatusFilter === 'all' || classifyOneOff(t) === myTaskStatusFilter)
+      .slice()
+      .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''))
+      .forEach(t => {
+        const date = t.due_date || 'none';
+        const cat  = t.category || 'General';
+        if (!oneOffsByDate[date]) { oneOffsByDate[date] = {}; oneOffDateOrder.push(date); }
+        if (!oneOffsByDate[date][cat]) oneOffsByDate[date][cat] = [];
+        oneOffsByDate[date][cat].push(t);
+      });
+
+    const allDates = [...new Set([...occDateOrder, ...oneOffDateOrder])].sort((a, b) => {
+      if (a === 'none') return 1; if (b === 'none') return -1;
+      return a.localeCompare(b);
+    });
+
+    const overdueCt  = myTaskOccs.filter(o => classifyOcc(o) === 'overdue').length + myTaskOneOffs.filter(t => classifyOneOff(t) === 'overdue').length;
+    const upcomingCt = myTaskOccs.filter(o => classifyOcc(o) === 'upcoming').length + myTaskOneOffs.filter(t => classifyOneOff(t) === 'upcoming').length;
+    const totalFiltered = allDates.length;
+
+    // Render a single recurring task occurrence using the exact same state/handlers as the Tasks tab
+    const renderOccTask = occ => {
+      const task = occ.task_def || {};
+      const resp = vatResponses[task.id];
+      const respVal = resp?.response || '';
+      const done = respVal === 'yes' || respVal === 'checked';
+      const isDone = classifyOcc(occ) === 'ontime' || classifyOcc(occ) === 'late';
+
+      const subTasks = task.sub_tasks || [];
+      const subTrigger = subTasks[0]?.trigger || 'always';
+      const showSubs = subTasks.length > 0 && (() => {
+        if (subTrigger === 'always') return true;
+        if (subTrigger.startsWith('custom:')) return respVal === subTrigger.slice(7);
+        return respVal === subTrigger;
+      })();
+
+      return (
+        <div key={occ.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px' }}>
+            {/* Response buttons — identical to Tasks tab */}
+            <div style={{ display: 'flex', gap: '5px', flexShrink: 0, marginTop: '2px' }}>
+              {(task.response_type === 'yes_no' || task.response_type === 'yes_no_na') ? (
+                <>
+                  <button onClick={() => handleVatResponse(task.id, respVal === 'yes' ? '' : 'yes')} title="Yes" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: respVal === 'yes' ? 'var(--success)' : 'var(--border)', background: respVal === 'yes' ? 'var(--success)' : 'transparent', color: respVal === 'yes' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
+                  <button onClick={() => handleVatResponse(task.id, respVal === 'no' ? '' : 'no')} title="No" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: respVal === 'no' ? 'var(--danger)' : 'var(--border)', background: respVal === 'no' ? 'var(--danger)' : 'transparent', color: respVal === 'no' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><XCircle size={13} /></button>
+                  {task.response_type === 'yes_no_na' && <button onClick={() => handleVatResponse(task.id, respVal === 'na' ? '' : 'na')} style={{ padding: '0 7px', height: '26px', borderRadius: '13px', border: '2px solid', borderColor: respVal === 'na' ? 'var(--text-muted)' : 'var(--border)', background: respVal === 'na' ? 'var(--text-muted)' : 'transparent', color: respVal === 'na' ? 'white' : 'var(--text-muted)', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}>N/A</button>}
+                </>
+              ) : task.response_type === 'checkbox' ? (
+                <button onClick={() => handleVatResponse(task.id, respVal === 'checked' ? '' : 'checked')} style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid', borderColor: respVal === 'checked' ? 'var(--purple-primary)' : 'var(--border)', background: respVal === 'checked' ? 'var(--purple-primary)' : 'transparent', color: respVal === 'checked' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
+              ) : task.response_options?.length ? (
+                task.response_options.map(opt => {
+                  const val = opt.startsWith('custom:') ? opt.slice(7) : opt;
+                  const activeColor = opt === 'yes' ? 'var(--success)' : opt === 'no' ? 'var(--danger)' : opt === 'na' ? 'var(--text-muted)' : 'var(--purple-primary)';
+                  const active = respVal === val;
+                  const isNa = opt === 'na';
+                  return (
+                    <button key={opt} onClick={() => handleVatResponse(task.id, active ? '' : val)} title={val}
+                      style={{ minWidth: '26px', height: '26px', padding: '0 6px', borderRadius: isNa ? '13px' : '50%', border: `2px solid ${active ? activeColor : 'var(--border)'}`, background: active ? activeColor : 'transparent', color: active ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: isNa ? '10px' : '13px', fontWeight: 600 }}>
+                      {opt === 'yes' ? <CheckCircle size={13} /> : opt === 'no' ? <XCircle size={13} /> : val.slice(0, 4)}
+                    </button>
+                  );
+                })
+              ) : (
+                <label style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                  <Upload size={13} />
+                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={() => {}} />
+                </label>
+              )}
+            </div>
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                <p style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', lineHeight: 1.5, margin: 0, flex: 1 }}>{task.title}</p>
+                <button onClick={() => openTaskDefEditor(task)} title="Edit task" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '1px 3px', display: 'flex', flexShrink: 0, opacity: 0.5 }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}><Pencil size={12} /></button>
+              </div>
+
+              {task.sop_trigger && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px', padding: '2px 7px', background: '#FEF0F0', color: 'var(--danger)', borderRadius: '12px', fontSize: '10px', fontWeight: 600 }}>
+                  <AlertTriangle size={9} />
+                  {task.conditional_text ? <a href={task.conditional_text} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--danger)', textDecoration: 'underline' }}>SOP</a> : 'SOP'}
+                </span>
+              )}
+
+              {vatExisting[task.id] && (
+                <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                  <span style={{ color: 'var(--success)' }}>✓</span> Done by {vatExisting[task.id].assignment?.profile?.full_name || '?'} on {new Date(vatExisting[task.id].responded_at).toLocaleDateString()}
+                </div>
+              )}
+
+              {respVal && (
+                <textarea value={resp?.notes || ''} onChange={e => handleVatNotes(task.id, e.target.value)} placeholder="Notes (optional)" rows={1}
+                  style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />
+              )}
+
+              {showSubs && (
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                  {subTasks.map((st, si) => {
+                    const stKey = `${task.id}_sub_${st.id}`;
+                    const stDone = vatResponses[stKey]?.response === 'checked';
+                    return (
+                      <div key={si} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
+                        <button onClick={() => handleVatResponse(stKey, stDone ? '' : 'checked')} style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${stDone ? 'var(--purple-primary)' : 'var(--border)'}`, background: stDone ? 'var(--purple-primary)' : 'transparent', color: stDone ? 'white' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}><Check size={11} /></button>
+                        <span style={{ fontSize: 12, color: stDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: stDone ? 'line-through' : 'none' }}>{st.title}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // Render a one-off task card
+    const renderOneOffTask = t => {
+      const cls = classifyOneOff(t);
+      const isDone = cls === 'ontime' || cls === 'late';
+      const key = `oneoff-${t.id}`;
+      const resp = myTaskResponses[key] || '';
+      const notes = myTaskNotes[key] ?? (t.notes || '');
+      const toggleResp = () => setMyTaskResponses(p => ({ ...p, [key]: p[key] === 'checked' ? '' : 'checked' }));
+      const updateNotes = v => setMyTaskNotes(p => ({ ...p, [key]: v }));
+      return (
+        <div key={t.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px' }}>
+            <div style={{ display: 'flex', gap: '5px', flexShrink: 0, marginTop: '2px' }}>
+              <button onClick={toggleResp} style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp === 'checked' || isDone ? 'var(--success)' : 'var(--border)', background: resp === 'checked' || isDone ? 'var(--success)' : 'transparent', color: resp === 'checked' || isDone ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: '13px', color: isDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.5, margin: 0 }}>{t.title}</p>
+              {t.description && <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: 3 }}>{t.description}</div>}
+              {t.assigner?.full_name && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 2 }}>Assigned by {t.assigner.full_name}</div>}
+              {isDone && t.completed_at && (
+                <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                  <span style={{ color: 'var(--success)' }}>✓</span> Completed on {new Date(t.completed_at).toLocaleDateString()}
+                  {cls === 'late' && <span style={{ color: '#f59e0b', marginLeft: 4 }}>(late)</span>}
+                </div>
+              )}
+              {(resp || isDone) && (
+                <textarea value={notes} onChange={e => updateNotes(e.target.value)} placeholder="Notes (optional)" rows={1}
+                  style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />
+              )}
+              {t.file_url && <div style={{ marginTop: 6 }}><a href={t.file_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: 'var(--purple-primary)', fontWeight: 600 }}>📎 Attachment →</a></div>}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    return (
+      <div>
+        {/* Header */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>My Tasks</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
+            {myProfile?.full_name || 'Your'} assigned tasks — {upcomingCt} upcoming{overdueCt > 0 ? `, ${overdueCt} overdue` : ''}
+          </div>
+        </div>
+
+        {/* Status filter */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 20 }}>
+          {FILTER_OPTIONS.map(({ id, label }) => (
+            <button key={id} onClick={() => setMyTaskStatusFilter(id)}
+              style={{ padding: '6px 16px', borderRadius: 20, border: `1.5px solid ${myTaskStatusFilter === id ? 'var(--purple-primary)' : 'var(--border)'}`, background: myTaskStatusFilter === id ? 'var(--purple-primary)' : 'transparent', color: myTaskStatusFilter === id ? '#fff' : 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {myTaskLoading ? (
+          <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
+        ) : totalFiltered === 0 ? (
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>No tasks match this filter.</div>
+        ) : (
+          allDates.map(date => {
+            const occCatMap    = occsByDate[date] || {};
+            const oneOffCatMap = oneOffsByDate[date] || {};
+            const allCats      = [...new Set([...Object.keys(occCatMap), ...Object.keys(oneOffCatMap)])].sort();
+            if (allCats.length === 0) return null;
+            const isOverdue = dateIsOverdue(date);
+
+            return (
+              <div key={date} style={{ marginBottom: 32 }}>
+                {/* Date header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: isOverdue ? '#ef4444' : 'var(--text-primary)' }}>
+                    {dateLabel(date)}
+                    {date !== 'none' && <span style={{ fontWeight: 400, fontSize: 13, color: 'var(--text-muted)', marginLeft: 8 }}>
+                      {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>}
+                  </div>
+                  {isOverdue && <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', padding: '2px 8px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 10 }}>OVERDUE</span>}
+                  <div style={{ flex: 1, height: 2, background: isOverdue ? '#fca5a5' : 'var(--purple-primary)', opacity: 0.25, borderRadius: 1 }} />
+                </div>
+
+                {/* Categories */}
+                {allCats.map(cat => (
+                  <div key={cat} style={{ marginBottom: 20 }}>
+                    {allCats.length > 1 && (
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10, paddingLeft: 2 }}>{cat}</div>
+                    )}
+
+                    {/* Recurring groups within this category */}
+                    {Object.entries(occCatMap[cat] || {}).map(([groupName, occs]) => (
+                      <div key={groupName} style={{ marginBottom: 4 }}>
+                        {groupName && (
+                          <div style={{ padding: '10px 2px 6px', borderBottom: '2px solid var(--purple-primary)', marginBottom: '8px' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--purple-primary)' }}>{groupName}</span>
+                          </div>
+                        )}
+                        {occs.map(occ => renderOccTask(occ))}
+                      </div>
+                    ))}
+
+                    {/* One-off tasks within this category (no group header) */}
+                    {(oneOffCatMap[cat] || []).map(t => renderOneOffTask(t))}
+                  </div>
+                ))}
+              </div>
+            );
+          })
         )}
       </div>
     );
@@ -1336,6 +1941,9 @@ export default function Tasks2({ userRole }) {
                 <CheckCircle size={13} color="var(--success)" />
                 {completedCount} / {adjustedVisibleTasks.length}
               </div>
+              <button onClick={() => openTaskDefEditor(null, { category: vatCategory, frequency: vatFreq })} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px', border: '1px solid var(--purple-primary)', borderRadius: 'var(--radius-md)', background: 'var(--purple-primary)', color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                <Plus size={13} /> Add Task
+              </button>
             </div>
 
             {adjustedVisibleTasks.length > 0 && (
@@ -1403,7 +2011,13 @@ export default function Tasks2({ userRole }) {
                               <textarea value={resp?.notes || ''} onChange={e => handleVatNotes(task.id, e.target.value)} placeholder="Notes (optional)" rows={1}
                                 style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />
                             )}
-                            {task.sub_tasks && task.sub_tasks.length > 0 && (
+                            {task.sub_tasks && task.sub_tasks.length > 0 && (() => {
+                              const trigger = task.sub_tasks[0]?.trigger || 'always';
+                              if (trigger === 'always') return true;
+                              const mainResp = resp?.response;
+                              if (trigger.startsWith('custom:')) return mainResp === trigger.slice(7);
+                              return mainResp === trigger;
+                            })() && (
                               <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
                                 {task.sub_tasks.map((st, si) => {
                                   const stKey = `${task.id}_sub_${st.id}`;
@@ -1447,10 +2061,6 @@ export default function Tasks2({ userRole }) {
                 </div>
               );
             })}
-            {/* Add Task button */}
-            <button onClick={() => openTaskDefEditor(null, { category: vatCategory, frequency: vatFreq })} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, padding: '8px 14px', border: '1px dashed var(--border)', borderRadius: 'var(--radius-md)', background: 'none', color: 'var(--text-muted)', fontSize: 13, cursor: 'pointer', width: '100%', justifyContent: 'center' }}>
-              <Plus size={13} /> Add Task
-            </button>
           </>
         )}
 
@@ -2713,8 +3323,17 @@ export default function Tasks2({ userRole }) {
     </div>
   );
 
+  const myTaskOverdueCt = myTaskOccs.filter(o => {
+    const today = new Date().toISOString().split('T')[0];
+    return o.status !== 'done' && o.due_date < today;
+  }).length + myTaskOneOffs.filter(t => {
+    const today = new Date().toISOString().split('T')[0];
+    return t.status !== 'completed' && t.due_date && t.due_date < today;
+  }).length;
+
   const tabs = [
     { id: 'view-all',     label: 'Tasks' },
+    { id: 'my-tasks',     label: 'My Tasks', badge: myTaskOverdueCt || null },
     { id: 'oneoff',       label: 'One-off Tasks' },
     { id: 'calendar',     label: 'Calendar' },
     { id: 'productivity', label: 'Productivity' },
@@ -2787,6 +3406,12 @@ export default function Tasks2({ userRole }) {
       {tab === 'assigned' && (
         <div style={card}>
           {renderAssignedTab()}
+        </div>
+      )}
+
+      {tab === 'my-tasks' && (
+        <div style={card}>
+          {renderMyTasksTab()}
         </div>
       )}
 
