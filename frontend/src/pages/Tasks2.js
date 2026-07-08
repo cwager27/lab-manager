@@ -288,10 +288,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const [myTaskOneOffs, setMyTaskOneOffs] = useState([]);
   const [myTaskLoading, setMyTaskLoading] = useState(false);
   const [myTaskStatusFilter, setMyTaskStatusFilter] = useState('all');
-  const [myTaskExpanded, setMyTaskExpanded] = useState(new Set());
   const [myTaskResponses, setMyTaskResponses] = useState({});
   const [myTaskNotes, setMyTaskNotes] = useState({});
-  const [myTaskSubResponses, setMyTaskSubResponses] = useState({});
   // Tracks occurrence IDs already auto-persisted as 'done' to avoid duplicate DB writes
   const persistedCompletionsRef = useRef(new Set());
 
@@ -1078,7 +1076,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     const tdLeftStyle = { ...tdStyle, textAlign: 'left' };
 
     const ScoreCell = ({ stats }) => {
-      const { onTime, late, missed, pending, matured, score } = stats;
+      const { onTime, late, missed, matured, score } = stats;
       const col = scoreColor(score);
       return (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
@@ -1209,7 +1207,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
   function renderPersonDetail() {
     const today = new Date().toISOString().split('T')[0];
-    const scoreColor = s => s === null ? 'var(--text-muted)' : s >= 90 ? '#22c55e' : s >= 70 ? '#f59e0b' : s >= 50 ? '#f97316' : '#ef4444';
 
     const classify = occ => {
       if (occ.status !== 'done' && occ.due_date >= today) return 'upcoming';
