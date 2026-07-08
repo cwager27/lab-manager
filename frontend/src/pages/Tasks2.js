@@ -344,7 +344,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   useEffect(() => { if (tab === 'view-all' && !vatLoaded) loadVatData(); }, [tab, vatLoaded]); // eslint-disable-line
   useEffect(() => { if (tab === 'assigned') loadAssignedTasks(assignedFrom, assignedTo); }, [tab, assignedFrom, assignedTo]); // eslint-disable-line
   useEffect(() => { if (tab === 'assigned') loadReport(reportPeriod, assignedFrom, assignedTo); }, [tab, reportPeriod, assignedFrom, assignedTo]); // eslint-disable-line
-  useEffect(() => { if (tab === 'productivity') loadProductivity(prodPeriod); }, [tab, prodPeriod]); // eslint-disable-line
+  useEffect(() => { if (tab === 'productivity') loadProductivity(prodPeriod); }, [tab, prodPeriod, profiles.length]); // eslint-disable-line
   useEffect(() => { if (tab === 'oneoff') loadOneOffTab(); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (tab === 'my-tasks' && userId) { loadMyTasks(); if (!vatLoaded) loadVatData(); } }, [tab, userId]); // eslint-disable-line
 
@@ -974,17 +974,24 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       qFrom = '2020-01-01';
       qTo = '2099-12-31';
     } else {
-      // current: all time including pending future tasks
       qFrom = '2020-01-01';
       qTo = new Date(Date.now() + 60 * 86400000).toISOString().split('T')[0];
     }
 
-    const { data } = await supabase
-      .from('task_occurrences')
-      .select('id, due_date, status, completed_at, assigned_to, task_definition_id, task_def:tasks_definitions(category)')
-      .not('assigned_to', 'is', null)
-      .gte('due_date', qFrom)
-      .lte('due_date', qTo);
+    const [{ data }, { data: profData }] = await Promise.all([
+      supabase
+        .from('task_occurrences')
+        .select('id, due_date, status, completed_at, assigned_to, task_definition_id, task_def:tasks_definitions(category)')
+        .not('assigned_to', 'is', null)
+        .gte('due_date', qFrom)
+        .lte('due_date', qTo),
+      profiles.length === 0
+        ? supabase.from('profiles').select('id, full_name, email, role')
+        : Promise.resolve({ data: null }),
+    ]);
+
+    const allProfiles = (profData && profData.length > 0) ? profData : profiles;
+    if (profData && profData.length > 0) setProfiles(profData);
 
     const RECURRING_CATS = new Set(['MISC', 'PM', 'Equipment']);
 
@@ -992,10 +999,9 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       const onTime  = arr.filter(o => o.status === 'done' && o.completed_at && o.completed_at.slice(0,10) <= o.due_date).length;
       const late    = arr.filter(o => o.status === 'done' && o.completed_at && o.completed_at.slice(0,10) > o.due_date).length;
       const missed  = arr.filter(o => o.status !== 'done' && o.due_date < todayStr).length;
-      const pending = arr.filter(o => o.status !== 'done' && o.due_date >= todayStr).length;
       const matured = onTime + late + missed;
       const score   = matured > 0 ? Math.round((onTime + late * 0.5) / matured * 100) : null;
-      return { onTime, late, missed, pending, matured, score };
+      return { onTime, late, missed, matured, score };
     }
 
     const byPerson = {};
@@ -1004,7 +1010,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       byPerson[occ.assigned_to].push(occ);
     });
 
-    const rows = profiles
+    const rows = allProfiles
       .map(p => {
         const occs    = byPerson[p.id] || [];
         const recurring = occs.filter(o => RECURRING_CATS.has(o.task_def?.category));

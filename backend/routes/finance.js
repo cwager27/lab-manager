@@ -214,9 +214,10 @@ router.post('/import-nanoseq', async (req, res) => {
   }
 });
 
-// Daily grant alert check (called from cron)
+// Daily grant alert check — PAUSED until reinstated
 async function checkGrantAlerts() {
-  const { data: grants } = await supabase.from('grants').select('*');
+  return; // emails paused — remove this line to reinstate
+  const { data: grants } = await supabase.from('grants').select('*'); // eslint-disable-line no-unreachable
   const { data: managers } = await supabase
     .from('profiles').select('email, full_name').in('role', ['admin', 'pm']);
 
