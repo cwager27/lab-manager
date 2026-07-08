@@ -3473,11 +3473,11 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
   const tabs = [
     { id: 'view-all',     label: 'Tasks' },
-    { id: 'my-tasks',     label: 'My Tasks', badge: myTaskOverdueCt || null },
     { id: 'oneoff',       label: 'One-off Tasks' },
     { id: 'calendar',     label: 'Calendar' },
     { id: 'productivity', label: 'Productivity' },
     { id: 'assigned',     label: 'Insights', badge: unassignedCount || null },
+    { id: 'my-tasks',     label: 'My Tasks', badge: myTaskOverdueCt || null },
   ];
 
   return (
