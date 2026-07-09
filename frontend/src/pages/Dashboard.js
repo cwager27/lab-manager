@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle, Pencil, Trash2, X, Check } from 'lucide-react';
+import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle } from 'lucide-react';
 
 
 function formatDate(d) {
@@ -9,14 +9,6 @@ function formatDate(d) {
   return `${m}/${day}/${y}`;
 }
 
-const FREQ_ORDER = ['daily', 'weekly', 'biweekly', 'monthly', 'yearly'];
-const FREQ_COLORS = {
-  daily:    { bg: '#EBF5FB', text: '#2980B9' },
-  weekly:   { bg: '#EAF7F0', text: '#27AE60' },
-  biweekly: { bg: '#FEF9E7', text: '#F39C12' },
-  monthly:  { bg: '#F5EEF8', text: '#7B3FA0' },
-  yearly:   { bg: '#FDEDEC', text: '#E74C3C' },
-};
 
 const PROD_PERIODS = [{ id: 'current', label: 'Currently' }, { id: '30d', label: 'Last 30d' }, { id: 'all', label: 'Since Joining' }];
 
@@ -33,24 +25,50 @@ function PeriodPicker({ value, onChange }) {
   );
 }
 
-function MiniScoreRow({ row }) {
-  const { profile, score } = row;
-  const firstName = (profile.full_name || '').split(' ')[0];
-  const noData = score === null;
-  const barStyle = noData
-    ? { width: '100%', background: '#e5d0f5' }
-    : score === 0
-    ? { width: '100%', background: 'hsl(0, 75%, 42%)' }
-    : { width: `${score}%`, background: `hsl(${Math.round(score * 1.2)}, 75%, 42%)` };
+function TaskStatusCard({ icon, title, tasks, getTitle, dateKey }) {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const next14 = new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
+  const next30 = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+  const missed   = tasks.filter(t => t.status !== 'done' && t[dateKey] && t[dateKey] < todayStr);
+  const twoWeeks = tasks.filter(t => t.status !== 'done' && t[dateKey] && t[dateKey] >= todayStr && t[dateKey] <= next14);
+  const thirty   = tasks.filter(t => t.status !== 'done' && t[dateKey] && t[dateKey] > next14 && t[dateKey] <= next30);
+  const isEmpty  = !missed.length && !twoWeeks.length && !thirty.length;
+
+  const renderSection = (label, items, headBg, headColor) => {
+    if (!items.length) return null;
+    return (
+      <div key={label}>
+        <div style={{ padding: '5px 14px', background: headBg, display: 'flex', alignItems: 'center', gap: 6, borderTop: '1px solid var(--border)' }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: headColor, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+          <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(255,255,255,0.55)', color: headColor, borderRadius: 8, padding: '0 5px', lineHeight: 1.6 }}>{items.length}</span>
+        </div>
+        {items.map(t => (
+          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderTop: '1px solid var(--border)' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-primary)', flex: 1, lineHeight: 1.3 }}>{getTitle(t)}</span>
+            {t[dateKey] && (
+              <span style={{ fontSize: 10, color: headColor === '#E74C3C' ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(t[dateKey])}</span>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', width: 72, overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>{firstName}</div>
-      <div style={{ flex: 1, height: 10, borderRadius: 5, background: 'var(--border)', overflow: 'hidden' }}>
-        <div style={{ height: '100%', borderRadius: 5, transition: 'width 0.4s ease', ...barStyle }} />
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 7 }}>
+        {icon}
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</span>
       </div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: noData ? '#b084d0' : 'var(--text-secondary)', width: 26, textAlign: 'right', flexShrink: 0 }}>
-        {noData ? '—' : score}
-      </div>
+      {isEmpty ? (
+        <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Nothing missed or due in the next 30 days.</p>
+      ) : (
+        <>
+          {renderSection('Missed', missed, '#FEF5F5', '#E74C3C')}
+          {renderSection('Upcoming — next 2 weeks', twoWeeks, '#FFFBF0', '#D68910')}
+          {renderSection('Upcoming — next 30 days', thirty, 'var(--bg-secondary)', 'var(--text-secondary)')}
+        </>
+      )}
     </div>
   );
 }
@@ -118,34 +136,20 @@ export default function Dashboard({ profile, userRole, userId }) {
   // Personal data
   const [myTimeOff, setMyTimeOff] = useState([]);
   const [myTasks, setMyTasks] = useState([]);
-  const [myAssignments, setMyAssignments] = useState([]);
-  const [taskFreq, setTaskFreq] = useState(null);
+  const [myRecurOccs, setMyRecurOccs] = useState([]);
   const [grants, setGrants] = useState([]);
   const [publicTasks, setPublicTasks] = useState([]);
-
-  // Admin task management
-  const [members, setMembers] = useState([]);
-  const [editingTask, setEditingTask] = useState(null);
-  const [editForm, setEditForm] = useState({});
-  const [editingAssignment, setEditingAssignment] = useState(null);
-  const [reassignTo, setReassignTo] = useState('');
-  const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Productivity state
   const [recurPeriod, setRecurPeriod] = useState('current');
   const [recurData, setRecurData] = useState([]);
   const [recurLoading, setRecurLoading] = useState(false);
-  const [oneOffPeriod, setOneOffPeriod] = useState('current');
-  const [oneOffData, setOneOffData] = useState([]);
-  const [oneOffLoading, setOneOffLoading] = useState(false);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchAll(); }, [profile]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (teamMembers.length) loadRecurProductivity(recurPeriod); }, [teamMembers, recurPeriod]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (teamMembers.length) loadOneOffProductivity(oneOffPeriod); }, [teamMembers, oneOffPeriod]);
 
   async function fetchAll() {
     if (!profile?.id) return;
@@ -175,13 +179,13 @@ export default function Dashboard({ profile, userRole, userId }) {
         .eq('status', 'scheduled').gte('meeting_date', today).order('meeting_date'),
       // tasks
       sporQuery,
-      canEdit
-        ? supabase.from('task_assignments')
-            .select('*, task:tasks_definitions(title, frequency, category), assignee:profiles(id, full_name)')
-            .eq('status', 'pending').order('task_id')
-        : supabase.from('task_assignments')
-            .select('*, task:tasks_definitions(title, frequency, category)')
-            .eq('assigned_to', profile.id).eq('status', 'pending'),
+      // current user's recurring task occurrences (last 90 days → next 30 days)
+      supabase.from('task_occurrences')
+        .select('id, due_date, status, completed_at, task_definition_id, task_def:tasks_definitions(title, group_name)')
+        .eq('assigned_to', profile.id)
+        .gte('due_date', new Date(Date.now() - 90 * 86400000).toISOString().split('T')[0])
+        .lte('due_date', new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0])
+        .order('due_date'),
       supabase.from('profiles').select('id, full_name, email, role').order('full_name'),
       // grants (for Mia and PM only)
       showGrantAlert
@@ -200,7 +204,7 @@ export default function Dashboard({ profile, userRole, userId }) {
       { data: myVacData },
       { data: allMeetingData },
       { data: sporData },
-      { data: assignData },
+      { data: myRecurData },
       { data: memberData },
       { data: grantData },
       { data: publicTaskData },
@@ -214,14 +218,8 @@ export default function Dashboard({ profile, userRole, userId }) {
     setAdhocMeetings(allMeetings.filter(m => m.meeting_type === 'adhoc_meeting').slice(0, 6));
     setMyTimeOff(myVacData || []);
     setMyTasks(sporData || []);
-
-    const assigns = assignData || [];
-    setMyAssignments(assigns);
-    const firstFreq = FREQ_ORDER.find(f => assigns.some(a => a.task?.frequency === f));
-    setTaskFreq(prev => prev || firstFreq || null);
-
+    setMyRecurOccs(myRecurData || []);
     setTeamMembers(memberData || []);
-    setMembers(memberData || []);
     setGrants(grantData || []);
     setPublicTasks(publicTaskData || []);
     setLoading(false);
@@ -263,57 +261,8 @@ export default function Dashboard({ profile, userRole, userId }) {
     setRecurLoading(false);
   }
 
-  async function loadOneOffProductivity(period) {
-    setOneOffLoading(true);
-    const today = new Date().toISOString().split('T')[0];
-    const { from, to } = prodDateRange(period);
-    const { data } = await supabase
-      .from('sporadic_tasks')
-      .select('id, due_date, status, completed_at, assigned_to')
-      .not('assigned_to', 'is', null)
-      .gte('due_date', from)
-      .lte('due_date', to);
-    const byPerson = {};
-    (data || []).forEach(o => { if (!byPerson[o.assigned_to]) byPerson[o.assigned_to] = []; byPerson[o.assigned_to].push(o); });
-    setOneOffData(teamMembers.map(p => ({ profile: p, ...calcProdScore(byPerson[p.id] || [], today) })));
-    setOneOffLoading(false);
-  }
-
-
-  async function handleSaveEdit(taskId) {
-    setSaving(true);
-    await supabase.from('sporadic_tasks').update({
-      title: editForm.title,
-      assigned_to: editForm.assignedTo,
-      due_date: editForm.dueDate,
-    }).eq('id', taskId);
-    setEditingTask(null);
-    setSaving(false);
-    fetchAll();
-  }
-
-  async function handleDeleteTask(taskId) {
-    await supabase.from('sporadic_tasks').delete().eq('id', taskId);
-    fetchAll();
-  }
-
-
-
-  async function handleReassign(assignmentId) {
-    if (!reassignTo) return;
-    setSaving(true);
-    await supabase.from('task_assignments').update({ assigned_to: reassignTo }).eq('id', assignmentId);
-    setEditingAssignment(null);
-    setReassignTo('');
-    setSaving(false);
-    fetchAll();
-  }
-
   const today = new Date().toISOString().split('T')[0];
-  const availableFreqs = FREQ_ORDER.filter(f => myAssignments.some(a => a.task?.frequency === f));
-  const visibleAssignments = taskFreq
-    ? myAssignments.filter(a => a.task?.frequency === taskFreq)
-    : myAssignments;
+  const myPersonalAdhocTasks = myTasks.filter(t => t.assigned_to === profile?.id);
 
   const vacOverlapIds = (() => {
     const all = [...outToday, ...nextWeekOut];
@@ -362,7 +311,7 @@ export default function Dashboard({ profile, userRole, userId }) {
 
           {/* ══ PERSONAL DASHBOARD ══ */}
           <div style={{ flex: 1, minWidth: 0, order: 2, background: '#FBF8FF', border: '1px solid #E4D9F5', borderRadius: '16px', padding: '20px' }}>
-            <h2 style={{ fontSize: '13px', fontWeight: 800, color: '#7B3FA0', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px', paddingLeft: '10px', borderLeft: '3px solid #7B3FA0', lineHeight: 1.2, margin: '0 0 16px' }}>Personal Dashboard</h2>
+            <h2 style={{ fontSize: '13px', fontWeight: 800, color: '#7B3FA0', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: '10px', borderLeft: '3px solid #7B3FA0', lineHeight: 1.2, margin: '0 0 16px' }}>Personal Dashboard</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
             {/* Grant Alerts — Mia and PM only */}
@@ -399,6 +348,24 @@ export default function Dashboard({ profile, userRole, userId }) {
               </div>
             )}
 
+            {/* Recurring task status */}
+            <TaskStatusCard
+              icon={<ClipboardList size={13} color="var(--purple-primary)" />}
+              title="Recurring task status"
+              tasks={myRecurOccs}
+              getTitle={t => t.task_def?.title || 'Task'}
+              dateKey="due_date"
+            />
+
+            {/* Ad hoc task status */}
+            <TaskStatusCard
+              icon={<ClipboardList size={13} color="#27AE60" />}
+              title="Ad hoc task status"
+              tasks={myPersonalAdhocTasks}
+              getTitle={t => t.title}
+              dateKey="due_date"
+            />
+
             {/* My Time Off */}
             <Card icon={<Palmtree size={13} color="#F39C12" />} title="My Time Off">
               {myTimeOff.length === 0 ? (
@@ -424,160 +391,6 @@ export default function Dashboard({ profile, userRole, userId }) {
                 </div>
               )}
             </Card>
-
-            {/* My Tasks */}
-            <Card
-              icon={<ClipboardList size={13} color="var(--purple-primary)" />}
-              title={canEdit ? 'Tasks' : 'My Tasks'}
-            >
-              {/* Header controls */}
-              <div style={{ padding: '6px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                {availableFreqs.map(f => {
-                  const c = FREQ_COLORS[f];
-                  const active = taskFreq === f;
-                  const count = myAssignments.filter(a => a.task?.frequency === f).length;
-                  return (
-                    <button key={f} onClick={() => setTaskFreq(active ? null : f)} style={{
-                      padding: '2px 8px', borderRadius: '10px', border: `1px solid ${active ? c.text : 'var(--border)'}`,
-                      background: active ? c.bg : 'transparent', color: active ? c.text : 'var(--text-muted)',
-                      fontSize: '11px', fontWeight: active ? 600 : 400, cursor: 'pointer',
-                    }}>
-                      {f.charAt(0).toUpperCase() + f.slice(1)} {count > 1 ? `(${count})` : ''}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Task list */}
-              <div style={{ padding: '6px 14px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
-                {myTasks.map(task => {
-                  const done = task.status === 'done';
-                  const overdue = !done && task.due_date && task.due_date < today;
-                  const isEditing = editingTask === task.id;
-                  const statusBadge = done
-                    ? { label: 'Completed', bg: '#E8F8F0', color: '#27AE60' }
-                    : overdue
-                    ? { label: 'Late', bg: '#FDEDEC', color: '#E74C3C' }
-                    : { label: 'Not Completed', bg: 'var(--bg-secondary)', color: 'var(--text-muted)' };
-                  return (
-                    <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 0', borderBottom: '1px solid var(--border)' }}>
-                      {isEditing ? (
-                        <>
-                          <input value={editForm.title} onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))}
-                            style={{ flex: '2 1 120px', padding: '3px 6px', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '12px', background: 'var(--bg-card)', color: 'var(--text-primary)' }} />
-                          <select value={editForm.assignedTo} onChange={e => setEditForm(p => ({ ...p, assignedTo: e.target.value }))}
-                            style={{ flex: '1 1 110px', padding: '3px 6px', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '11px', background: 'var(--bg-card)', color: 'var(--text-primary)' }}>
-                            {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
-                          </select>
-                          <input type="date" value={editForm.dueDate} onChange={e => setEditForm(p => ({ ...p, dueDate: e.target.value }))}
-                            style={{ flex: '0 0 110px', padding: '3px 6px', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '11px', background: 'var(--bg-card)', color: 'var(--text-primary)' }} />
-                          <button onClick={() => handleSaveEdit(task.id)} disabled={saving} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#27AE60', padding: '2px', display: 'flex' }}><Check size={13} /></button>
-                          <button onClick={() => setEditingTask(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px', display: 'flex' }}><X size={13} /></button>
-                        </>
-                      ) : (
-                        <>
-                          <span style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', flex: 1, lineHeight: 1.4, textDecoration: done ? 'line-through' : 'none' }}>{task.title}</span>
-                          {canEdit && task.assignee?.full_name && (
-                            <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>{task.assignee.full_name}</span>
-                          )}
-                          {task.due_date && <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(task.due_date)}</span>}
-                          <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: 8, background: statusBadge.bg, color: statusBadge.color, flexShrink: 0, whiteSpace: 'nowrap' }}>{statusBadge.label}</span>
-                          {canEdit && (
-                            <>
-                              <button onClick={() => { setEditingTask(task.id); setEditForm({ title: task.title, assignedTo: task.assigned_to, dueDate: task.due_date }); }}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px', display: 'flex', flexShrink: 0 }}><Pencil size={11} /></button>
-                              <button onClick={() => handleDeleteTask(task.id)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px', display: 'flex', flexShrink: 0 }}
-                                onMouseEnter={e => e.currentTarget.style.color = '#E74C3C'}
-                                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}><Trash2 size={11} /></button>
-                            </>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {myTasks.length > 0 && visibleAssignments.length > 0 && (
-                  <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
-                )}
-
-                {visibleAssignments.length > 0 && (
-                  <>
-                    {myTasks.length > 0 && (
-                      <p style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '2px 0 4px' }}>
-                        {canEdit ? 'Recurring' : 'Your recurring'}
-                      </p>
-                    )}
-                    {visibleAssignments.map(a => {
-                      const overdue = a.cycle_end && a.cycle_end < today;
-                      const c = FREQ_COLORS[a.task?.frequency];
-                      const isReassigning = editingAssignment === a.id;
-                      const statusBadge = overdue
-                        ? { label: 'Late', bg: '#FDEDEC', color: '#E74C3C' }
-                        : { label: 'Not Completed', bg: 'var(--bg-secondary)', color: 'var(--text-muted)' };
-                      return (
-                        <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 0' }}>
-                          <span style={{ fontSize: '13px', color: 'var(--text-primary)', flex: 1, lineHeight: 1.4 }}>{a.task?.title || 'Task'}</span>
-                          {isReassigning ? (
-                            <>
-                              <select value={reassignTo} onChange={e => setReassignTo(e.target.value)}
-                                style={{ flex: '0 0 120px', padding: '3px 6px', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '11px', background: 'var(--bg-card)', color: 'var(--text-primary)' }}>
-                                {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
-                              </select>
-                              <button onClick={() => handleReassign(a.id)} disabled={saving} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#27AE60', padding: '2px', display: 'flex', flexShrink: 0 }}><Check size={13} /></button>
-                              <button onClick={() => setEditingAssignment(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px', display: 'flex', flexShrink: 0 }}><X size={13} /></button>
-                            </>
-                          ) : (
-                            <>
-                              {canEdit && a.assignee?.full_name && (
-                                <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>{a.assignee.full_name}</span>
-                              )}
-                              {!taskFreq && c && (
-                                <span style={{ padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 600, background: c.bg, color: c.text, flexShrink: 0 }}>{a.task?.frequency}</span>
-                              )}
-                              {a.cycle_end && <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(a.cycle_end)}</span>}
-                              <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: 8, background: statusBadge.bg, color: statusBadge.color, flexShrink: 0, whiteSpace: 'nowrap' }}>{statusBadge.label}</span>
-                              {canEdit && (
-                                <button onClick={() => { setEditingAssignment(a.id); setReassignTo(a.assigned_to); setEditingTask(null); }}
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px', display: 'flex', flexShrink: 0 }}><Pencil size={11} /></button>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
-
-                {myTasks.length === 0 && visibleAssignments.length === 0 && (
-                  <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '6px 0', padding: '2px 0' }}>
-                    {taskFreq ? `No ${taskFreq} tasks assigned.` : canEdit ? 'No pending tasks.' : 'No tasks assigned to you right now.'}
-                  </p>
-                )}
-              </div>
-            </Card>
-
-            {/* ── One-off Task Productivity ── */}
-            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-              <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <ClipboardList size={13} color="#27AE60" />
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>One-off Task Productivity</span>
-                </div>
-                <PeriodPicker value={oneOffPeriod} onChange={setOneOffPeriod} />
-              </div>
-              {oneOffLoading ? (
-                <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Loading…</p>
-              ) : (
-                <div style={{ padding: '4px 14px 6px' }}>
-                  {(canEdit
-                    ? oneOffData.sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
-                    : oneOffData.filter(r => r.profile.id === profile?.id)
-                  ).map(row => <MiniScoreRow key={row.profile.id} row={row} />)}
-                </div>
-              )}
-            </div>
 
           </div>
           </div>
