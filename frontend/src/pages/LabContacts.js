@@ -28,7 +28,7 @@ const PERMISSIONS = [
 
 const EMPTY_CONTACT = {
   first_name: '', last_name: '', role: 'member', title: '', phone: '', email: '',
-  alternative_email: '', address: '', supervisor: '', supervisor_email: '',
+  personal_email: '', alternative_email: '', address: '', supervisor: '', supervisor_email: '',
   emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_email: '',
   emergency_contact_relationship: '', status: 'active', sort_order: 99, notes: ''
 };
@@ -111,6 +111,9 @@ function AdminContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, o
         <td style={{ padding: '10px 14px', fontSize: '12px' }}>
           {contact.email ? <a href={`mailto:${contact.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{contact.email}</a> : '—'}
         </td>
+        <td style={{ padding: '10px 14px', fontSize: '12px' }}>
+          {contact.personal_email ? <a href={`mailto:${contact.personal_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{contact.personal_email}</a> : '—'}
+        </td>
         {canViewPersonalPhone && (
           <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
             {contact.phone ? <a href={`tel:${contact.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.phone}</a> : '—'}
@@ -140,8 +143,11 @@ function AdminContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, o
               <div><label style={labelStyle}>First Name</label>{inp('first_name')}</div>
               <div><label style={labelStyle}>Last Name</label>{inp('last_name')}</div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
-              <div><label style={labelStyle}>Email</label>{inp('email', 'name@example.com')}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+              <div><label style={labelStyle}>Work Email</label>{inp('email', 'name@work.edu')}</div>
+              <div><label style={labelStyle}>Personal Email</label>{inp('personal_email', 'name@gmail.com')}</div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
               <div><label style={labelStyle}>Personal Phone</label>{phoneInp('phone')}</div>
               <div><label style={labelStyle}>Work Phone</label>{phoneInp('alternative_email')}</div>
             </div>
@@ -173,12 +179,12 @@ function AdminContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, o
 }
 
 // Each lab member row fetches its own contact data by full_name — completely isolated
-function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin, onUpdatePermissions, onUpdateRole, onDelete, onChangePassword, rowIndex }) {
+function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin, onUpdatePermissions, onUpdateRole, onUpdateLabStatus, onDelete, onChangePassword, rowIndex }) {
   const [extraData, setExtraData] = useState(null);
   const [showContactEdit, setShowContactEdit] = useState(false);
   const [showPerms, setShowPerms] = useState(false);
   const [form, setForm] = useState({
-    phone: '', address: '',
+    phone: '', personal_email: '', address: '',
     emergency_contact_name: '', emergency_contact_phone: '',
     emergency_contact_email: '', emergency_contact_relationship: '',
   });
@@ -217,6 +223,7 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
   function openContactEdit() {
     setForm({
       phone: extraData?.phone || '',
+      personal_email: extraData?.personal_email || '',
       address: extraData?.address || '',
       emergency_contact_name: extraData?.emergency_contact_name || '',
       emergency_contact_phone: extraData?.emergency_contact_phone || '',
@@ -232,6 +239,7 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
     try {
       const payload = {
         phone: form.phone || '',
+        personal_email: form.personal_email || '',
         address: form.address || '',
         emergency_contact_name: form.emergency_contact_name || '',
         emergency_contact_phone: form.emergency_contact_phone || '',
@@ -282,6 +290,9 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
         <td style={{ padding: '10px 14px', fontSize: '12px' }}>
           {member.email ? <a href={`mailto:${member.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{member.email}</a> : '—'}
         </td>
+        <td style={{ padding: '10px 14px', fontSize: '12px' }}>
+          {extraData?.personal_email ? <a href={`mailto:${extraData.personal_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{extraData.personal_email}</a> : '—'}
+        </td>
         <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
           {extraData?.phone ? <a href={`tel:${extraData.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{extraData.phone}</a> : '—'}
         </td>
@@ -314,6 +325,14 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
                   <Shield size={12} /> {showPerms ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                 </button>
               )}
+              {member.id !== userId && onUpdateLabStatus && (
+                <button
+                  onClick={() => onUpdateLabStatus(member.id, member.lab_status === 'alumni' ? 'active' : 'alumni')}
+                  title={member.lab_status === 'alumni' ? 'Move back to active members' : 'Move to alumni'}
+                  style={{ padding: '5px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)', fontSize: '11px', cursor: 'pointer' }}>
+                  {member.lab_status === 'alumni' ? 'Active' : 'Alumni'}
+                </button>
+              )}
               {isAdmin && (
                 <button onClick={() => onChangePassword(member)}
                   style={{ padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-muted)', cursor: 'pointer' }} title="Set password">
@@ -330,18 +349,25 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
       {showContactEdit && (
         <tr style={{ background: 'rgba(123,63,160,0.03)' }}>
           <td colSpan={99} style={{ padding: '16px 20px', borderTop: '2px solid var(--purple-primary)', borderBottom: '2px solid var(--purple-primary)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: canViewPersonalPhone ? '1fr 1fr 1fr' : '1fr 1fr', gap: 8, marginBottom: 12 }}>
               <div>
                 <label style={labelStyle}>Phone Number</label>
                 <input style={inpStyle} type="text" value={form.phone || ''} placeholder="xxx-xxx-xxxx"
                   onChange={e => setForm(p => ({ ...p, phone: formatPhone(e.target.value) }))} />
               </div>
               <div>
-                <label style={labelStyle}>Address</label>
-                <input style={inpStyle} type="text" value={form.address || ''} placeholder="123 Main St, Apt 4B..."
-                  onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
-                  onBlur={e => setForm(p => ({ ...p, address: formatAddress(e.target.value) }))} />
+                <label style={labelStyle}>Personal Email</label>
+                <input style={inpStyle} type="text" value={form.personal_email || ''} placeholder="name@gmail.com"
+                  onChange={e => setForm(p => ({ ...p, personal_email: e.target.value }))} />
               </div>
+              {canViewPersonalPhone && (
+                <div>
+                  <label style={labelStyle}>Address</label>
+                  <input style={inpStyle} type="text" value={form.address || ''} placeholder="123 Main St, Apt 4B..."
+                    onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
+                    onBlur={e => setForm(p => ({ ...p, address: formatAddress(e.target.value) }))} />
+                </div>
+              )}
             </div>
             <div style={{ marginBottom: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
               <span style={{ ...labelStyle, display: 'inline' }}>Emergency Contact</span>
@@ -395,6 +421,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   const [loading, setLoading] = useState(true);
   const [adminSearch, setAdminSearch] = useState('');
   const [labSearch, setLabSearch] = useState('');
+  const [alumniSearch, setAlumniSearch] = useState('');
   const [activeTab, setActiveTab] = useState('admin');
   const [showContactForm, setShowContactForm] = useState(false);
   const [showMemberForm, setShowMemberForm] = useState(false);
@@ -445,6 +472,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
       title: contactForm.title || '',
       phone: contactForm.phone || '',
       email: contactForm.email || '',
+      personal_email: contactForm.personal_email || '',
       alternative_email: contactForm.alternative_email || '',
       address: contactForm.address || '',
       supervisor: contactForm.supervisor || '',
@@ -534,6 +562,11 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
     });
   }
 
+  async function handleUpdateLabStatus(memberId, status) {
+    await supabase.from('profiles').update({ lab_status: status }).eq('id', memberId);
+    setMembers(prev => prev.map(m => m.id === memberId ? { ...m, lab_status: status } : m));
+  }
+
   function setDefaultPermissions(role) {
     const defaults = {
       admin: { can_assign_tasks: true, can_approve_sporadic: true, can_edit_meetings: true, can_view_finance: true, can_edit_samples: true, can_view_contacts: true, can_add_members: true },
@@ -552,6 +585,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
       title: form.title || '',
       phone: form.phone || '',
       email: form.email || '',
+      personal_email: form.personal_email || '',
       alternative_email: form.alternative_email || '',
       address: form.address || '',
       supervisor: form.supervisor || '',
@@ -618,8 +652,16 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   });
 
   const filteredLabMembers = sortedMembers.filter(m => {
+    if (m.lab_status === 'alumni') return false;
     if (!labSearch) return true;
     const q = labSearch.toLowerCase();
+    return [m.full_name, m.email, ROLE_LABELS[m.role]].some(v => v?.toLowerCase().includes(q));
+  });
+
+  const filteredAlumni = sortedMembers.filter(m => {
+    if (m.lab_status !== 'alumni') return false;
+    if (!alumniSearch) return true;
+    const q = alumniSearch.toLowerCase();
     return [m.full_name, m.email, ROLE_LABELS[m.role]].some(v => v?.toLowerCase().includes(q));
   });
 
@@ -646,7 +688,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
             borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer'
           }}><Plus size={16} /> Add Contact</button>
         )}
-        {canManage && activeTab === 'lab' && (
+        {canManage && (activeTab === 'lab' || activeTab === 'alumni') && (
           <button onClick={() => { setMemberForm(EMPTY_MEMBER); setShowMemberForm(true); }} style={{
             display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
             background: 'var(--purple-primary)', color: 'white', border: 'none',
@@ -657,7 +699,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
 
       {/* Tab switcher */}
       <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content', marginBottom: '20px' }}>
-        {[{ id: 'admin', label: 'Admin Contacts' }, { id: 'lab', label: 'Lab Contacts' }].map(tab => (
+        {[{ id: 'admin', label: 'Admin Contacts' }, { id: 'lab', label: 'Lab Contacts' }, { id: 'alumni', label: 'Lab Alumni' }].map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
             style={{ padding: '10px 20px', background: activeTab === tab.id ? 'var(--purple-primary)' : 'transparent', color: activeTab === tab.id ? 'white' : 'var(--text-secondary)', border: 'none', fontWeight: activeTab === tab.id ? 600 : 400, fontSize: '13px', cursor: 'pointer' }}>
             {tab.label}
@@ -681,7 +723,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                 <thead>
                   <tr style={{ background: 'var(--bg-secondary)' }}>
                     {[
-                      'Name', 'Email', ...(canViewPersonalPhone ? ['Personal Phone'] : []),
+                      'Name', 'Work Email', 'Personal Email', ...(canViewPersonalPhone ? ['Personal Phone'] : []),
                       'Work Phone', 'Office / Dept', 'Responsibilities',
                       ...(canManage ? [''] : [])
                     ].map(h => (
@@ -691,7 +733,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                 </thead>
                 <tbody>
                   {filteredAdminContacts.length === 0 ? (
-                    <tr><td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No admin contacts yet.</td></tr>
+                    <tr><td colSpan={99} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No admin contacts yet.</td></tr>
                   ) : filteredAdminContacts.map((contact, i) => (
                     <AdminContactRow
                       key={contact.id}
@@ -726,7 +768,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                 <thead>
                   <tr style={{ background: 'var(--bg-secondary)' }}>
                     {[
-                      'First / Last Name', 'Email', 'Phone Number',
+                      'First / Last Name', 'Work Email', 'Personal Email', 'Phone Number',
                       ...(canViewPersonalPhone ? ['Emergency Contact'] : []),
                       ...(canViewPersonalPhone ? ['Address'] : []),
                       ...(canManage ? [''] : [])
@@ -737,7 +779,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                 </thead>
                 <tbody>
                   {filteredLabMembers.length === 0 && pendingLabContacts.length === 0 ? (
-                    <tr><td colSpan={canManage ? 6 : 4} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No lab contacts found.</td></tr>
+                    <tr><td colSpan={99} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No lab contacts found.</td></tr>
                   ) : filteredLabMembers.map((member, i) => (
                     <LabMemberRow
                       key={member.id}
@@ -748,6 +790,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                       isAdmin={userRole === 'admin'}
                       onUpdatePermissions={handleUpdatePermissions}
                       onUpdateRole={handleUpdateRole}
+                      onUpdateLabStatus={canManage ? handleUpdateLabStatus : null}
                       onDelete={setConfirmDeleteMember}
                       onChangePassword={setPasswordTarget}
                       rowIndex={i}
@@ -762,6 +805,57 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                       onUpdate={updateAdminContact}
                       onDelete={handleDeleteContact}
                       rowIndex={filteredLabMembers.length + i}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Lab Alumni tab */}
+      {activeTab === 'alumni' && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px', marginBottom: '16px' }}>
+            <Search size={13} color="var(--text-muted)" />
+            <input value={alumniSearch} onChange={e => setAlumniSearch(e.target.value)} placeholder="Search alumni..."
+              style={{ border: 'none', outline: 'none', flex: 1, fontSize: '13px', background: 'transparent' }} />
+          </div>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading...</div>
+          ) : (
+            <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg-secondary)' }}>
+                    {[
+                      'First / Last Name', 'Work Email', 'Personal Email', 'Phone Number',
+                      ...(canViewPersonalPhone ? ['Emergency Contact'] : []),
+                      ...(canViewPersonalPhone ? ['Address'] : []),
+                      ...(canManage ? [''] : [])
+                    ].map(h => (
+                      <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', fontWeight: 600 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredAlumni.length === 0 ? (
+                    <tr><td colSpan={99} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No alumni yet. Move a lab member to alumni using the Alumni button in their row.</td></tr>
+                  ) : filteredAlumni.map((member, i) => (
+                    <LabMemberRow
+                      key={member.id}
+                      member={member}
+                      canManage={canManage}
+                      canViewPersonalPhone={canViewPersonalPhone}
+                      userId={userId}
+                      isAdmin={userRole === 'admin'}
+                      onUpdatePermissions={handleUpdatePermissions}
+                      onUpdateRole={handleUpdateRole}
+                      onUpdateLabStatus={canManage ? handleUpdateLabStatus : null}
+                      onDelete={setConfirmDeleteMember}
+                      onChangePassword={setPasswordTarget}
+                      rowIndex={i}
                     />
                   ))}
                 </tbody>
@@ -809,7 +903,8 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
             </div>
 
             {[
-              { key: 'email', label: 'Email', placeholder: 'name@example.com' },
+              { key: 'email', label: 'Work Email', placeholder: 'name@work.edu' },
+              { key: 'personal_email', label: 'Personal Email', placeholder: 'name@gmail.com' },
               { key: 'phone', label: 'Personal Phone', placeholder: 'xxx-xxx-xxxx', format: formatPhone },
               { key: 'alternative_email', label: 'Work Phone', placeholder: 'xxx-xxx-xxxx', format: formatPhone },
               { key: 'address', label: 'Office / Department', placeholder: '123 Main St, Apt 4B, New York, NY 10001', format: formatAddress },

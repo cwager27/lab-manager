@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   email               text,
   full_name           text,
   role                text DEFAULT 'member',
+  lab_status          text DEFAULT 'active',
   can_assign_tasks    boolean DEFAULT false,
   can_approve_sporadic boolean DEFAULT false,
   can_edit_meetings   boolean DEFAULT false,
@@ -119,6 +120,7 @@ CREATE TABLE IF NOT EXISTS lab_contacts (
   emergency_contact_phone         text,
   emergency_contact_email         text,
   emergency_contact_relationship  text,
+  personal_email                  text,
   status                          text DEFAULT 'active',
   sort_order                      integer DEFAULT 99,
   notes                           text,
@@ -248,6 +250,8 @@ CREATE TABLE IF NOT EXISTS lab_meetings (
 -- Migration (run in Supabase SQL editor if table already exists):
 -- ALTER TABLE lab_meetings ADD COLUMN IF NOT EXISTS zoom_link text;
 -- ALTER TABLE lab_meetings ADD COLUMN IF NOT EXISTS zoom_info text;
+-- ALTER TABLE lab_contacts ADD COLUMN IF NOT EXISTS personal_email text;
+-- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS lab_status text DEFAULT 'active';
 
 -- 14. adhoc_meetings
 CREATE TABLE IF NOT EXISTS adhoc_meetings (
