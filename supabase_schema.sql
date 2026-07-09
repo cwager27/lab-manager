@@ -252,6 +252,7 @@ CREATE TABLE IF NOT EXISTS lab_meetings (
 -- ALTER TABLE lab_meetings ADD COLUMN IF NOT EXISTS zoom_info text;
 -- ALTER TABLE lab_contacts ADD COLUMN IF NOT EXISTS personal_email text;
 -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS lab_status text DEFAULT 'active';
+-- ALTER TABLE grants ADD COLUMN IF NOT EXISTS start_date date;
 
 -- 14. adhoc_meetings
 CREATE TABLE IF NOT EXISTS adhoc_meetings (

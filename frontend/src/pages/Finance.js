@@ -50,46 +50,19 @@ const STATUS_STYLES = {
   deleted: { bg: '#F2F2F2', text: '#9E9E9E', label: 'Deleted' },
 };
 
-function GrantCard({ grant }) {
-  const pct = grant.total_amount && grant.remaining_balance ? (grant.remaining_balance / grant.total_amount) * 100 : null;
-  const isLow = pct !== null && pct < 25;
+const EMPTY_GRANT = { name: '', chartstring: '', total_amount: '', remaining_balance: '', start_date: '', end_date: '', notes: '' };
+
+function grantMeta(grant) {
+  const pct = grant.total_amount && grant.remaining_balance != null
+    ? (grant.remaining_balance / grant.total_amount) * 100 : null;
+  const daysLeft = grant.end_date
+    ? Math.ceil((new Date(grant.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null;
   const isCritical = pct !== null && pct < 10;
-  const daysLeft = grant.end_date ? Math.ceil((new Date(grant.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null;
-  const isExpiringSoon = daysLeft !== null && daysLeft <= 90;
+  const isLow = pct !== null && pct < 25;
   const isExpiringUrgent = daysLeft !== null && daysLeft <= 14;
-  return (
-    <div style={{ background: 'var(--bg-card)', border: `1px solid ${isCritical ? '#FADBD8' : isLow ? '#FAD7A0' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', padding: '16px', boxShadow: 'var(--shadow-sm)' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
-        <div style={{ flex: 1 }}>
-          <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>{grant.name}</h3>
-          {grant.chartstring && <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, fontFamily: 'monospace' }}>{grant.chartstring}</p>}
-        </div>
-        <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-          {isCritical && <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#FDEDEC', color: '#E74C3C' }}>Critical</span>}
-          {isLow && !isCritical && <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#FEF9E7', color: '#F39C12' }}>Low</span>}
-          {isExpiringUrgent && <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#FDEDEC', color: '#E74C3C' }}>Expires in {daysLeft}d</span>}
-          {isExpiringSoon && !isExpiringUrgent && <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#FEF9E7', color: '#F39C12' }}>Expires in {daysLeft}d</span>}
-        </div>
-      </div>
-      <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', flexWrap: 'wrap' }}>
-        {grant.total_amount !== null && <div><p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 2px' }}>Total</p><p style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>${grant.total_amount?.toLocaleString()}</p></div>}
-        {grant.remaining_balance !== null && <div><p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 2px' }}>Remaining</p><p style={{ fontSize: '16px', fontWeight: 700, color: isCritical ? '#E74C3C' : isLow ? '#F39C12' : '#27AE60', margin: 0 }}>${grant.remaining_balance?.toLocaleString()}</p></div>}
-        {grant.end_date && <div><p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 2px' }}>End Date</p><p style={{ fontSize: '14px', fontWeight: 600, color: isExpiringUrgent ? '#E74C3C' : 'var(--text-primary)', margin: 0 }}>{grant.end_date}</p></div>}
-      </div>
-      {pct !== null && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Balance remaining</span>
-            <span style={{ fontSize: '11px', fontWeight: 600, color: isCritical ? '#E74C3C' : isLow ? '#F39C12' : '#27AE60' }}>{pct.toFixed(1)}%</span>
-          </div>
-          <div style={{ height: '6px', background: 'var(--border)', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: isCritical ? '#E74C3C' : isLow ? '#F39C12' : '#27AE60', borderRadius: '3px' }} />
-          </div>
-        </div>
-      )}
-      {grant.notes && <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '10px 0 0', fontStyle: 'italic' }}>{grant.notes}</p>}
-    </div>
-  );
+  const isExpiringSoon = daysLeft !== null && daysLeft <= 90;
+  const balanceColor = isCritical ? '#E74C3C' : isLow ? '#F39C12' : '#27AE60';
+  return { pct, daysLeft, isCritical, isLow, isExpiringUrgent, isExpiringSoon, balanceColor };
 }
 
 
@@ -189,6 +162,11 @@ export default function Finance({ userRole }) {
   const [editingOrder, setEditingOrder] = useState(null);
   const [editOrderForm, setEditOrderForm] = useState({});
   const [confirmDeleteOrder, setConfirmDeleteOrder] = useState(false);
+  const [showAddGrant, setShowAddGrant] = useState(false);
+  const [grantForm, setGrantForm] = useState(EMPTY_GRANT);
+  const [editingGrant, setEditingGrant] = useState(null);
+  const [editGrantForm, setEditGrantForm] = useState({});
+  const [confirmDeleteGrant, setConfirmDeleteGrant] = useState(false);
 
   const canManage = userRole === 'admin' || userRole === 'pm';
 
@@ -330,6 +308,62 @@ export default function Finance({ userRole }) {
     setEditingOrder(null);
   }
 
+  async function handleAddGrant(e) {
+    e.preventDefault();
+    if (!grantForm.name.trim()) return;
+    const payload = {
+      name: grantForm.name.trim(),
+      chartstring: grantForm.chartstring || null,
+      total_amount: grantForm.total_amount ? parseFloat(grantForm.total_amount) : null,
+      remaining_balance: grantForm.remaining_balance ? parseFloat(grantForm.remaining_balance) : null,
+      start_date: grantForm.start_date || null,
+      end_date: grantForm.end_date || null,
+      notes: grantForm.notes || null,
+    };
+    const { data, error } = await supabase.from('grants').insert([payload]).select().single();
+    if (!error && data) {
+      setGrants(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+      setShowAddGrant(false);
+      setGrantForm(EMPTY_GRANT);
+    }
+  }
+
+  function openEditGrant(grant) {
+    setConfirmDeleteGrant(false);
+    setEditingGrant(grant);
+    setEditGrantForm({
+      name: grant.name || '',
+      chartstring: grant.chartstring || '',
+      total_amount: grant.total_amount != null ? String(grant.total_amount) : '',
+      remaining_balance: grant.remaining_balance != null ? String(grant.remaining_balance) : '',
+      start_date: grant.start_date || '',
+      end_date: grant.end_date || '',
+      notes: grant.notes || '',
+    });
+  }
+
+  async function handleSaveGrant() {
+    const payload = {
+      name: editGrantForm.name.trim(),
+      chartstring: editGrantForm.chartstring || null,
+      total_amount: editGrantForm.total_amount ? parseFloat(editGrantForm.total_amount) : null,
+      remaining_balance: editGrantForm.remaining_balance ? parseFloat(editGrantForm.remaining_balance) : null,
+      start_date: editGrantForm.start_date || null,
+      end_date: editGrantForm.end_date || null,
+      notes: editGrantForm.notes || null,
+    };
+    await supabase.from('grants').update(payload).eq('id', editingGrant.id);
+    setGrants(prev => prev.map(g => g.id === editingGrant.id ? { ...g, ...payload } : g));
+    setEditingGrant(null);
+  }
+
+  async function handleDeleteGrant() {
+    await supabase.from('grants').delete().eq('id', editingGrant.id);
+    setGrants(prev => prev.filter(g => g.id !== editingGrant.id));
+    setEditingGrant(null);
+    setConfirmDeleteGrant(false);
+  }
+
   async function commitReagentEdit() {
     if (!editCell || editCell.tbl !== 'reagent') return;
     const { id, col } = editCell;
@@ -429,6 +463,9 @@ export default function Finance({ userRole }) {
             <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', background: activeTab === tab ? 'var(--purple-primary)' : 'transparent', color: activeTab === tab ? 'white' : 'var(--text-secondary)', border: 'none', fontWeight: activeTab === tab ? 600 : 400, fontSize: '13px', textTransform: 'capitalize' }}>{tab}</button>
           ))}
         </div>
+        {canManage && activeTab === 'grants' && (
+          <button onClick={() => { setGrantForm(EMPTY_GRANT); setShowAddGrant(true); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Grant</button>
+        )}
         {canManage && activeTab === 'orders' && (
           <button onClick={() => setShowAddOrder(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Order</button>
         )}
@@ -484,8 +521,64 @@ export default function Finance({ userRole }) {
       ) : (
         <>
           {activeTab === 'grants' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
-              {grants.map(grant => <GrantCard key={grant.id} grant={grant} />)}
+            <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
+              <table style={{ width: '100%', minWidth: '900px', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg-secondary)' }}>
+                    {['Grant', 'Chartering', 'Flags', 'Total', 'Balance Remaining', 'Start Date', 'End Date', 'Notes'].map(h => (
+                      <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', fontWeight: 600 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {grants.length === 0 ? (
+                    <tr><td colSpan={8} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No grants yet.{canManage ? ' Click "Add Grant" to add one.' : ''}</td></tr>
+                  ) : grants.map((grant, i) => {
+                    const { pct, daysLeft, isCritical, isLow, isExpiringUrgent, isExpiringSoon, balanceColor } = grantMeta(grant);
+                    return (
+                      <tr key={grant.id}
+                        onClick={canManage ? () => openEditGrant(grant) : undefined}
+                        style={{ borderTop: '1px solid var(--border)', cursor: canManage ? 'pointer' : 'default', background: i % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}
+                        onMouseEnter={canManage ? e => e.currentTarget.style.background = 'rgba(123,63,160,0.04)' : undefined}
+                        onMouseLeave={canManage ? e => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' : undefined}
+                      >
+                        <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{grant.name}</td>
+                        <td style={{ padding: '12px 14px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{grant.chartstring || '—'}</td>
+                        <td style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                            {isCritical && <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: '#FDEDEC', color: '#E74C3C' }}>Critical</span>}
+                            {isLow && !isCritical && <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: '#FEF9E7', color: '#F39C12' }}>Low</span>}
+                            {isExpiringUrgent && <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: '#FDEDEC', color: '#E74C3C' }}>{daysLeft}d left</span>}
+                            {isExpiringSoon && !isExpiringUrgent && <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: '#FEF9E7', color: '#F39C12' }}>{daysLeft}d left</span>}
+                            {!isCritical && !isLow && !isExpiringUrgent && !isExpiringSoon && pct !== null && <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: '#EAF7F0', color: '#27AE60' }}>Good</span>}
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                          {grant.total_amount != null ? `$${grant.total_amount.toLocaleString()}` : '—'}
+                        </td>
+                        <td style={{ padding: '12px 14px', minWidth: '170px' }}>
+                          {grant.remaining_balance != null ? (
+                            <div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '5px' }}>
+                                <span style={{ fontSize: '13px', fontWeight: 600, color: balanceColor }}>${grant.remaining_balance.toLocaleString()}</span>
+                                {pct !== null && <span style={{ fontSize: '11px', fontWeight: 600, color: balanceColor, marginLeft: '8px' }}>{pct.toFixed(1)}%</span>}
+                              </div>
+                              {pct !== null && (
+                                <div style={{ height: '6px', background: 'var(--border)', borderRadius: '3px', overflow: 'hidden' }}>
+                                  <div style={{ height: '100%', width: `${Math.min(Math.max(pct, 0), 100)}%`, background: balanceColor, borderRadius: '3px' }} />
+                                </div>
+                              )}
+                            </div>
+                          ) : '—'}
+                        </td>
+                        <td style={{ padding: '12px 14px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{grant.start_date || '—'}</td>
+                        <td style={{ padding: '12px 14px', fontSize: '12px', color: isExpiringUrgent ? '#E74C3C' : 'var(--text-secondary)', fontWeight: isExpiringUrgent ? 600 : 400, whiteSpace: 'nowrap' }}>{grant.end_date || '—'}</td>
+                        <td style={{ padding: '12px 14px', fontSize: '12px', color: 'var(--text-muted)', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{grant.notes || '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
 
@@ -932,6 +1025,84 @@ export default function Finance({ userRole }) {
           )}
 
         </>
+      )}
+
+      {showAddGrant && canManage && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '520px', maxHeight: '80vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>Add Grant</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+              {[
+                { key: 'name', label: 'Grant Name', full: true, placeholder: 'e.g. R01 CA123456' },
+                { key: 'chartstring', label: 'Chartering', full: true, placeholder: 'e.g. 21-31234-A-R01' },
+                { key: 'total_amount', label: 'Total ($)', type: 'number', placeholder: '500000' },
+                { key: 'remaining_balance', label: 'Balance Remaining ($)', type: 'number', placeholder: '125000' },
+                { key: 'start_date', label: 'Start Date', type: 'date' },
+                { key: 'end_date', label: 'End Date', type: 'date' },
+              ].map(f => (
+                <div key={f.key} style={{ gridColumn: f.full ? '1 / -1' : 'auto' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{f.label}</label>
+                  <input type={f.type || 'text'} value={grantForm[f.key]} placeholder={f.placeholder || ''} onChange={e => setGrantForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+              ))}
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Notes</label>
+                <textarea value={grantForm.notes} onChange={e => setGrantForm(p => ({ ...p, notes: e.target.value }))}
+                  rows={3} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowAddGrant(false)} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleAddGrant} disabled={!grantForm.name.trim()} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: grantForm.name.trim() ? 'var(--purple-primary)' : 'var(--border)', color: grantForm.name.trim() ? 'white' : 'var(--text-muted)', fontWeight: 600, cursor: grantForm.name.trim() ? 'pointer' : 'default' }}>Add Grant</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingGrant && canManage && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '520px', maxHeight: '80vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>Edit Grant</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+              {[
+                { key: 'name', label: 'Grant Name', full: true },
+                { key: 'chartstring', label: 'Chartering', full: true },
+                { key: 'total_amount', label: 'Total ($)', type: 'number' },
+                { key: 'remaining_balance', label: 'Balance Remaining ($)', type: 'number' },
+                { key: 'start_date', label: 'Start Date', type: 'date' },
+                { key: 'end_date', label: 'End Date', type: 'date' },
+              ].map(f => (
+                <div key={f.key} style={{ gridColumn: f.full ? '1 / -1' : 'auto' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{f.label}</label>
+                  <input type={f.type || 'text'} value={editGrantForm[f.key] || ''} onChange={e => setEditGrantForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+              ))}
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Notes</label>
+                <textarea value={editGrantForm.notes || ''} onChange={e => setEditGrantForm(p => ({ ...p, notes: e.target.value }))}
+                  rows={3} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {confirmDeleteGrant ? (
+                  <>
+                    <button onClick={handleDeleteGrant} style={{ padding: '10px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--danger)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Confirm Delete</button>
+                    <button onClick={() => setConfirmDeleteGrant(false)} style={{ padding: '10px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                  </>
+                ) : (
+                  <button onClick={() => setConfirmDeleteGrant(true)} style={{ padding: '10px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--danger)', background: 'transparent', color: 'var(--danger)', fontWeight: 500, cursor: 'pointer' }}>Delete Grant</button>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button onClick={() => setEditingGrant(null)} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={handleSaveGrant} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Save Changes</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {showAddOrder && canManage && (
