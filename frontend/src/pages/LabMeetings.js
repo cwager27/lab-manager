@@ -488,7 +488,12 @@ export default function LabMeetings({ userRole, userId, profile }) {
 
         {/* Column headers */}
         <div style={{ display: 'grid', gridTemplateColumns: isLab ? '74px 1fr 28px 80px 1fr 22px' : '74px 1fr 80px 30px 1fr 1fr 22px', gap: '6px', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', marginBottom: '4px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          <span>Date</span><span>Presenter</span>
+          <span>Date</span>
+          {isLab ? <span>Presenter</span> : (
+            <span style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Presenter</span><span>SOF</span>
+            </span>
+          )}
           {isLab && <span>SOF</span>}
           <span>Status</span>
           {!isLab && <span>Zoom</span>}
