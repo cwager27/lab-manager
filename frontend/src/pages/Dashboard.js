@@ -170,9 +170,17 @@ export default function Dashboard({ profile, userRole, userId }) {
       supabase.from('vacation_requests')
         .select('*, requester:profiles!vacation_requests_requested_by_fkey(full_name)')
         .eq('status', 'approved').lte('start_date', next8Weeks).gte('end_date', today).order('start_date'),
-      // my own vacation requests
-      supabase.from('vacation_requests')
-        .select('*').eq('requested_by', profile.id).order('start_date', { ascending: false }),
+      // all requests: Mia/PM see everyone's, others see only their own (pending+approved only)
+      showGrantAlert
+        ? supabase.from('vacation_requests')
+            .select('*, requester:profiles!vacation_requests_requested_by_fkey(full_name)')
+            .in('status', ['pending', 'approved'])
+            .order('start_date', { ascending: false })
+        : supabase.from('vacation_requests')
+            .select('*, requester:profiles!vacation_requests_requested_by_fkey(full_name)')
+            .eq('requested_by', profile.id)
+            .in('status', ['pending', 'approved'])
+            .order('start_date', { ascending: false }),
       // meetings — both types live in lab_meetings, split by meeting_type
       supabase.from('lab_meetings')
         .select('*, presenter:profiles!lab_meetings_presenter_id_fkey(full_name)')
@@ -276,6 +284,17 @@ export default function Dashboard({ profile, userRole, userId }) {
     return ids;
   })();
 
+  const vacRequestOverlapIds = showGrantAlert ? (() => {
+    const ids = new Set();
+    for (let i = 0; i < myTimeOff.length; i++) {
+      for (let j = i + 1; j < myTimeOff.length; j++) {
+        const a = myTimeOff[i], b = myTimeOff[j];
+        if (a.start_date <= b.end_date && b.start_date <= a.end_date) { ids.add(a.id); ids.add(b.id); }
+      }
+    }
+    return ids;
+  })() : new Set();
+
   const classifyAdhocTask = t => t.status === 'done' ? 2 : (t.due_date && t.due_date < today) ? 0 : 1;
   const adhocDisplayTasks = canEdit ? myTasks : publicTasks;
   const sortedAdhocTasks = [...adhocDisplayTasks].sort((a, b) => {
@@ -366,25 +385,34 @@ export default function Dashboard({ profile, userRole, userId }) {
               dateKey="due_date"
             />
 
-            {/* My Time Off */}
-            <Card icon={<Palmtree size={13} color="#F39C12" />} title="My Time Off">
+            {/* All requests */}
+            <Card icon={<Palmtree size={13} color="#F39C12" />} title="All requests">
               {myTimeOff.length === 0 ? (
-                <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No time off requests yet.</p>
+                <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No requests.</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {myTimeOff.map((r, i) => {
                     const s = STATUS_COLORS[r.status] || STATUS_COLORS.pending;
+                    const hasOverlap = vacRequestOverlapIds.has(r.id);
+                    const label = showGrantAlert
+                      ? (r.requester?.full_name || 'Unknown')
+                      : r.leave_type;
                     return (
-                      <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
-                        <div>
-                          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{r.leave_type}</span>
-                          <p style={{ margin: '1px 0 0', fontSize: '11px', color: 'var(--text-muted)' }}>
+                      <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: hasOverlap ? '#FEF5F5' : undefined }}>
+                        <div style={{ minWidth: 0 }}>
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)' }}>{label}</span>
+                          <p style={{ margin: '1px 0 0', fontSize: '11px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)' }}>
                             {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
                           </p>
                         </div>
-                        <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.text, flexShrink: 0 }}>
-                          {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                          {hasOverlap && (
+                            <span style={{ fontSize: 9, fontWeight: 700, color: '#E74C3C', background: '#FDEDEC', padding: '1px 5px', borderRadius: 6, border: '1px solid #F1948A' }}>OVERLAP</span>
+                          )}
+                          <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.text }}>
+                            {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
