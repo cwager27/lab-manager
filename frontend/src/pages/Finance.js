@@ -97,6 +97,10 @@ export default function Finance({ userRole }) {
   const [categoryFilterOpen, setCategoryFilterOpen] = useState(false);
   const [draftCategories, setDraftCategories] = useState([]);
   const [categorySearch, setCategorySearch] = useState('');
+  const [selectedGrantsExpType, setSelectedGrantsExpType] = useState([]);
+  const [grantFilterExpTypeOpen, setGrantFilterExpTypeOpen] = useState(false);
+  const [draftGrantsExpType, setDraftGrantsExpType] = useState([]);
+  const [grantSearchExpType, setGrantSearchExpType] = useState('');
   const chartData = useMemo(() => {
     const real = orders.filter(o => o.item && o.item.trim() !== '' && o.status !== 'deleted');
 
@@ -455,6 +459,51 @@ export default function Finance({ userRole }) {
   }).filter(r => r.complete > 0 || r.processing > 0);
   const tableTotalComplete   = tableMonthRows.reduce((s, r) => s + r.complete,   0);
   const tableTotalProcessing = tableMonthRows.reduce((s, r) => s + r.processing, 0);
+
+  const filteredGrantOptionsExpType = GRANT_NAMES.filter(g => g.toLowerCase().includes(grantSearchExpType.toLowerCase()));
+  const activeGrantsExpType = selectedGrantsExpType.length === 0 ? GRANT_NAMES : selectedGrantsExpType;
+  const ordersReal = orders.filter(o => o.item && o.item.trim() !== '' && o.status !== 'deleted');
+  const expTypeOrders = activeGrantsExpType.length === GRANT_NAMES.length && selectedGrantsExpType.length === 0 ? ordersReal : ordersReal.filter(o => activeGrantsExpType.includes(o.grant_name));
+  const byCatFiltered = {};
+  CATEGORIES.forEach(cat => { byCatFiltered[cat] = { name: cat, complete: 0, processing: 0 }; });
+  expTypeOrders.forEach(o => {
+    if (!o.category || o.total_price == null) return;
+    if (!byCatFiltered[o.category]) byCatFiltered[o.category] = { name: o.category, complete: 0, processing: 0 };
+    const s = (o.status || '').trim().toLowerCase();
+    if (s === 'complete') byCatFiltered[o.category].complete += Number(o.total_price);
+    else if (s === 'processing') byCatFiltered[o.category].processing += Number(o.total_price);
+  });
+  const catStatusDataFiltered = CATEGORIES.map(cat => byCatFiltered[cat]);
+
+  function exportTableXLSX(rows, filename) {
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Data');
+    XLSX.writeFile(wb, filename);
+  }
+  function exportTotalsTable() {
+    exportTableXLSX([
+      { Status: 'Complete',   Total: totalComplete   },
+      { Status: 'Processing', Total: totalProcessing },
+    ], 'totals.xlsx');
+  }
+  function exportMonthTable() {
+    const rows = tableMonthRows.map(r => ({ Date: r.month, Complete: r.complete, Processing: r.processing }));
+    rows.push({ Date: 'Grand Total', Complete: tableTotalComplete, Processing: tableTotalProcessing });
+    exportTableXLSX(rows, 'complete_processing_by_month.xlsx');
+  }
+  function exportExpTypeTable() {
+    const rows = catStatusDataFiltered.filter(r => r.complete > 0 || r.processing > 0).map(r => ({ Category: r.name, Complete: r.complete, Processing: r.processing }));
+    exportTableXLSX(rows, 'complete_processing_by_expense_type.xlsx');
+  }
+  function exportCatMonthTable() {
+    const rows = activeCats.map(cat => {
+      const row = { Category: cat };
+      catMonths.forEach((m, mi) => { row[m] = catData[mi]?.[cat] ?? ''; });
+      return row;
+    });
+    exportTableXLSX(rows, 'monthly_spending_by_category.xlsx');
+  }
 
   const filteredOrders = orders.filter(o => searchQuery === '' || o.item?.toLowerCase().includes(searchQuery.toLowerCase()) || o.vendor?.toLowerCase().includes(searchQuery.toLowerCase()) || o.requisition_id?.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -888,164 +937,27 @@ export default function Finance({ userRole }) {
           {activeTab === 'charts' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
 
-              {/* Status by Month — filterable */}
+              {/* 1. Complete and Processing, totals */}
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
-                {/* Header row: title + filter button */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Status, Complete and Processing</h3>
-                  <div style={{ position: 'relative' }}>
-                    <button
-                      onClick={() => { setDraftGrants(selectedGrants); setGrantSearch(''); setGrantFilterOpen(v => !v); }}
-                      style={{ padding: '8px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                    >
-                      {selectedGrants.length === 0 ? 'All Grants' : `${selectedGrants.length} Grant${selectedGrants.length > 1 ? 's' : ''} Selected`}
-                      <span style={{ fontSize: '10px' }}>▼</span>
-                    </button>
-                    {grantFilterOpen && (
-                      <div style={{ position: 'absolute', zIndex: 200, top: 'calc(100% + 4px)', right: 0, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px', width: '340px', boxShadow: 'var(--shadow-lg)' }}>
-                        <input
-                          value={grantSearch}
-                          onChange={e => setGrantSearch(e.target.value)}
-                          placeholder="Search grants…"
-                          style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box', marginBottom: '8px' }}
-                        />
-                        <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                          <button onClick={() => setDraftGrants([...GRANT_NAMES])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Select All</button>
-                          <button onClick={() => setDraftGrants([])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Clear</button>
-                        </div>
-                        <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          {filteredGrantOptions.map(g => (
-                            <label key={g} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px' }}>
-                              <input
-                                type="checkbox"
-                                checked={draftGrants.includes(g)}
-                                onChange={e => setDraftGrants(prev => e.target.checked ? [...prev, g] : prev.filter(x => x !== g))}
-                              />
-                              <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{g}</span>
-                            </label>
-                          ))}
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
-                          <button onClick={() => setGrantFilterOpen(false)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
-                          <button onClick={() => { setSelectedGrants(draftGrants); setGrantFilterOpen(false); }} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>OK</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Complete and Processing, totals</h3>
+                  <button onClick={exportTotalsTable} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
                 </div>
-
-                {/* Chart + table side by side */}
-                <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                  {/* Chart */}
-                  <div style={{ flex: '1 1 480px', minWidth: 0 }}>
-                    <ResponsiveContainer width="100%" height={340}>
-                      <BarChart data={grantChartData} margin={{ top: 24, right: 16, left: 8, bottom: 20 }} barCategoryGap="35%">
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" vertical={false} />
-                        <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#555' }} />
-                        <YAxis tickFormatter={v => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} tick={{ fontSize: 10, fill: '#555' }} width={90} />
-                        <Tooltip formatter={(v, name) => [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name === 'complete' ? 'Complete' : 'Processing']} />
-                        <Legend verticalAlign="top" height={32} formatter={v => v === 'complete' ? 'complete' : 'processing'} />
-                        <Bar dataKey="complete" name="complete" stackId="a" fill="#CC4125" />
-                        <Bar dataKey="processing" name="processing" stackId="a" fill="#E9A918" radius={[2, 2, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  {/* Pivot table */}
-                  <div style={{ flex: '0 1 340px', minWidth: '280px', maxHeight: '380px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-                        <tr style={{ background: '#9DA9C7' }}>
-                          <th style={{ padding: '7px 10px', textAlign: 'left', color: 'white', fontWeight: 600, whiteSpace: 'nowrap' }}>Date</th>
-                          <th style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>Complete</th>
-                          <th style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>Processing</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {tableMonthRows.map((r, i) => (
-                          <tr key={r.month} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white', borderTop: '1px solid var(--border)' }}>
-                            <td style={{ padding: '5px 10px', color: '#1A1A2E', whiteSpace: 'nowrap' }}>{r.month}</td>
-                            <td style={{ padding: '5px 10px', textAlign: 'right', color: '#CC4125' }}>
-                              {r.complete > 0 ? `$${r.complete.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
-                            </td>
-                            <td style={{ padding: '5px 10px', textAlign: 'right', color: '#C99000' }}>
-                              {r.processing > 0 ? `$${r.processing.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr style={{ background: '#9DA9C7', borderTop: '2px solid #7A8AB5', fontWeight: 700 }}>
-                          <td style={{ padding: '7px 10px', color: 'white' }}>Grand Total</td>
-                          <td style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066' }}>
-                            ${tableTotalComplete.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </td>
-                          <td style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066' }}>
-                            {tableTotalProcessing > 0 ? `$${tableTotalProcessing.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-              </div>
-
-              {/* Complete and Processing */}
-              <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '20px' }}>Complete and Processing</h3>
                 <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
-
-                  {/* Left 70%: category chart then category table */}
-                  <div style={{ flex: '0 0 70%', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    <ResponsiveContainer width="100%" height={480}>
-                      <BarChart data={catStatusData} margin={{ top: 24, right: 16, left: 16, bottom: 100 }} barCategoryGap="30%">
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" vertical={false} />
-                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#555' }} angle={-45} textAnchor="end" interval={0} />
-                        <YAxis tickFormatter={v => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} tick={{ fontSize: 11, fill: '#555' }} />
-                        <Tooltip formatter={(v, name) => [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name === 'complete' ? 'Complete' : 'Processing']} />
-                        <Legend verticalAlign="top" height={32} formatter={v => v === 'complete' ? 'complete' : 'processing'} />
-                        <Bar dataKey="complete" name="complete" stackId="a" fill={CHART_BLUE} />
-                        <Bar dataKey="processing" name="processing" stackId="a" fill={CHART_RED} radius={[2,2,0,0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                      <thead>
-                        <tr style={{ background: '#9DA9C7' }}>
-                          <th style={{ padding: '7px 10px', textAlign: 'left', color: 'white', fontWeight: 600, fontStyle: 'italic' }}>SUM of Total price<br /><span style={{ fontStyle: 'normal' }}>Category</span></th>
-                          <th style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600 }}>complete</th>
-                          <th style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600 }}>processing</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {catStatusData.map((row, i) => (
-                          <tr key={i} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white' }}>
-                            <td style={{ padding: '5px 10px', color: '#1A1A2E' }}>{row.name}</td>
-                            {['complete', 'processing'].map(col => (
-                              <td key={col} style={{ padding: '5px 10px', textAlign: 'right', color: col === 'complete' ? CHART_BLUE : CHART_RED }}>
-                                {row[col] > 0 ? `$${row[col].toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Right 30%: totals chart then totals table */}
-                  <div style={{ flex: '1 1 0', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    <ResponsiveContainer width="100%" height={480}>
-                      <BarChart data={totalsChartData} margin={{ top: 28, right: 8, left: 8, bottom: 20 }} barCategoryGap="40%">
+                  <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart data={totalsChartData} margin={{ top: 16, right: 16, left: 8, bottom: 16 }} barCategoryGap="40%">
                         <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" vertical={false} />
                         <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#555' }} />
-                        <YAxis tickFormatter={v => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} tick={{ fontSize: 10, fill: '#555' }} />
+                        <YAxis tickFormatter={v => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} tick={{ fontSize: 10, fill: '#555' }} width={90} />
                         <Tooltip formatter={(v, name) => [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name]} />
                         <Bar dataKey="value" radius={[2,2,0,0]}>
                           {totalsChartData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
-
+                  </div>
+                  <div style={{ flex: '0 0 260px', minWidth: '200px' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                       <thead>
                         <tr style={{ background: '#9DA9C7' }}>
@@ -1065,99 +977,248 @@ export default function Finance({ userRole }) {
                       </tbody>
                     </table>
                   </div>
-
                 </div>
               </div>
 
-              {/* Monthly Spending by Category */}
+              {/* 2. Complete and Processing, per month */}
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Monthly Spending by Category</h3>
-                  <div style={{ position: 'relative' }}>
-                    <button
-                      onClick={() => { setDraftCategories(selectedCategories); setCategorySearch(''); setCategoryFilterOpen(v => !v); }}
-                      style={{ padding: '8px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                    >
-                      {selectedCategories.length === 0 ? 'All Categories' : `${selectedCategories.length} Categor${selectedCategories.length > 1 ? 'ies' : 'y'} Selected`}
-                      <span style={{ fontSize: '10px' }}>▼</span>
-                    </button>
-                    {categoryFilterOpen && (
-                      <div style={{ position: 'absolute', zIndex: 200, top: 'calc(100% + 4px)', right: 0, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px', width: '320px', boxShadow: 'var(--shadow-lg)' }}>
-                        <input
-                          value={categorySearch}
-                          onChange={e => setCategorySearch(e.target.value)}
-                          placeholder="Search categories…"
-                          style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box', marginBottom: '8px' }}
-                        />
-                        <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                          <button onClick={() => setDraftCategories([...CATEGORIES])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Select All</button>
-                          <button onClick={() => setDraftCategories([])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Clear</button>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '12px', flexWrap: 'wrap' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Complete and Processing, per month</h3>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <button onClick={exportMonthTable} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        onClick={() => { setDraftGrants(selectedGrants); setGrantSearch(''); setGrantFilterOpen(v => !v); }}
+                        style={{ padding: '8px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        {selectedGrants.length === 0 ? 'All Grants' : `${selectedGrants.length} Grant${selectedGrants.length > 1 ? 's' : ''} Selected`}
+                        <span style={{ fontSize: '10px' }}>▼</span>
+                      </button>
+                      {grantFilterOpen && (
+                        <div style={{ position: 'absolute', zIndex: 200, top: 'calc(100% + 4px)', right: 0, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px', width: '340px', boxShadow: 'var(--shadow-lg)' }}>
+                          <input value={grantSearch} onChange={e => setGrantSearch(e.target.value)} placeholder="Search grants…" style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box', marginBottom: '8px' }} />
+                          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                            <button onClick={() => setDraftGrants([...GRANT_NAMES])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Select All</button>
+                            <button onClick={() => setDraftGrants([])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Clear</button>
+                          </div>
+                          <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            {filteredGrantOptions.map(g => (
+                              <label key={g} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px' }}>
+                                <input type="checkbox" checked={draftGrants.includes(g)} onChange={e => setDraftGrants(prev => e.target.checked ? [...prev, g] : prev.filter(x => x !== g))} />
+                                <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{g}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                            <button onClick={() => setGrantFilterOpen(false)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                            <button onClick={() => { setSelectedGrants(draftGrants); setGrantFilterOpen(false); }} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>OK</button>
+                          </div>
                         </div>
-                        <div style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          {filteredCategoryOptions.map(cat => (
-                            <label key={cat} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px' }}>
-                              <input
-                                type="checkbox"
-                                checked={draftCategories.includes(cat)}
-                                onChange={e => setDraftCategories(prev => e.target.checked ? [...prev, cat] : prev.filter(x => x !== cat))}
-                              />
-                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: CATEGORY_COLORS[cat] || '#888888', flexShrink: 0 }} />
-                              <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{cat}</span>
-                            </label>
-                          ))}
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
-                          <button onClick={() => setCategoryFilterOpen(false)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
-                          <button onClick={() => { setSelectedCategories(draftCategories); setCategoryFilterOpen(false); }} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>OK</button>
-                        </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
-                <ResponsiveContainer width="100%" height={520}>
-                  <LineChart data={catData} margin={{ top: 20, right: 40, left: 10, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
-                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#555' }} />
-                    <YAxis scale="log" domain={[0.9, 250000]} ticks={[1, 10, 100, 1000, 10000, 100000]}
-                           tickFormatter={v => v >= 1000 ? `$${(v/1000).toFixed(0)}K` : `$${v.toFixed(0)}`}
-                           tick={{ fontSize: 10, fill: '#555' }} width={55} />
-                    <Tooltip formatter={(v, name) => v != null ? [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name] : ['-', name]} />
-                    <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '16px' }} />
-                    {activeCats.map(cat => (
-                      <Line key={cat} type="linear" dataKey={cat} stroke={CATEGORY_COLORS[cat] || '#888888'}
-                            dot={{ r: 3, fill: CATEGORY_COLORS[cat] || '#888888', strokeWidth: 0 }}
-                            strokeWidth={1.5} connectNulls={false} />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-
-                <div style={{ overflowX: 'auto', marginTop: '24px' }}>
-                  <table style={{ borderCollapse: 'collapse', fontSize: '11px', minWidth: '900px', width: '100%' }}>
-                    <thead>
-                      <tr style={{ background: '#9DA9C7' }}>
-                        <th style={{ padding: '7px 10px', textAlign: 'left', color: 'white', fontWeight: 600, whiteSpace: 'nowrap' }}>Category</th>
-                        {catMonths.map(m => <th key={m} style={{ padding: '7px 8px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>{m}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activeCats.map((cat, i) => (
-                        <tr key={cat} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white' }}>
-                          <td style={{ padding: '5px 10px', whiteSpace: 'nowrap' }}>
-                            <span style={{ backgroundColor: CATEGORY_COLORS[cat] || '#888888', width: 8, height: 8, borderRadius: '50%', display: 'inline-block', marginRight: 6, verticalAlign: 'middle' }} />
-                            <span style={{ color: '#1A1A2E', verticalAlign: 'middle' }}>{cat}</span>
-                          </td>
-                          {catMonths.map((m, mi) => {
-                            const val = catData[mi]?.[cat];
-                            return (
-                              <td key={m} style={{ padding: '5px 8px', textAlign: 'right', color: '#1A1A2E' }}>
-                                {val != null ? `$${val.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}
-                              </td>
-                            );
-                          })}
+                <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                  <div style={{ flex: '1 1 400px', minWidth: 0 }}>
+                    <ResponsiveContainer width="100%" height={340}>
+                      <BarChart data={grantChartData} margin={{ top: 24, right: 16, left: 8, bottom: 20 }} barCategoryGap="35%">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" vertical={false} />
+                        <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#555' }} />
+                        <YAxis tickFormatter={v => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} tick={{ fontSize: 10, fill: '#555' }} width={90} />
+                        <Tooltip formatter={(v, name) => [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name === 'complete' ? 'Complete' : 'Processing']} />
+                        <Legend verticalAlign="top" height={32} formatter={v => v === 'complete' ? 'complete' : 'processing'} />
+                        <Bar dataKey="complete" name="complete" stackId="a" fill="#CC4125" />
+                        <Bar dataKey="processing" name="processing" stackId="a" fill="#E9A918" radius={[2, 2, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div style={{ flex: '0 0 300px', minWidth: '240px', maxHeight: '380px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                        <tr style={{ background: '#9DA9C7' }}>
+                          <th style={{ padding: '7px 10px', textAlign: 'left', color: 'white', fontWeight: 600, whiteSpace: 'nowrap' }}>Date</th>
+                          <th style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>Complete</th>
+                          <th style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>Processing</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {tableMonthRows.map((r, i) => (
+                          <tr key={r.month} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white', borderTop: '1px solid var(--border)' }}>
+                            <td style={{ padding: '5px 10px', color: '#1A1A2E', whiteSpace: 'nowrap' }}>{r.month}</td>
+                            <td style={{ padding: '5px 10px', textAlign: 'right', color: '#CC4125' }}>{r.complete > 0 ? `$${r.complete.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}</td>
+                            <td style={{ padding: '5px 10px', textAlign: 'right', color: '#C99000' }}>{r.processing > 0 ? `$${r.processing.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ background: '#9DA9C7', borderTop: '2px solid #7A8AB5', fontWeight: 700 }}>
+                          <td style={{ padding: '7px 10px', color: 'white' }}>Grand Total</td>
+                          <td style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066' }}>${tableTotalComplete.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                          <td style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066' }}>{tableTotalProcessing > 0 ? `$${tableTotalProcessing.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Complete and Processing, per expense type */}
+              <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '12px', flexWrap: 'wrap' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Complete and Processing, per expense type</h3>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <button onClick={exportExpTypeTable} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        onClick={() => { setDraftGrantsExpType(selectedGrantsExpType); setGrantSearchExpType(''); setGrantFilterExpTypeOpen(v => !v); }}
+                        style={{ padding: '8px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        {selectedGrantsExpType.length === 0 ? 'All Grants' : `${selectedGrantsExpType.length} Grant${selectedGrantsExpType.length > 1 ? 's' : ''} Selected`}
+                        <span style={{ fontSize: '10px' }}>▼</span>
+                      </button>
+                      {grantFilterExpTypeOpen && (
+                        <div style={{ position: 'absolute', zIndex: 200, top: 'calc(100% + 4px)', right: 0, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px', width: '340px', boxShadow: 'var(--shadow-lg)' }}>
+                          <input value={grantSearchExpType} onChange={e => setGrantSearchExpType(e.target.value)} placeholder="Search grants…" style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box', marginBottom: '8px' }} />
+                          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                            <button onClick={() => setDraftGrantsExpType([...GRANT_NAMES])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Select All</button>
+                            <button onClick={() => setDraftGrantsExpType([])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Clear</button>
+                          </div>
+                          <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            {filteredGrantOptionsExpType.map(g => (
+                              <label key={g} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px' }}>
+                                <input type="checkbox" checked={draftGrantsExpType.includes(g)} onChange={e => setDraftGrantsExpType(prev => e.target.checked ? [...prev, g] : prev.filter(x => x !== g))} />
+                                <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{g}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                            <button onClick={() => setGrantFilterExpTypeOpen(false)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                            <button onClick={() => { setSelectedGrantsExpType(draftGrantsExpType); setGrantFilterExpTypeOpen(false); }} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>OK</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                  <div style={{ flex: '1 1 400px', minWidth: 0 }}>
+                    <ResponsiveContainer width="100%" height={420}>
+                      <BarChart data={catStatusDataFiltered} margin={{ top: 24, right: 16, left: 16, bottom: 100 }} barCategoryGap="30%">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#555' }} angle={-45} textAnchor="end" interval={0} />
+                        <YAxis tickFormatter={v => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} tick={{ fontSize: 11, fill: '#555' }} />
+                        <Tooltip formatter={(v, name) => [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name === 'complete' ? 'Complete' : 'Processing']} />
+                        <Legend verticalAlign="top" height={32} formatter={v => v === 'complete' ? 'complete' : 'processing'} />
+                        <Bar dataKey="complete" name="complete" stackId="a" fill={CHART_BLUE} />
+                        <Bar dataKey="processing" name="processing" stackId="a" fill={CHART_RED} radius={[2,2,0,0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div style={{ flex: '0 0 280px', minWidth: '220px', maxHeight: '460px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                        <tr style={{ background: '#9DA9C7' }}>
+                          <th style={{ padding: '7px 10px', textAlign: 'left', color: 'white', fontWeight: 600 }}>Category</th>
+                          <th style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600 }}>Complete</th>
+                          <th style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600 }}>Processing</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {catStatusDataFiltered.map((row, i) => (
+                          <tr key={i} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white', borderTop: '1px solid var(--border)' }}>
+                            <td style={{ padding: '5px 10px', color: '#1A1A2E' }}>{row.name}</td>
+                            <td style={{ padding: '5px 10px', textAlign: 'right', color: CHART_BLUE }}>{row.complete > 0 ? `$${row.complete.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}</td>
+                            <td style={{ padding: '5px 10px', textAlign: 'right', color: CHART_RED }}>{row.processing > 0 ? `$${row.processing.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Monthly Spending by Category */}
+              <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '12px', flexWrap: 'wrap' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Monthly Spending by Category</h3>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <button onClick={exportCatMonthTable} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        onClick={() => { setDraftCategories(selectedCategories); setCategorySearch(''); setCategoryFilterOpen(v => !v); }}
+                        style={{ padding: '8px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        {selectedCategories.length === 0 ? 'All Categories' : `${selectedCategories.length} Categor${selectedCategories.length > 1 ? 'ies' : 'y'} Selected`}
+                        <span style={{ fontSize: '10px' }}>▼</span>
+                      </button>
+                      {categoryFilterOpen && (
+                        <div style={{ position: 'absolute', zIndex: 200, top: 'calc(100% + 4px)', right: 0, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px', width: '320px', boxShadow: 'var(--shadow-lg)' }}>
+                          <input value={categorySearch} onChange={e => setCategorySearch(e.target.value)} placeholder="Search categories…" style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box', marginBottom: '8px' }} />
+                          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                            <button onClick={() => setDraftCategories([...CATEGORIES])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Select All</button>
+                            <button onClick={() => setDraftCategories([])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Clear</button>
+                          </div>
+                          <div style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            {filteredCategoryOptions.map(cat => (
+                              <label key={cat} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px' }}>
+                                <input type="checkbox" checked={draftCategories.includes(cat)} onChange={e => setDraftCategories(prev => e.target.checked ? [...prev, cat] : prev.filter(x => x !== cat))} />
+                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: CATEGORY_COLORS[cat] || '#888888', flexShrink: 0 }} />
+                                <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{cat}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                            <button onClick={() => setCategoryFilterOpen(false)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                            <button onClick={() => { setSelectedCategories(draftCategories); setCategoryFilterOpen(false); }} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>OK</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                  <div style={{ flex: '1 1 400px', minWidth: 0 }}>
+                    <ResponsiveContainer width="100%" height={460}>
+                      <LineChart data={catData} margin={{ top: 20, right: 24, left: 10, bottom: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
+                        <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#555' }} />
+                        <YAxis scale="log" domain={[0.9, 250000]} ticks={[1, 10, 100, 1000, 10000, 100000]}
+                               tickFormatter={v => v >= 1000 ? `$${(v/1000).toFixed(0)}K` : `$${v.toFixed(0)}`}
+                               tick={{ fontSize: 10, fill: '#555' }} width={55} />
+                        <Tooltip formatter={(v, name) => v != null ? [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name] : ['-', name]} />
+                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '16px' }} />
+                        {activeCats.map(cat => (
+                          <Line key={cat} type="linear" dataKey={cat} stroke={CATEGORY_COLORS[cat] || '#888888'}
+                                dot={{ r: 3, fill: CATEGORY_COLORS[cat] || '#888888', strokeWidth: 0 }}
+                                strokeWidth={1.5} connectNulls={false} />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div style={{ flex: '0 0 320px', minWidth: '240px', maxHeight: '500px', overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+                    <table style={{ borderCollapse: 'collapse', fontSize: '11px', minWidth: '280px' }}>
+                      <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                        <tr style={{ background: '#9DA9C7' }}>
+                          <th style={{ padding: '7px 10px', textAlign: 'left', color: 'white', fontWeight: 600, whiteSpace: 'nowrap' }}>Category</th>
+                          {catMonths.map(m => <th key={m} style={{ padding: '7px 8px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>{m}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activeCats.map((cat, i) => (
+                          <tr key={cat} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white', borderTop: '1px solid var(--border)' }}>
+                            <td style={{ padding: '5px 10px', whiteSpace: 'nowrap' }}>
+                              <span style={{ backgroundColor: CATEGORY_COLORS[cat] || '#888888', width: 8, height: 8, borderRadius: '50%', display: 'inline-block', marginRight: 6, verticalAlign: 'middle' }} />
+                              <span style={{ color: '#1A1A2E', verticalAlign: 'middle' }}>{cat}</span>
+                            </td>
+                            {catMonths.map((m, mi) => {
+                              const val = catData[mi]?.[cat];
+                              return <td key={m} style={{ padding: '5px 8px', textAlign: 'right', color: '#1A1A2E', whiteSpace: 'nowrap' }}>{val != null ? `$${val.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}</td>;
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
 
