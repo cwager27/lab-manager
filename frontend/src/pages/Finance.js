@@ -157,8 +157,6 @@ export default function Finance({ userRole }) {
 
   const { months: MONTHS, catData, catStatusData, grantNames: GRANT_NAMES, byGrant: ordersDataByGrant } = chartData;
 
-  const [editCell, setEditCell] = useState(null);
-  const [editVal, setEditVal] = useState('');
   const [vendors, setVendors] = useState([]);
   const [editingOrder, setEditingOrder] = useState(null);
   const [editOrderForm, setEditOrderForm] = useState({});
@@ -170,6 +168,13 @@ export default function Finance({ userRole }) {
   const [editingGrant, setEditingGrant] = useState(null);
   const [editGrantForm, setEditGrantForm] = useState({});
   const [confirmDeleteGrant, setConfirmDeleteGrant] = useState(false);
+  const [reagentsSortCol, setReagentsSortCol] = useState(null);
+  const [reagentsSortDir, setReagentsSortDir] = useState('asc');
+  const [showAddReagent, setShowAddReagent] = useState(false);
+  const [reagentForm, setReagentForm] = useState({ name: '', vendor: '', catalog_number: '', category: '', quantity_in_lab: '', fy24_purchases: '', fy25_purchases: '', fy26_purchases: '' });
+  const [editingReagent, setEditingReagent] = useState(null);
+  const [editReagentForm, setEditReagentForm] = useState({});
+  const [confirmDeleteReagent, setConfirmDeleteReagent] = useState(false);
 
   const canManage = userRole === 'admin' || userRole === 'pm';
 
@@ -367,23 +372,65 @@ export default function Finance({ userRole }) {
     setConfirmDeleteGrant(false);
   }
 
-  async function commitReagentEdit() {
-    if (!editCell || editCell.tbl !== 'reagent') return;
-    const { id, col } = editCell;
-    const numericFields = ['quantity_in_lab', 'fy24_purchases', 'fy25_purchases', 'fy26_purchases'];
-    const numVal = parseFloat(editVal);
-    const value = numericFields.includes(col) ? (isNaN(numVal) ? null : numVal) : editVal;
-    setReagents(prev => prev.map(r => r.id === id ? { ...r, [col]: value } : r));
-    await supabase.from('reagents').update({ [col]: value }).eq('id', id);
-    setEditCell(null);
-    setEditVal('');
+  const EMPTY_REAGENT_FORM = { name: '', vendor: '', catalog_number: '', category: '', quantity_in_lab: '', fy24_purchases: '', fy25_purchases: '', fy26_purchases: '' };
+
+  async function handleAddReagent(e) {
+    e.preventDefault();
+    if (!reagentForm.name.trim()) return;
+    const numF = v => v !== '' ? parseFloat(v) : null;
+    const payload = { name: reagentForm.name.trim(), vendor: reagentForm.vendor || null, catalog_number: reagentForm.catalog_number || null, category: reagentForm.category || null, quantity_in_lab: numF(reagentForm.quantity_in_lab), fy24_purchases: numF(reagentForm.fy24_purchases), fy25_purchases: numF(reagentForm.fy25_purchases), fy26_purchases: numF(reagentForm.fy26_purchases) };
+    const { data, error } = await supabase.from('reagents').insert([payload]).select().single();
+    if (!error && data) { setReagents(prev => [...prev, data]); setShowAddReagent(false); setReagentForm(EMPTY_REAGENT_FORM); }
   }
 
-  async function addReagentRow() {
-    const { data } = await supabase.from('reagents').insert([{ name: 'New Reagent', vendor: '', catalog_number: '', category: '' }]).select().single();
-    if (data) setReagents(prev => [...prev, data]);
+  function openEditReagent(r) {
+    setConfirmDeleteReagent(false);
+    setEditingReagent(r);
+    setEditReagentForm({ name: r.name || '', vendor: r.vendor || '', catalog_number: r.catalog_number || '', category: r.category || '', quantity_in_lab: r.quantity_in_lab != null ? String(r.quantity_in_lab) : '', fy24_purchases: r.fy24_purchases != null ? String(r.fy24_purchases) : '', fy25_purchases: r.fy25_purchases != null ? String(r.fy25_purchases) : '', fy26_purchases: r.fy26_purchases != null ? String(r.fy26_purchases) : '' });
   }
 
+  async function handleSaveReagent() {
+    const numF = v => v !== '' ? parseFloat(v) : null;
+    const payload = { name: editReagentForm.name.trim(), vendor: editReagentForm.vendor || null, catalog_number: editReagentForm.catalog_number || null, category: editReagentForm.category || null, quantity_in_lab: numF(editReagentForm.quantity_in_lab), fy24_purchases: numF(editReagentForm.fy24_purchases), fy25_purchases: numF(editReagentForm.fy25_purchases), fy26_purchases: numF(editReagentForm.fy26_purchases) };
+    await supabase.from('reagents').update(payload).eq('id', editingReagent.id);
+    setReagents(prev => prev.map(r => r.id === editingReagent.id ? { ...r, ...payload } : r));
+    setEditingReagent(null);
+  }
+
+  async function handleDeleteReagent() {
+    await supabase.from('reagents').delete().eq('id', editingReagent.id);
+    setReagents(prev => prev.filter(r => r.id !== editingReagent.id));
+    setEditingReagent(null); setConfirmDeleteReagent(false);
+  }
+
+  function handleExportReagents() {
+    const rows = sortedReagents.map(r => ({ 'Name': r.name||'', 'Vendor': r.vendor||'', 'Catalog #': r.catalog_number||'', 'Category': r.category||'', 'In Lab': r.quantity_in_lab??'', 'FY24': r.fy24_purchases??'', 'FY25': r.fy25_purchases??'', 'FY26': r.fy26_purchases??'' }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Reagents');
+    XLSX.writeFile(wb, `reagents_${new Date().toISOString().split('T')[0]}.xlsx`);
+  }
+
+  function handleReagentTemplate() {
+    const ws = XLSX.utils.json_to_sheet([{ 'Name': '', 'Vendor': '', 'Catalog #': '', 'Category': '', 'In Lab': '', 'FY24': '', 'FY25': '', 'FY26': '' }]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Reagents');
+    XLSX.writeFile(wb, 'reagents_import_template.xlsx');
+  }
+
+
+  const sortedReagents = useMemo(() => {
+    const q = reagentSearch.toLowerCase();
+    const filtered = q ? reagents.filter(r => ['name','vendor','catalog_number','category'].some(k => r[k] != null && String(r[k]).toLowerCase().includes(q))) : reagents;
+    if (!reagentsSortCol) return filtered;
+    return [...filtered].sort((a, b) => {
+      let av = a[reagentsSortCol], bv = b[reagentsSortCol];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1; if (bv == null) return -1;
+      const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv));
+      return reagentsSortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [reagents, reagentSearch, reagentsSortCol, reagentsSortDir]);
 
   const totalComplete = catStatusData.reduce((s, r) => s + (r.complete || 0), 0);
   const totalProcessing = catStatusData.reduce((s, r) => s + (r.processing || 0), 0);
@@ -469,22 +516,7 @@ export default function Finance({ userRole }) {
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Finance</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>Grants, orders, and reagent tracking</p>
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          {canManage && activeTab === 'reagents' && reagentTab === 'nanoseq' && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
-              <Upload size={16} /> {uploadingFile ? 'Processing...' : 'Import Nanoseq'}
-              <input type="file" accept=".xlsx,.csv" style={{ display: 'none' }} onChange={async (e) => {
-                const file = e.target.files[0]; if (!file) return;
-                setUploadingFile(true);
-                const formData = new FormData(); formData.append('file', file);
-                const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/preview-nanoseq`, { method: 'POST', body: formData });
-                const data = await res.json();
-                if (data.newNanoseq) setPreviewNanoseq(data.newNanoseq);
-                setUploadingFile(false);
-              }} />
-            </label>
-          )}
-        </div>
+        <div />
       </div>
 
       {alertGrants.length > 0 && (
@@ -511,7 +543,9 @@ export default function Finance({ userRole }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
         <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content' }}>
           {['grants', 'orders', 'reagents', 'vendors', 'charts'].map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', background: activeTab === tab ? 'var(--purple-primary)' : 'transparent', color: activeTab === tab ? 'white' : 'var(--text-secondary)', border: 'none', fontWeight: activeTab === tab ? 600 : 400, fontSize: '13px', textTransform: 'capitalize' }}>{tab}</button>
+            <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', background: activeTab === tab ? 'var(--purple-primary)' : 'transparent', color: activeTab === tab ? 'white' : 'var(--text-secondary)', border: 'none', fontWeight: activeTab === tab ? 600 : 400, fontSize: '13px', textTransform: 'capitalize' }}>
+              {tab === 'reagents' ? 'Standardized Reagents' : tab}
+            </button>
           ))}
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -544,8 +578,42 @@ export default function Finance({ userRole }) {
               <button onClick={() => setShowAddOrder(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Order</button>
             </>
           )}
-          {canManage && activeTab === 'reagents' && (
-            <button onClick={addReagentRow} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Reagent</button>
+          {activeTab === 'reagents' && reagentTab === 'misc' && (
+            <button onClick={handleExportReagents} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
+              <Download size={14} /> Export
+            </button>
+          )}
+          {canManage && activeTab === 'reagents' && reagentTab === 'misc' && (
+            <>
+              <button onClick={handleReagentTemplate} title="Download blank import template" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>Template</button>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
+                <Upload size={14} /> {uploadingFile ? 'Processing…' : 'Import'}
+                <input type="file" accept=".xlsx,.csv" style={{ display: 'none' }} onChange={async (e) => {
+                  const file = e.target.files[0]; if (!file) return;
+                  setUploadingFile(true);
+                  const formData = new FormData(); formData.append('file', file);
+                  const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/preview-reagents`, { method: 'POST', body: formData });
+                  const data = await res.json();
+                  if (data.newReagents) setPreviewReagents(data.newReagents);
+                  setUploadingFile(false); e.target.value = '';
+                }} />
+              </label>
+              <button onClick={() => { setReagentForm(EMPTY_REAGENT_FORM); setShowAddReagent(true); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Reagent</button>
+            </>
+          )}
+          {canManage && activeTab === 'reagents' && reagentTab === 'nanoseq' && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
+              <Upload size={14} /> {uploadingFile ? 'Processing…' : 'Import Nanoseq'}
+              <input type="file" accept=".xlsx,.csv" style={{ display: 'none' }} onChange={async (e) => {
+                const file = e.target.files[0]; if (!file) return;
+                setUploadingFile(true);
+                const formData = new FormData(); formData.append('file', file);
+                const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/preview-nanoseq`, { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.newNanoseq) setPreviewNanoseq(data.newNanoseq);
+                setUploadingFile(false); e.target.value = '';
+              }} />
+            </label>
           )}
         </div>
       </div>
@@ -754,61 +822,40 @@ export default function Finance({ userRole }) {
                 </div>
               </div>
 
-              {reagentTab === 'misc' && (() => {
-                const q = reagentSearch.toLowerCase();
-                const filteredReagents = q
-                  ? reagents.filter(r => ['name','vendor','catalog_number','category','quantity_in_lab','fy24_purchases','fy25_purchases','fy26_purchases'].some(k => r[k] != null && String(r[k]).toLowerCase().includes(q)))
-                  : reagents;
-                return (
+              {reagentTab === 'misc' && (
                 <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: 'var(--bg-secondary)' }}>
-                        {['Name','Vendor','Cat #','Category','In Lab','FY24','FY25','FY26'].map(h => (
-                          <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                        {[['name','Name'],['vendor','Vendor'],['catalog_number','Cat #'],['category','Category'],['quantity_in_lab','In Lab'],['fy24_purchases','FY24'],['fy25_purchases','FY25'],['fy26_purchases','FY26']].map(([key, label]) => (
+                          <th key={key} onClick={() => { if (reagentsSortCol === key) { setReagentsSortDir(d => d === 'asc' ? 'desc' : 'asc'); } else { setReagentsSortCol(key); setReagentsSortDir('asc'); } }} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: reagentsSortCol === key ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>
+                            {label}{reagentsSortCol === key ? (reagentsSortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                          </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredReagents.length === 0 && (
-                        <tr><td colSpan={8} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No reagents match "{reagentSearch}"</td></tr>
+                      {sortedReagents.length === 0 && (
+                        <tr><td colSpan={8} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>{reagentSearch ? `No reagents match "${reagentSearch}"` : 'No reagents yet.'}</td></tr>
                       )}
-                      {filteredReagents.map(r => {
-                        function rCell(col, style, display) {
-                          const isEd = editCell?.tbl === 'reagent' && editCell?.id === r.id && editCell?.col === col;
-                          return isEd ? (
-                            <td key={col} style={{ padding: 0, background: '#FFF9C4' }}>
-                              <input autoFocus value={editVal} onChange={e => setEditVal(e.target.value)} onBlur={commitReagentEdit} onKeyDown={e => { if (e.key === 'Enter') commitReagentEdit(); if (e.key === 'Escape') setEditCell(null); }} style={{ width: '100%', border: 'none', padding: '10px 12px', outline: 'none', fontSize: '13px', background: 'transparent', textAlign: style.textAlign || 'left', boxSizing: 'border-box' }} />
-                            </td>
-                          ) : (
-                            <td key={col} onClick={() => { setEditCell({ tbl: 'reagent', id: r.id, col }); setEditVal(r[col] != null ? String(r[col]) : ''); }} style={{ padding: '10px 12px', cursor: 'pointer', ...style }} title="Click to edit">
-                              {display}
-                            </td>
-                          );
-                        }
-                        return (
-                          <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}>
-                            {rCell('name',            { fontSize: '13px', color: 'var(--text-primary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, r.name)}
-                            {rCell('vendor',          { fontSize: '12px', color: 'var(--text-secondary)' }, r.vendor)}
-                            {rCell('catalog_number',  { fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }, r.catalog_number)}
-                            {rCell('category',        { fontSize: '12px', color: 'var(--text-secondary)' }, r.category)}
-                            {rCell('quantity_in_lab', { fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center' }, r.quantity_in_lab ?? '—')}
-                            {rCell('fy24_purchases',  { fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }, r.fy24_purchases ?? '—')}
-                            {rCell('fy25_purchases',  { fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }, r.fy25_purchases ?? '—')}
-                            {rCell('fy26_purchases',  { fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }, r.fy26_purchases ?? '—')}
-                          </tr>
-                        );
-                      })}
-                      <tr>
-                        <td colSpan={8} style={{ padding: '8px 12px', borderTop: '1px solid var(--border)' }}>
-                          <button onClick={addReagentRow} style={{ padding: '5px 12px', border: '1px dashed var(--border)', borderRadius: 'var(--radius-md)', background: 'transparent', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer' }}>+ Add Reagent</button>
-                        </td>
-                      </tr>
+                      {sortedReagents.map(r => (
+                        <tr key={r.id} onClick={() => canManage && openEditReagent(r)} style={{ borderTop: '1px solid var(--border)', cursor: canManage ? 'pointer' : 'default' }}
+                          onMouseEnter={e => { if (canManage) e.currentTarget.style.background = 'var(--bg-secondary)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = ''; }}>
+                          <td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-primary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</td>
+                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.vendor}</td>
+                          <td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{r.catalog_number}</td>
+                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.category}</td>
+                          <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center' }}>{r.quantity_in_lab ?? '—'}</td>
+                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.fy24_purchases ?? '—'}</td>
+                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.fy25_purchases ?? '—'}</td>
+                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.fy26_purchases ?? '—'}</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
-                );
-              })()}
+              )}
 
               {reagentTab === 'nanoseq' && (() => {
                 const q = reagentSearch.toLowerCase();
@@ -821,7 +868,7 @@ export default function Finance({ userRole }) {
                     <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>No Nanoseq reagents loaded yet. Click Import Nanoseq to upload.</div>
                   ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead><tr style={{ background: 'var(--bg-secondary)' }}>{['Protocol','Reagent','Company','Code','Cost','Amount','nRxn','Link'].map(h => <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
+                      <thead><tr style={{ background: 'var(--bg-secondary)' }}>{['Protocol','Reagent','Vendor','Code','Cost','Amount','nRxn','Link'].map(h => <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
                       <tbody>
                         {filteredNanoseq.length === 0 && (
                           <tr><td colSpan={8} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No reagents match "{reagentSearch}"</td></tr>
@@ -1384,6 +1431,101 @@ export default function Finance({ userRole }) {
                 ) : (
                   <button onClick={saveEditOrder} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Save Changes</button>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddReagent && canManage && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '480px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>Add Reagent</h2>
+            <form onSubmit={handleAddReagent} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Name *</label>
+                <input required value={reagentForm.name} onChange={e => setReagentForm(p => ({ ...p, name: e.target.value }))} placeholder="Reagent name" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Vendor</label>
+                  <input list="reagent-vendor-list" value={reagentForm.vendor} onChange={e => setReagentForm(p => ({ ...p, vendor: e.target.value }))} placeholder="Select or type vendor..." style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                  <datalist id="reagent-vendor-list">{vendors.map(v => <option key={v.id} value={v.name} />)}</datalist>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Catalog #</label>
+                  <input value={reagentForm.catalog_number} onChange={e => setReagentForm(p => ({ ...p, catalog_number: e.target.value }))} placeholder="e.g. ABC-12345" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Category</label>
+                <input value={reagentForm.category} onChange={e => setReagentForm(p => ({ ...p, category: e.target.value }))} placeholder="e.g. Antibody, Buffer..." style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px' }}>
+                {[['quantity_in_lab','In Lab'],['fy24_purchases','FY24'],['fy25_purchases','FY25'],['fy26_purchases','FY26']].map(([key, label]) => (
+                  <div key={key}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>{label}</label>
+                    <input type="number" value={reagentForm[key]} onChange={e => setReagentForm(p => ({ ...p, [key]: e.target.value }))} placeholder="0" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                <button type="button" onClick={() => setShowAddReagent(false)} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                <button type="submit" style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Add Reagent</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingReagent && canManage && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '480px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>Edit Reagent</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Name *</label>
+                <input required value={editReagentForm.name} onChange={e => setEditReagentForm(p => ({ ...p, name: e.target.value }))} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Vendor</label>
+                  <input list="reagent-edit-vendor-list" value={editReagentForm.vendor} onChange={e => setEditReagentForm(p => ({ ...p, vendor: e.target.value }))} placeholder="Select or type vendor..." style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                  <datalist id="reagent-edit-vendor-list">{vendors.map(v => <option key={v.id} value={v.name} />)}</datalist>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Catalog #</label>
+                  <input value={editReagentForm.catalog_number} onChange={e => setEditReagentForm(p => ({ ...p, catalog_number: e.target.value }))} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Category</label>
+                <input value={editReagentForm.category} onChange={e => setEditReagentForm(p => ({ ...p, category: e.target.value }))} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px' }}>
+                {[['quantity_in_lab','In Lab'],['fy24_purchases','FY24'],['fy25_purchases','FY25'],['fy26_purchases','FY26']].map(([key, label]) => (
+                  <div key={key}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>{label}</label>
+                    <input type="number" value={editReagentForm[key]} onChange={e => setEditReagentForm(p => ({ ...p, [key]: e.target.value }))} placeholder="0" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
+                <div>
+                  {!confirmDeleteReagent ? (
+                    <button onClick={() => setConfirmDeleteReagent(true)} style={{ padding: '10px 16px', borderRadius: 'var(--radius-md)', border: '1px solid #e74c3c', background: 'transparent', color: '#e74c3c', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>Delete</button>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '12px', color: '#e74c3c' }}>Sure?</span>
+                      <button onClick={handleDeleteReagent} style={{ padding: '8px 14px', borderRadius: 'var(--radius-md)', border: 'none', background: '#e74c3c', color: 'white', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}>Yes, delete</button>
+                      <button onClick={() => setConfirmDeleteReagent(false)} style={{ padding: '8px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button onClick={() => { setEditingReagent(null); setConfirmDeleteReagent(false); }} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                  <button onClick={handleSaveReagent} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Save Changes</button>
+                </div>
               </div>
             </div>
           </div>

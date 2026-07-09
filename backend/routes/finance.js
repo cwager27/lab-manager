@@ -93,41 +93,51 @@ router.post('/preview-reagents', upload.single('file'), async (req, res) => {
   try {
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheet = workbook.Sheets['Misc.'] || workbook.Sheets[workbook.SheetNames[0]];
-    
-    // Get all rows as arrays, skip row 1 (person names), use row 2 as headers
-    const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
-    const headers = allRows[1]; // Row 2 = index 1
-    const dataRows = allRows.slice(2); // Row 3+ = data
-
-    console.log('Headers:', headers.slice(0, 6));
-    console.log('First data row:', dataRows[0]?.slice(0, 6));
 
     const { data: existing } = await supabase
       .from('reagents').select('catalog_number');
     const existingCats = new Set((existing || []).map(e => String(e.catalog_number)));
 
+    // Try header-based parsing first (row 1 = headers)
+    const headerRows = XLSX.utils.sheet_to_json(sheet, { defval: null });
+    const HEADER_COLS = { name: ['Name','Item','name'], vendor: ['Vendor','vendor'], catalog_number: ['Catalog #','Catalog Number','catalog_number','Cat #'], category: ['Category','category'], quantity_in_lab: ['In Lab','quantity_in_lab','Qty'], fy24_purchases: ['FY24','fy24_purchases'], fy25_purchases: ['FY25','fy25_purchases'], fy26_purchases: ['FY26','fy26_purchases'] };
+    function pick(row, keys) { for (const k of keys) { if (row[k] != null) return row[k]; } return null; }
+
+    const firstRow = headerRows[0] || {};
+    const hasHeaders = HEADER_COLS.name.some(k => k in firstRow);
+
     const newReagents = [];
-    for (const row of dataRows) {
-      const name = row[1]; // Item (name) is column B
-      const cat = row[3];  // Cat number is column D
-      const category = row[0]; // Category is column A
-      const units = row[4]; // Units is column E
-      const vendor = row[2]; // Vendor is column C
-
-      if (!name || existingCats.has(String(cat))) continue;
-
-      newReagents.push({
-        name: String(name),
-        vendor: vendor ? String(vendor) : null,
-        catalog_number: cat ? String(cat) : null,
-        category: category ? String(category) : null,
-        unit_description: units ? String(units) : null,
-        quantity_in_lab: null,
-        fy24_purchases: null,
-        fy25_purchases: null,
-        fy26_purchases: null,
-        notes: null
-      });
+    if (hasHeaders) {
+      for (const row of headerRows) {
+        const name = pick(row, HEADER_COLS.name);
+        const cat = pick(row, HEADER_COLS.catalog_number);
+        if (!name || existingCats.has(String(cat))) continue;
+        newReagents.push({
+          name: String(name),
+          vendor: pick(row, HEADER_COLS.vendor) ? String(pick(row, HEADER_COLS.vendor)) : null,
+          catalog_number: cat ? String(cat) : null,
+          category: pick(row, HEADER_COLS.category) ? String(pick(row, HEADER_COLS.category)) : null,
+          quantity_in_lab: parseFloat(pick(row, HEADER_COLS.quantity_in_lab)) || null,
+          fy24_purchases: parseFloat(pick(row, HEADER_COLS.fy24_purchases)) || null,
+          fy25_purchases: parseFloat(pick(row, HEADER_COLS.fy25_purchases)) || null,
+          fy26_purchases: parseFloat(pick(row, HEADER_COLS.fy26_purchases)) || null,
+        });
+      }
+    } else {
+      // Legacy positional format: row 1 = names, row 2 = headers, row 3+ = data
+      const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+      const dataRows = allRows.slice(2);
+      for (const row of dataRows) {
+        const name = row[1]; const cat = row[3];
+        if (!name || existingCats.has(String(cat))) continue;
+        newReagents.push({
+          name: String(name),
+          vendor: row[2] ? String(row[2]) : null,
+          catalog_number: cat ? String(cat) : null,
+          category: row[0] ? String(row[0]) : null,
+          quantity_in_lab: null, fy24_purchases: null, fy25_purchases: null, fy26_purchases: null,
+        });
+      }
     }
 
     console.log('New reagents found:', newReagents.length);
@@ -140,7 +150,28 @@ router.post('/preview-reagents', upload.single('file'), async (req, res) => {
 
 // Import confirmed reagents
 router.post('/import-reagents', async (req, res) => {
-  // Preview Nanoseq reagents
+  const { reagents } = req.body;
+  try {
+    let imported = 0;
+    for (const reagent of reagents) {
+      const { error } = await supabase
+        .from('reagents')
+        .insert(reagent);
+      if (error) {
+        console.error('Reagent insert error:', error.message, reagent.name);
+      } else {
+        imported++;
+      }
+    }
+    console.log('Imported:', imported, 'of', reagents.length);
+    res.json({ success: true, imported });
+  } catch (error) {
+    console.error('Reagent import error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Preview Nanoseq reagents
 router.post('/preview-nanoseq', upload.single('file'), async (req, res) => {
   try {
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
@@ -190,26 +221,6 @@ router.post('/import-nanoseq', async (req, res) => {
     res.json({ success: true, imported });
   } catch (error) {
     console.error('Nanoseq import error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-  const { reagents } = req.body;
-  try {
-    let imported = 0;
-    for (const reagent of reagents) {
-      const { error } = await supabase
-        .from('reagents')
-        .insert(reagent);
-      if (error) {
-        console.error('Reagent insert error:', error.message, reagent.name);
-      } else {
-        imported++;
-      }
-    }
-    console.log('Imported:', imported, 'of', reagents.length);
-    res.json({ success: true, imported });
-  } catch (error) {
-    console.error('Reagent import error:', error);
     res.status(500).json({ error: error.message });
   }
 });
