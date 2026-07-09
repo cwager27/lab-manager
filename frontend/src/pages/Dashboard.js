@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle, Pencil, Trash2, X, Check, Globe } from 'lucide-react';
+import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle, Pencil, Trash2, X, Check } from 'lucide-react';
 
 
 function formatDate(d) {
@@ -50,6 +50,42 @@ function MiniScoreRow({ row }) {
       </div>
       <div style={{ fontSize: 11, fontWeight: 700, color: noData ? '#b084d0' : 'var(--text-secondary)', width: 26, textAlign: 'right', flexShrink: 0 }}>
         {noData ? '—' : score}
+      </div>
+    </div>
+  );
+}
+
+function RecurScoreRow({ row }) {
+  const { profile, onTime, late, missed, pending } = row;
+  const firstName = (profile.full_name || '').split(' ')[0];
+  const total = onTime + late + missed + pending;
+  const matured = onTime + late + missed;
+  if (total === 0) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', width: 72, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{firstName}</div>
+        <div style={{ flex: 1, height: 10, borderRadius: 5, background: 'var(--border)' }} />
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', width: 46, textAlign: 'right', flexShrink: 0 }}>—</div>
+      </div>
+    );
+  }
+  const pctOnTime = Math.round(onTime / total * 100);
+  const pctLate = Math.round(late / total * 100);
+  const pctMissed = Math.round(missed / total * 100);
+  const pctPending = 100 - pctOnTime - pctLate - pctMissed;
+  const onTimePct = matured > 0 ? Math.round(onTime / matured * 100) : null;
+  const labelColor = onTimePct === null ? 'var(--text-muted)' : onTimePct >= 70 ? '#27AE60' : onTimePct >= 40 ? '#F39C12' : '#E74C3C';
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', width: 72, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{firstName}</div>
+      <div style={{ flex: 1, height: 10, borderRadius: 5, overflow: 'hidden', display: 'flex', background: '#E5E5EA' }}>
+        {pctOnTime > 0 && <div style={{ width: `${pctOnTime}%`, background: '#27AE60', height: '100%', transition: 'width 0.4s ease' }} />}
+        {pctLate > 0 && <div style={{ width: `${pctLate}%`, background: '#F39C12', height: '100%', transition: 'width 0.4s ease' }} />}
+        {pctMissed > 0 && <div style={{ width: `${pctMissed}%`, background: '#E74C3C', height: '100%', transition: 'width 0.4s ease' }} />}
+        {pctPending > 0 && <div style={{ width: `${pctPending}%`, background: '#D0D0D8', height: '100%', transition: 'width 0.4s ease' }} />}
+      </div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: labelColor, width: 46, textAlign: 'right', flexShrink: 0 }}>
+        {onTimePct !== null ? `${onTimePct}%` : '—'}
       </div>
     </div>
   );
@@ -115,8 +151,7 @@ export default function Dashboard({ profile, userRole, userId }) {
     if (!profile?.id) return;
     setLoading(true);
     const today = new Date().toISOString().split('T')[0];
-    const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const thirtyDays = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const next8Weeks = new Date(Date.now() + 56 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     const sporQuery = canEdit
       ? supabase.from('sporadic_tasks')
@@ -130,7 +165,7 @@ export default function Dashboard({ profile, userRole, userId }) {
       // vacation – all approved in next 30 days
       supabase.from('vacation_requests')
         .select('*, requester:profiles!vacation_requests_requested_by_fkey(full_name)')
-        .eq('status', 'approved').lte('start_date', thirtyDays).gte('end_date', today).order('start_date'),
+        .eq('status', 'approved').lte('start_date', next8Weeks).gte('end_date', today).order('start_date'),
       // my own vacation requests
       supabase.from('vacation_requests')
         .select('*').eq('requested_by', profile.id).order('start_date', { ascending: false }),
@@ -173,10 +208,10 @@ export default function Dashboard({ profile, userRole, userId }) {
 
     const allVac = vacData || [];
     setOutToday(allVac.filter(r => r.start_date <= today && r.end_date >= today));
-    setNextWeekOut(allVac.filter(r => r.start_date > today && r.start_date <= nextWeek));
+    setNextWeekOut(allVac.filter(r => r.start_date > today && r.start_date <= next8Weeks));
     const allMeetings = allMeetingData || [];
-    setLabMeetings(allMeetings.filter(m => m.meeting_type !== 'adhoc_meeting').slice(0, 2));
-    setAdhocMeetings(allMeetings.filter(m => m.meeting_type === 'adhoc_meeting').slice(0, 2));
+    setLabMeetings(allMeetings.filter(m => m.meeting_type !== 'adhoc_meeting').slice(0, 6));
+    setAdhocMeetings(allMeetings.filter(m => m.meeting_type === 'adhoc_meeting').slice(0, 6));
     setMyTimeOff(myVacData || []);
     setMyTasks(sporData || []);
 
@@ -279,6 +314,25 @@ export default function Dashboard({ profile, userRole, userId }) {
   const visibleAssignments = taskFreq
     ? myAssignments.filter(a => a.task?.frequency === taskFreq)
     : myAssignments;
+
+  const vacOverlapIds = (() => {
+    const all = [...outToday, ...nextWeekOut];
+    const ids = new Set();
+    for (let i = 0; i < all.length; i++) {
+      for (let j = i + 1; j < all.length; j++) {
+        const a = all[i], b = all[j];
+        if (a.start_date <= b.end_date && b.start_date <= a.end_date) { ids.add(a.id); ids.add(b.id); }
+      }
+    }
+    return ids;
+  })();
+
+  const classifyAdhocTask = t => t.status === 'done' ? 2 : (t.due_date && t.due_date < today) ? 0 : 1;
+  const adhocDisplayTasks = canEdit ? myTasks : publicTasks;
+  const sortedAdhocTasks = [...adhocDisplayTasks].sort((a, b) => {
+    const d = classifyAdhocTask(a) - classifyAdhocTask(b);
+    return d !== 0 ? d : (a.due_date || '').localeCompare(b.due_date || '');
+  });
 
   const alertGrants = grants.filter(g => {
     const pct = g.total_amount && g.remaining_balance ? (g.remaining_balance / g.total_amount) * 100 : null;
@@ -531,77 +585,78 @@ export default function Dashboard({ profile, userRole, userId }) {
           {/* ══ LAB DASHBOARD ══ */}
           <div style={{ flex: 1, minWidth: 0, order: 1, background: '#F0F4FF', border: '1px solid #D8E0F5', borderRadius: '16px', padding: '20px' }}>
             <h2 style={{ fontSize: '13px', fontWeight: 800, color: '#3B5BDB', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px', paddingLeft: '10px', borderLeft: '3px solid #3B5BDB', lineHeight: 1.2, margin: '0 0 16px' }}>Lab Dashboard</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-
-            {/* Row 1: Out today + Next week out */}
-            <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-
-              {/* Out of Office Today */}
-              <div style={{ flex: '1 1 200px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-                <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
-                  <Palmtree size={13} color="#F39C12" />
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Out of Office Today</span>
-                </div>
-                {outToday.length === 0 ? (
-                  <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>Everyone is in today.</p>
-                ) : (
-                  <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                    {outToday.map(r => (
-                      <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {r.requester?.full_name}
-                        </span>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                          {formatDate(r.start_date)}{r.start_date !== r.end_date ? `–${formatDate(r.end_date)}` : ''}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Next Week Out */}
-              <div style={{ flex: '1 1 200px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-                <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
-                  <Calendar size={13} color="var(--purple-primary)" />
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Out Next Week</span>
-                </div>
-                {nextWeekOut.length === 0 ? (
-                  <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No one out next week.</p>
-                ) : (
-                  <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                    {nextWeekOut.map(r => (
-                      <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {r.requester?.full_name}
-                        </span>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                          {formatDate(r.start_date)}{r.start_date !== r.end_date ? `–${formatDate(r.end_date)}` : ''}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-            </div>
-
-            {/* Row 2: Next Lab Meeting + Next Ad-hoc Meeting */}
             <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
-              {[
-                { label: 'Next Lab Meeting', meetings: labMeetings },
-                { label: 'Next Ad-hoc Meeting', meetings: adhocMeetings },
-              ].map(({ label, meetings }) => (
-                <div key={label} style={{ flex: '1 1 0', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+
+              {/* ── LEFT column ── */}
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+                {/* Out today */}
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
                   <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
-                    <Calendar size={13} color="var(--purple-primary)" />
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>{label}</span>
+                    <Palmtree size={13} color="#F39C12" />
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Out today</span>
                   </div>
-                  {meetings.length === 0 ? (
-                    <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>None scheduled.</p>
+                  {outToday.length === 0 ? (
+                    <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>Everyone is in today.</p>
                   ) : (
                     <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                      {meetings.map(m => (
+                      {outToday.map(r => (
+                        <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {r.requester?.full_name}
+                          </span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            {formatDate(r.start_date)}{r.start_date !== r.end_date ? `–${formatDate(r.end_date)}` : ''}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Out next 8 weeks — overlapping periods flagged in red */}
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                  <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
+                    <Calendar size={13} color="var(--purple-primary)" />
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Out next 8 weeks</span>
+                  </div>
+                  {nextWeekOut.length === 0 ? (
+                    <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No one out in the next 8 weeks.</p>
+                  ) : (
+                    <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                      {nextWeekOut.map(r => {
+                        const hasOverlap = vacOverlapIds.has(r.id);
+                        return (
+                          <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {r.requester?.full_name}
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                              {hasOverlap && (
+                                <span style={{ fontSize: 9, fontWeight: 700, color: '#E74C3C', background: '#FDEDEC', padding: '1px 5px', borderRadius: 6, border: '1px solid #F1948A' }}>OVERLAP</span>
+                              )}
+                              <span style={{ fontSize: '11px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                                {formatDate(r.start_date)}{r.start_date !== r.end_date ? `–${formatDate(r.end_date)}` : ''}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Upcoming lab meetings */}
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                  <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
+                    <Calendar size={13} color="var(--purple-primary)" />
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Upcoming lab meetings</span>
+                  </div>
+                  {labMeetings.length === 0 ? (
+                    <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>None scheduled.</p>
+                  ) : (
+                    <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {labMeetings.map(m => (
                         <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
                           <div>
                             <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -620,62 +675,117 @@ export default function Dashboard({ profile, userRole, userId }) {
                     </div>
                   )}
                 </div>
-              ))}
-            </div>
 
-            {/* Admin Contacts (lab_contacts) */}
-            {/* ── Lab Tasks ── */}
-            <Card icon={<Globe size={13} color="var(--purple-primary)" />} title="Lab Tasks">
-              {publicTasks.length === 0 ? (
-                <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>No public tasks.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {publicTasks.map((task, i) => {
-                    const done = task.status === 'done';
-                    const todayStr = new Date().toISOString().split('T')[0];
-                    const overdue = !done && task.due_date && task.due_date < todayStr;
-                    const statusBadge = done
-                      ? { label: 'Completed', bg: '#E8F8F0', color: '#27AE60' }
-                      : overdue
-                      ? { label: 'Late', bg: '#FDEDEC', color: '#E74C3C' }
-                      : { label: 'Not Completed', bg: 'var(--bg-secondary)', color: 'var(--text-muted)' };
-                    return (
-                      <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', opacity: done ? 0.7 : 1 }}>
-                        <span style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', flex: 1, lineHeight: 1.4, textDecoration: done ? 'line-through' : 'none' }}>{task.title}</span>
-                        {task.assignee?.full_name && (
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{task.assignee.full_name}</span>
-                        )}
-                        {task.due_date && <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(task.due_date)}</span>}
-                        <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: 8, background: statusBadge.bg, color: statusBadge.color, flexShrink: 0, whiteSpace: 'nowrap' }}>{statusBadge.label}</span>
-                      </div>
-                    );
-                  })}
+                {/* Upcoming ad hoc meetings */}
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                  <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
+                    <Calendar size={13} color="var(--purple-primary)" />
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Upcoming ad hoc meetings</span>
+                  </div>
+                  {adhocMeetings.length === 0 ? (
+                    <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>None scheduled.</p>
+                  ) : (
+                    <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {adhocMeetings.map(m => (
+                        <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                          <div>
+                            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              {new Date(m.meeting_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })}
+                              {m.is_sof && <Star size={10} color="#7B3FA0" fill="#7B3FA0" />}
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '1px' }}>
+                              {m.presenter?.full_name || m.guest_name || <em>TBD</em>}
+                            </div>
+                          </div>
+                          {m.is_sof && (
+                            <span style={{ padding: '1px 6px', borderRadius: '8px', fontSize: '9px', fontWeight: 700, background: 'var(--purple-faint)', color: 'var(--purple-primary)', flexShrink: 0 }}>SOF</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </Card>
 
-            {/* ── Recurring Responsibilities Productivity ── */}
-            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-              <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <ClipboardList size={13} color="var(--purple-primary)" />
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Recurring Task Productivity</span>
-                </div>
-                <PeriodPicker value={recurPeriod} onChange={setRecurPeriod} />
               </div>
-              {recurLoading ? (
-                <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Loading…</p>
-              ) : (
-                <div style={{ padding: '4px 14px 6px' }}>
-                  {recurData.sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).map(row => (
-                    <MiniScoreRow key={row.profile.id} row={row} />
-                  ))}
+
+              {/* ── RIGHT column ── */}
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+                {/* Recurrent lab task productivity */}
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                  <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <ClipboardList size={13} color="var(--purple-primary)" />
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Recurrent lab task productivity</span>
+                    </div>
+                    <PeriodPicker value={recurPeriod} onChange={setRecurPeriod} />
+                  </div>
+                  <div style={{ padding: '5px 14px', display: 'flex', gap: 10, borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      {[['#27AE60', 'On time'], ['#F39C12', 'Late'], ['#E74C3C', 'Missed'], ['#D0D0D8', 'Pending']].map(([color, label]) => (
+                        <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{label}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>% tasks completed on time</span>
+                  </div>
+                  {recurLoading ? (
+                    <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Loading…</p>
+                  ) : (
+                    <div style={{ padding: '4px 14px 8px' }}>
+                      {recurData.sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).map(row => (
+                        <RecurScoreRow key={row.profile.id} row={row} />
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
+
+                {/* Ad hoc task productivity */}
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                  <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <ClipboardList size={13} color="#27AE60" />
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Ad hoc task productivity</span>
+                  </div>
+                  <div style={{ padding: '5px 14px', display: 'flex', gap: 10, borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
+                    {[['#27AE60', 'Completed on time'], ['#F39C12', 'Due'], ['#E74C3C', 'Overdue']].map(([color, label]) => (
+                      <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {sortedAdhocTasks.length === 0 ? (
+                    <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>No tasks.</p>
+                  ) : (
+                    <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                      {sortedAdhocTasks.map((task, i) => {
+                        const cls = classifyAdhocTask(task);
+                        const statusColor = cls === 2 ? '#27AE60' : cls === 0 ? '#E74C3C' : '#F39C12';
+                        const statusBg = cls === 2 ? '#EAF7F0' : cls === 0 ? '#FDEDEC' : '#FEF9E7';
+                        const statusLabel = cls === 2 ? 'Done' : cls === 0 ? 'Overdue' : 'Due';
+                        return (
+                          <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
+                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
+                            <span style={{ fontSize: 12, color: 'var(--text-primary)', flex: 1, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
+                            {task.assignee?.full_name && (
+                              <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{task.assignee.full_name.split(' ')[0]}</span>
+                            )}
+                            {task.due_date && (
+                              <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(task.due_date)}</span>
+                            )}
+                            <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 8, background: statusBg, color: statusColor, flexShrink: 0, whiteSpace: 'nowrap' }}>{statusLabel}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
             </div>
-
-
-          </div>
           </div>
 
         </div>
