@@ -307,8 +307,8 @@ export default function Dashboard({ profile, userRole, userId }) {
         <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
 
           {/* ══ PERSONAL DASHBOARD ══ */}
-          <div style={{ flex: 1, minWidth: 0, order: 2 }}>
-            <h2 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>Personal Dashboard</h2>
+          <div style={{ flex: 1, minWidth: 0, order: 2, background: '#FBF8FF', border: '1px solid #E4D9F5', borderRadius: '16px', padding: '20px' }}>
+            <h2 style={{ fontSize: '13px', fontWeight: 800, color: '#7B3FA0', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px', paddingLeft: '10px', borderLeft: '3px solid #7B3FA0', lineHeight: 1.2, margin: '0 0 16px' }}>Personal Dashboard</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
             {/* Grant Alerts — Mia and PM only */}
@@ -529,8 +529,8 @@ export default function Dashboard({ profile, userRole, userId }) {
           </div>
 
           {/* ══ LAB DASHBOARD ══ */}
-          <div style={{ flex: 1, minWidth: 0, order: 1 }}>
-            <h2 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>Lab Dashboard</h2>
+          <div style={{ flex: 1, minWidth: 0, order: 1, background: '#F0F4FF', border: '1px solid #D8E0F5', borderRadius: '16px', padding: '20px' }}>
+            <h2 style={{ fontSize: '13px', fontWeight: 800, color: '#3B5BDB', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px', paddingLeft: '10px', borderLeft: '3px solid #3B5BDB', lineHeight: 1.2, margin: '0 0 16px' }}>Lab Dashboard</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
             {/* Row 1: Out today + Next week out */}
