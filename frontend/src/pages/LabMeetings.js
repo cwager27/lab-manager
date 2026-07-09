@@ -436,7 +436,21 @@ export default function LabMeetings({ userRole, userId, profile }) {
             <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
               {isLab ? 'Lab Meetings' : 'Ad-hoc Meetings'}
             </h2>
-            {isLab && <p style={{ color: 'var(--text-muted)', fontSize: '11px', margin: '2px 0 0' }}>Thu 1:30–3pm · Zoom 987 7040 0275 · pw 676073</p>}
+            {isLab && (
+              <div style={{ display: 'flex', gap: '5px', marginTop: '5px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginRight: '2px' }}>Thu 1:30–3pm</span>
+                <a href="https://zoom.us/j/98770400275" target="_blank" rel="noopener noreferrer"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'var(--purple-primary)', color: 'white', padding: '2px 9px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, textDecoration: 'none' }}>
+                  <ExternalLink size={10} /> Join Zoom
+                </a>
+                <span style={{ background: 'var(--purple-primary)', color: 'white', padding: '2px 9px', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>
+                  ID: 987 7040 0275
+                </span>
+                <span style={{ background: 'var(--purple-primary)', color: 'white', padding: '2px 9px', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>
+                  PW: 676073
+                </span>
+              </div>
+            )}
           </div>
           {canEdit && (
             <button onClick={() => { setShowAddForm(table); setNewMeeting(EMPTY_MEETING); }}
