@@ -240,9 +240,14 @@ CREATE TABLE IF NOT EXISTS lab_meetings (
   sof_topic      text,
   notes          text,
   status         text DEFAULT 'scheduled',
+  zoom_link      text,
+  zoom_info      text,
   created_at     timestamptz DEFAULT now(),
   updated_at     timestamptz DEFAULT now()
 );
+-- Migration (run in Supabase SQL editor if table already exists):
+-- ALTER TABLE lab_meetings ADD COLUMN IF NOT EXISTS zoom_link text;
+-- ALTER TABLE lab_meetings ADD COLUMN IF NOT EXISTS zoom_info text;
 
 -- 14. adhoc_meetings
 CREATE TABLE IF NOT EXISTS adhoc_meetings (

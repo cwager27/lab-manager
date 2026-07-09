@@ -1,6 +1,36 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { Plus, X, Star, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Plus, X, Star, AlertTriangle, CheckCircle, ExternalLink } from 'lucide-react';
+
+const ZOOM_KEY_OPTIONS = ['Meeting ID', 'Passcode', 'Webinar ID', 'Other'];
+const ZOOM_SHORT = { 'Meeting ID': 'ID', 'Passcode': 'PW', 'Webinar ID': 'WID' };
+
+function buildZoomInfo(fields) {
+  const valid = (fields || [])
+    .map(f => ({ key: f.key === 'Other' ? (f.customKey || 'Other') : f.key, value: f.value }))
+    .filter(f => f.value && f.value.trim());
+  return valid.length ? JSON.stringify(valid) : null;
+}
+
+function formatZoomInfo(jsonStr) {
+  if (!jsonStr) return '';
+  try {
+    const parsed = JSON.parse(jsonStr);
+    return parsed.filter(f => f.value).map(f => `${ZOOM_SHORT[f.key] || f.key}: ${f.value}`).join(' · ');
+  } catch { return jsonStr; }
+}
+
+function parseZoomInfo(jsonStr) {
+  if (!jsonStr) return [{ key: 'Meeting ID', value: '', customKey: '' }];
+  try {
+    const parsed = JSON.parse(jsonStr);
+    return parsed.map(f => ({
+      key: ZOOM_KEY_OPTIONS.includes(f.key) ? f.key : 'Other',
+      value: f.value,
+      customKey: ZOOM_KEY_OPTIONS.includes(f.key) ? '' : f.key,
+    }));
+  } catch { return [{ key: 'Meeting ID', value: '', customKey: '' }]; }
+}
 
 const STATUS_STYLES = {
   scheduled: { bg: '#EBF5FB', text: '#2980B9', label: 'Scheduled' },
@@ -11,6 +41,7 @@ const STATUS_STYLES = {
 const EMPTY_MEETING = {
   meeting_date: '', presenter_id: '', guest_name: '', guest_title: '',
   is_sof: false, sof_topic: '', notes: '', status: 'scheduled',
+  zoom_link: '', zoom_info_fields: [{ key: 'Meeting ID', value: '', customKey: '' }],
 };
 
 function isOnVacationFn(memberId, date, vacations) {
@@ -46,6 +77,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
   const [cellValue, setCellValue] = useState('');
   const [guestNameEdit, setGuestNameEdit] = useState('');
   const [vacWarn, setVacWarn] = useState(null);
+  const [editingZoomInfo, setEditingZoomInfo] = useState(null);
 
   const canEdit = userRole === 'pm' || profile?.full_name?.toLowerCase().startsWith('mia');
   const today = new Date().toISOString().split('T')[0];
@@ -146,6 +178,13 @@ export default function LabMeetings({ userRole, userId, profile }) {
     fetchData(true);
   }
 
+  async function commitZoomInfo(meetingId, fields) {
+    const json = buildZoomInfo(fields);
+    await supabase.from(tblName()).update({ zoom_info: json, updated_at: new Date().toISOString() }).eq('id', meetingId);
+    setEditingZoomInfo(null);
+    fetchData(true);
+  }
+
   async function handleAddMeeting(e) {
     e.preventDefault();
     if (!showAddForm || !newMeeting.meeting_date) return;
@@ -168,6 +207,10 @@ export default function LabMeetings({ userRole, userId, profile }) {
       notes: newMeeting.notes || null,
       status: 'scheduled',
       meeting_type: showAddForm === 'adhoc' ? 'adhoc_meeting' : 'lab_meeting',
+      ...(showAddForm === 'adhoc' && {
+        zoom_link: newMeeting.zoom_link || null,
+        zoom_info: buildZoomInfo(newMeeting.zoom_info_fields),
+      }),
     }]);
 
     const presenter = members.find(m => m.id === presenterId);
@@ -201,10 +244,12 @@ export default function LabMeetings({ userRole, userId, profile }) {
     const onVac = meeting.presenter_id && isOnVacationFn(meeting.presenter_id, meeting.meeting_date, vacations);
     const statusStyle = STATUS_STYLES[meeting.status] || STATUS_STYLES.scheduled;
     const isPast = meeting.meeting_date < today;
+    const isAdhoc = table === 'adhoc';
+    const gridTemplate = isAdhoc ? '74px 1fr 28px 80px 36px 140px 1fr 22px' : '74px 1fr 28px 80px 1fr 22px';
 
     return (
       <div key={meeting.id} style={{
-        display: 'grid', gridTemplateColumns: '74px 1fr 28px 80px 1fr 22px',
+        display: 'grid', gridTemplateColumns: gridTemplate,
         gap: '6px', padding: '5px 8px', alignItems: 'center',
         background: meeting.is_sof ? 'var(--purple-faint)' : 'var(--bg-card)',
         border: `1px solid ${meeting.is_sof ? 'var(--purple-border)' : 'var(--border)'}`,
@@ -299,6 +344,50 @@ export default function LabMeetings({ userRole, userId, profile }) {
           </span>
         )}
 
+        {/* Zoom Link (adhoc only) */}
+        {isAdhoc && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {editing('zoom_link') ? (
+              <input autoFocus value={cellValue} onChange={e => setCellValue(e.target.value)}
+                onBlur={() => commitEdit(meeting.id, 'zoom_link', cellValue, table)}
+                onKeyDown={e => { if (e.key === 'Enter') commitEdit(meeting.id, 'zoom_link', cellValue, table); if (e.key === 'Escape') setEditingCell(null); }}
+                placeholder="https://…"
+                style={{ fontSize: '10px', padding: '2px 4px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+            ) : meeting.zoom_link ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                <a href={meeting.zoom_link} target="_blank" rel="noopener noreferrer"
+                  style={{ color: '#3B5BDB', display: 'flex', alignItems: 'center' }} title="Join Zoom">
+                  <ExternalLink size={13} />
+                </a>
+                {canEdit && (
+                  <span onClick={() => startEdit(meeting.id, 'zoom_link', meeting.zoom_link, table)}
+                    style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: '9px', lineHeight: 1 }}>✎</span>
+                )}
+              </div>
+            ) : canEdit ? (
+              <span onClick={() => startEdit(meeting.id, 'zoom_link', '', table)}
+                style={{ cursor: 'pointer', fontSize: '9px', color: 'var(--text-muted)', fontStyle: 'italic', whiteSpace: 'nowrap' }}>+ link</span>
+            ) : null}
+          </div>
+        )}
+
+        {/* Zoom Info (adhoc only) */}
+        {isAdhoc && (
+          <div style={{ overflow: 'hidden', minWidth: 0 }}>
+            {meeting.zoom_info ? (
+              <span
+                onClick={() => canEdit && setEditingZoomInfo({ meetingId: meeting.id, fields: parseZoomInfo(meeting.zoom_info) })}
+                title={canEdit ? 'Click to edit' : formatZoomInfo(meeting.zoom_info)}
+                style={{ cursor: canEdit ? 'pointer' : 'default', fontSize: '10px', color: 'var(--text-secondary)', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {formatZoomInfo(meeting.zoom_info)}
+              </span>
+            ) : canEdit ? (
+              <span onClick={() => setEditingZoomInfo({ meetingId: meeting.id, fields: [{ key: 'Meeting ID', value: '', customKey: '' }] })}
+                style={{ cursor: 'pointer', fontSize: '9px', color: 'var(--text-muted)', fontStyle: 'italic' }}>+ info</span>
+            ) : null}
+          </div>
+        )}
+
         {/* Notes */}
         <div style={{ overflow: 'hidden', minWidth: 0 }}>
           {editing('notes') ? (
@@ -364,7 +453,13 @@ export default function LabMeetings({ userRole, userId, profile }) {
         )}
 
         <div style={{ display: 'flex', gap: '5px', marginBottom: '10px', flexWrap: 'wrap' }}>
-          {[{ id: 'upcoming', label: 'Upcoming' }, { id: 'past', label: 'Past' }, { id: 'sof', label: 'SOF' }, { id: 'cancelled', label: 'Cancelled' }, { id: 'all', label: 'All' }].map(f => (
+          {[
+            { id: 'upcoming', label: 'Upcoming' },
+            { id: 'past', label: 'Past' },
+            ...(!isLab ? [] : [{ id: 'sof', label: 'SOF' }]),
+            { id: 'cancelled', label: 'Cancelled' },
+            { id: 'all', label: 'All' },
+          ].map(f => (
             <button key={f.id} onClick={() => setFilter(f.id)} style={{ padding: '3px 9px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: filter === f.id ? 'var(--purple-primary)' : 'var(--bg-primary)', color: filter === f.id ? 'white' : 'var(--text-secondary)', fontWeight: filter === f.id ? 600 : 400, fontSize: '11px' }}>
               {f.label}
             </button>
@@ -372,8 +467,11 @@ export default function LabMeetings({ userRole, userId, profile }) {
         </div>
 
         {/* Column headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: '74px 1fr 28px 80px 1fr 22px', gap: '6px', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', marginBottom: '4px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          <span>Date</span><span>Presenter</span><span>SOF</span><span>Status</span><span>Notes</span><span />
+        <div style={{ display: 'grid', gridTemplateColumns: isLab ? '74px 1fr 28px 80px 1fr 22px' : '74px 1fr 28px 80px 36px 140px 1fr 22px', gap: '6px', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', marginBottom: '4px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <span>Date</span><span>Presenter</span><span>SOF</span><span>Status</span>
+          {!isLab && <span>Zoom</span>}
+          {!isLab && <span>Sign-in</span>}
+          <span>Notes</span><span />
         </div>
 
         {loading ? (
@@ -466,6 +564,57 @@ export default function LabMeetings({ userRole, userId, profile }) {
                 style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
 
+            {showAddForm === 'adhoc' && (
+              <>
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>Zoom Link (optional)</label>
+                  <input type="url" value={newMeeting.zoom_link || ''} onChange={e => setNewMeeting(p => ({ ...p, zoom_link: e.target.value }))}
+                    placeholder="https://zoom.us/j/…"
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase' }}>Zoom Sign-in Info (optional)</label>
+                  {(newMeeting.zoom_info_fields || []).map((f, idx) => (
+                    <div key={idx} style={{ display: 'flex', gap: '6px', marginBottom: '6px', alignItems: 'center' }}>
+                      <select value={f.key}
+                        onChange={e => setNewMeeting(p => ({ ...p, zoom_info_fields: p.zoom_info_fields.map((x, i) => i === idx ? { ...x, key: e.target.value } : x) }))}
+                        style={{ padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', outline: 'none' }}>
+                        {ZOOM_KEY_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
+                      </select>
+                      {f.key === 'Other' && (
+                        <input value={f.customKey || ''} placeholder="Label"
+                          onChange={e => setNewMeeting(p => ({ ...p, zoom_info_fields: p.zoom_info_fields.map((x, i) => i === idx ? { ...x, customKey: e.target.value } : x) }))}
+                          style={{ width: '80px', padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', outline: 'none' }} />
+                      )}
+                      <input value={f.value} placeholder="Value"
+                        onChange={e => setNewMeeting(p => ({ ...p, zoom_info_fields: p.zoom_info_fields.map((x, i) => i === idx ? { ...x, value: e.target.value } : x) }))}
+                        style={{ flex: 1, padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', outline: 'none' }} />
+                      {idx > 0 && (
+                        <button type="button" onClick={() => setNewMeeting(p => ({ ...p, zoom_info_fields: p.zoom_info_fields.filter((_, i) => i !== idx) }))}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {(newMeeting.zoom_info_fields || []).length < 3 && (
+                    <button type="button" onClick={() => setNewMeeting(p => ({ ...p, zoom_info_fields: [...(p.zoom_info_fields || []), { key: 'Meeting ID', value: '', customKey: '' }] }))}
+                      style={{ fontSize: '11px', color: 'var(--purple-primary)', background: 'none', border: 'none', cursor: 'pointer', padding: '0', marginBottom: '4px' }}>
+                      + Add field
+                    </button>
+                  )}
+                  {(() => {
+                    const preview = formatZoomInfo(buildZoomInfo(newMeeting.zoom_info_fields));
+                    return preview ? (
+                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '6px 10px', borderRadius: 'var(--radius-md)', marginTop: '4px' }}>
+                        {preview}
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              </>
+            )}
+
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: newMeeting.is_sof ? '12px' : '20px' }}>
               <input type="checkbox" id="add-sof" checked={newMeeting.is_sof} onChange={e => setNewMeeting(p => ({ ...p, is_sof: e.target.checked }))} style={{ width: '15px', height: '15px', accentColor: 'var(--purple-primary)' }} />
               <label htmlFor="add-sof" style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>State of the Field (SOF)</label>
@@ -492,6 +641,57 @@ export default function LabMeetings({ userRole, userId, profile }) {
                 style={{ padding: '8px 18px', borderRadius: 'var(--radius-md)', border: 'none', background: !newMeeting.meeting_date ? 'var(--border)' : 'var(--purple-primary)', color: !newMeeting.meeting_date ? 'var(--text-muted)' : 'white', fontWeight: 600, fontSize: '13px' }}>
                 {saving ? 'Adding…' : 'Add Meeting'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Zoom Info Edit Modal */}
+      {editingZoomInfo && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300 }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '24px', width: '380px', maxHeight: '80vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 14px' }}>Edit Zoom Sign-in Info</h3>
+            {editingZoomInfo.fields.map((f, idx) => (
+              <div key={idx} style={{ display: 'flex', gap: '6px', marginBottom: '8px', alignItems: 'center' }}>
+                <select value={f.key}
+                  onChange={e => setEditingZoomInfo(prev => ({ ...prev, fields: prev.fields.map((x, i) => i === idx ? { ...x, key: e.target.value } : x) }))}
+                  style={{ padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', outline: 'none' }}>
+                  {ZOOM_KEY_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
+                </select>
+                {f.key === 'Other' && (
+                  <input value={f.customKey || ''} placeholder="Label"
+                    onChange={e => setEditingZoomInfo(prev => ({ ...prev, fields: prev.fields.map((x, i) => i === idx ? { ...x, customKey: e.target.value } : x) }))}
+                    style={{ width: '70px', padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', outline: 'none' }} />
+                )}
+                <input value={f.value} placeholder="Value"
+                  onChange={e => setEditingZoomInfo(prev => ({ ...prev, fields: prev.fields.map((x, i) => i === idx ? { ...x, value: e.target.value } : x) }))}
+                  style={{ flex: 1, padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', outline: 'none' }} />
+                {idx > 0 && (
+                  <button type="button" onClick={() => setEditingZoomInfo(prev => ({ ...prev, fields: prev.fields.filter((_, i) => i !== idx) }))}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            ))}
+            {editingZoomInfo.fields.length < 3 && (
+              <button type="button" onClick={() => setEditingZoomInfo(prev => ({ ...prev, fields: [...prev.fields, { key: 'Meeting ID', value: '', customKey: '' }] }))}
+                style={{ fontSize: '11px', color: 'var(--purple-primary)', background: 'none', border: 'none', cursor: 'pointer', padding: '0', marginBottom: '10px' }}>
+                + Add field
+              </button>
+            )}
+            {(() => {
+              const preview = formatZoomInfo(buildZoomInfo(editingZoomInfo.fields));
+              return (
+                <div style={{ fontSize: '11px', color: preview ? 'var(--text-secondary)' : 'var(--text-muted)', background: 'var(--bg-secondary)', padding: '6px 10px', borderRadius: 'var(--radius-md)', marginBottom: '14px', fontStyle: preview ? 'normal' : 'italic' }}>
+                  {preview || 'No info entered'}
+                </div>
+              );
+            })()}
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setEditingZoomInfo(null)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, fontSize: '13px' }}>Cancel</button>
+              <button onClick={() => commitZoomInfo(editingZoomInfo.meetingId, editingZoomInfo.fields)}
+                style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600, fontSize: '13px' }}>Save</button>
             </div>
           </div>
         </div>
