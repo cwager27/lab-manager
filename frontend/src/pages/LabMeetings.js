@@ -245,7 +245,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
     const statusStyle = STATUS_STYLES[meeting.status] || STATUS_STYLES.scheduled;
     const isPast = meeting.meeting_date < today;
     const isAdhoc = table === 'adhoc';
-    const gridTemplate = isAdhoc ? '74px 1fr 28px 80px 36px 140px 1fr 22px' : '74px 1fr 28px 80px 1fr 22px';
+    const gridTemplate = isAdhoc ? '74px 1fr 80px 30px 1fr 1fr 22px' : '74px 1fr 28px 80px 1fr 22px';
 
     return (
       <div key={meeting.id} style={{
@@ -301,6 +301,24 @@ export default function LabMeetings({ userRole, userId, profile }) {
                   style={{ fontSize: '12px', padding: '2px 6px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', marginTop: '4px', boxSizing: 'border-box' }} />
               )}
             </div>
+          ) : isAdhoc ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', minWidth: 0 }}>
+              <span onClick={() => startEdit(meeting.id, 'presenter_id', meeting.presenter_id || (meeting.guest_name ? 'guest' : ''), table, meeting.guest_name || '')}
+                title={onVac ? '⚠ Out of office — click to reassign' : (canEdit ? 'Click to edit' : '')}
+                style={{ cursor: canEdit ? 'pointer' : 'default', fontWeight: 600, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: onVac ? '#E67E22' : 'var(--text-primary)' }}>
+                {presenterName
+                  ? <>{presenterName}{onVac && <AlertTriangle size={11} style={{ marginLeft: '3px', verticalAlign: 'middle' }} />}</>
+                  : <em style={{ color: 'var(--text-muted)', fontWeight: 400 }}>TBD</em>}
+              </span>
+              <button onClick={canEdit ? async () => {
+                await supabase.from(tblName()).update({ is_sof: !meeting.is_sof, updated_at: new Date().toISOString() }).eq('id', meeting.id);
+                fetchData(true);
+              } : undefined}
+                disabled={!canEdit} title={canEdit ? (meeting.is_sof ? 'Remove SOF' : 'Mark SOF') : (meeting.is_sof ? 'SOF' : '')}
+                style={{ flexShrink: 0, background: 'none', border: 'none', cursor: canEdit ? 'pointer' : 'default', padding: '1px', display: 'flex', alignItems: 'center', opacity: !meeting.is_sof && !canEdit ? 0 : 1 }}>
+                <Star size={11} color={meeting.is_sof ? '#7B3FA0' : 'var(--border)'} fill={meeting.is_sof ? '#7B3FA0' : 'none'} />
+              </button>
+            </div>
           ) : (
             <span onClick={() => startEdit(meeting.id, 'presenter_id', meeting.presenter_id || (meeting.guest_name ? 'guest' : ''), table, meeting.guest_name || '')}
               title={onVac ? '⚠ Out of office — click to reassign' : (canEdit ? 'Click to edit' : '')}
@@ -317,15 +335,17 @@ export default function LabMeetings({ userRole, userId, profile }) {
           )}
         </div>
 
-        {/* SOF star */}
-        <button onClick={canEdit ? async () => {
-          await supabase.from(tblName()).update({ is_sof: !meeting.is_sof, updated_at: new Date().toISOString() }).eq('id', meeting.id);
-          fetchData(true);
-        } : undefined}
-          disabled={!canEdit} title={canEdit ? (meeting.is_sof ? 'Remove SOF' : 'Mark SOF') : (meeting.is_sof ? 'SOF' : '')}
-          style={{ background: 'none', border: 'none', cursor: canEdit ? 'pointer' : 'default', padding: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: !meeting.is_sof && !canEdit ? 0 : 1 }}>
-          <Star size={13} color={meeting.is_sof ? '#7B3FA0' : 'var(--border)'} fill={meeting.is_sof ? '#7B3FA0' : 'none'} />
-        </button>
+        {/* SOF star column (lab only — adhoc embeds it in the Presenter cell) */}
+        {!isAdhoc && (
+          <button onClick={canEdit ? async () => {
+            await supabase.from(tblName()).update({ is_sof: !meeting.is_sof, updated_at: new Date().toISOString() }).eq('id', meeting.id);
+            fetchData(true);
+          } : undefined}
+            disabled={!canEdit} title={canEdit ? (meeting.is_sof ? 'Remove SOF' : 'Mark SOF') : (meeting.is_sof ? 'SOF' : '')}
+            style={{ background: 'none', border: 'none', cursor: canEdit ? 'pointer' : 'default', padding: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: !meeting.is_sof && !canEdit ? 0 : 1 }}>
+            <Star size={13} color={meeting.is_sof ? '#7B3FA0' : 'var(--border)'} fill={meeting.is_sof ? '#7B3FA0' : 'none'} />
+          </button>
+        )}
 
         {/* Status */}
         {editing('status') ? (
@@ -467,8 +487,10 @@ export default function LabMeetings({ userRole, userId, profile }) {
         </div>
 
         {/* Column headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: isLab ? '74px 1fr 28px 80px 1fr 22px' : '74px 1fr 28px 80px 36px 140px 1fr 22px', gap: '6px', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', marginBottom: '4px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          <span>Date</span><span>Presenter</span><span>SOF</span><span>Status</span>
+        <div style={{ display: 'grid', gridTemplateColumns: isLab ? '74px 1fr 28px 80px 1fr 22px' : '74px 1fr 80px 30px 1fr 1fr 22px', gap: '6px', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', marginBottom: '4px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <span>Date</span><span>Presenter</span>
+          {isLab && <span>SOF</span>}
+          <span>Status</span>
           {!isLab && <span>Zoom</span>}
           {!isLab && <span>Sign-in</span>}
           <span>Notes</span><span />
