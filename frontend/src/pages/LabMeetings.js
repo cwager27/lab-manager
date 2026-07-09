@@ -245,12 +245,12 @@ export default function LabMeetings({ userRole, userId, profile }) {
     const statusStyle = STATUS_STYLES[meeting.status] || STATUS_STYLES.scheduled;
     const isPast = meeting.meeting_date < today;
     const isAdhoc = table === 'adhoc';
-    const gridTemplate = isAdhoc ? '74px 1fr 22px 82px 38px 1fr 1fr 22px' : '74px 1fr 28px 80px 1fr 22px';
+    const gridTemplate = isAdhoc ? '74px 1fr 36px 96px 56px 1fr 1fr 22px' : '74px 1fr 28px 80px 1fr 22px';
 
     return (
       <div key={meeting.id} style={{
         display: 'grid', gridTemplateColumns: gridTemplate,
-        gap: '6px', padding: '5px 8px', alignItems: 'center',
+        gap: isAdhoc ? '8px' : '6px', padding: '5px 8px', alignItems: 'center',
         background: meeting.is_sof ? 'var(--purple-faint)' : 'var(--bg-card)',
         border: `1px solid ${meeting.is_sof ? 'var(--purple-border)' : 'var(--border)'}`,
         borderRadius: 'var(--radius-sm)', marginBottom: '3px', fontSize: '12px',
@@ -467,7 +467,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
         </div>
 
         {/* Column headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: isLab ? '74px 1fr 28px 80px 1fr 22px' : '74px 1fr 22px 82px 38px 1fr 1fr 22px', gap: '6px', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', marginBottom: '4px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isLab ? '74px 1fr 28px 80px 1fr 22px' : '74px 1fr 36px 96px 56px 1fr 1fr 22px', gap: isLab ? '6px' : '8px', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', marginBottom: '4px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           <span>Date</span><span>Presenter</span><span>SOF</span><span>Status</span>
           {!isLab && <span>Zoom</span>}
           {!isLab && <span>Sign-in</span>}
