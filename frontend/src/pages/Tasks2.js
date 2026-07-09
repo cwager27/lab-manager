@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { fmtName, sortByLast } from '../lib/nameUtils';
 import { CheckCircle, XCircle, AlertTriangle, Upload, Clock, Search, ChevronDown, Bell, Trash2, Plus, Check, Globe, Pencil, X } from 'lucide-react';
 import {
   getMaintCycleKey, getMaintNextDue, getMaintKey,
@@ -1122,7 +1123,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
               onClick={() => setProdDropdownOpen(o => !o)}
               style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', border: '1.5px solid var(--border)', borderRadius: 8, background: 'var(--bg-card)', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', minWidth: 180 }}>
               <span style={{ flex: 1, textAlign: 'left' }}>
-                {prodSelected.size === 0 ? 'All members' : prodSelected.size === 1 ? prodRows.find(r => prodSelected.has(r.profile.id))?.profile.full_name : `${prodSelected.size} members`}
+                {prodSelected.size === 0 ? 'All members' : prodSelected.size === 1 ? fmtName(prodRows.find(r => prodSelected.has(r.profile.id))?.profile.full_name) : `${prodSelected.size} members`}
               </span>
               <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>▼</span>
             </button>
@@ -1133,7 +1134,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                   style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', fontWeight: prodSelected.size === 0 ? 700 : 400, color: prodSelected.size === 0 ? 'var(--purple-primary)' : 'var(--text-primary)', borderBottom: '1px solid var(--border)', background: prodSelected.size === 0 ? '#f5eefb' : 'transparent' }}>
                   All members
                 </div>
-                {prodRows.map(({ profile }) => {
+                {sortByLast(prodRows, r => r.profile.full_name).map(({ profile }) => {
                   const sel = prodSelected.has(profile.id);
                   return (
                     <div key={profile.id}
@@ -1146,7 +1147,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                       <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${sel ? 'var(--purple-primary)' : 'var(--border)'}`, background: sel ? 'var(--purple-primary)' : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         {sel && <span style={{ color: 'white', fontSize: 10, lineHeight: 1 }}>✓</span>}
                       </div>
-                      {profile.full_name}
+                      {fmtName(profile.full_name)}
                     </div>
                   );
                 })}
@@ -1182,7 +1183,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                   <tr key={profile.id} style={{ background: idx % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-secondary)', cursor: 'pointer' }}
                     onClick={() => { setProdDetailPerson({ profile }); loadPersonDetail(profile.id); }}>
                     <td style={{ ...tdLeftStyle, fontWeight: 600, borderRight: '1px solid var(--border)' }}>
-                      <span style={{ color: 'var(--purple-primary)', textDecoration: 'underline dotted' }}>{profile.full_name}</span>
+                      <span style={{ color: 'var(--purple-primary)', textDecoration: 'underline dotted' }}>{fmtName(profile.full_name)}</span>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
                         {combined.onTime + combined.late + combined.missed + combined.pending} total · click to expand
                       </div>
@@ -1297,7 +1298,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             ← Back
           </button>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>{profile.full_name}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>{fmtName(profile.full_name)}</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{prodDetailTasks.length} total task occurrences</div>
           </div>
         </div>
@@ -1778,7 +1779,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
   function renderAssignedTab() {
     const today = new Date().toISOString().split('T')[0];
-    const members = profiles.slice().sort((a, b) => a.full_name.localeCompare(b.full_name));
+    const members = sortByLast(profiles);
 
     const assignedList   = assignedOccs.filter(o => o.assigned_to);
     const unassignedList = assignedOccs.filter(o => !o.assigned_to);
@@ -1832,7 +1833,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                 style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--purple-primary)', borderRadius: 'var(--radius-md)', fontSize: '13px', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}>
                 {!isUnassignedSection && <option value="">— Unassign —</option>}
                 {isUnassignedSection && <option value="">— Select member —</option>}
-                {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
+                {members.map(m => <option key={m.id} value={m.id}>{fmtName(m.full_name)}</option>)}
               </select>
               <button onClick={() => saveAssignment(occ.id)} disabled={editSaving}
                 style={{ padding: '7px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
@@ -1868,7 +1869,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             </div>
           </div>
           <div>
-            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{occ.assignee?.full_name || '—'}</span>
+            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{fmtName(occ.assignee?.full_name) || '—'}</span>
           </div>
           <div>
             <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '10px', background: statusChip.bg, color: statusChip.color, whiteSpace: 'nowrap' }}>{statusChip.label}</span>
@@ -2563,7 +2564,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   }
 
   function renderStep3() {
-    const members = profiles.slice().sort((a, b) => a.full_name.localeCompare(b.full_name));
+    const members = sortByLast(profiles);
     const available = members.filter(p => !assigneeIds.includes(p.id));
     return (
       <div>
@@ -2576,7 +2577,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             return (
               <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', background: 'rgba(123,63,160,0.1)', borderRadius: 20, border: '1.5px solid var(--purple-primary)' }}>
                 {pto && <span title="Has upcoming time away" style={{ fontSize: 11, color: '#f59e0b' }}>⚠</span>}
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--purple-primary)' }}>{p?.full_name || id}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--purple-primary)' }}>{fmtName(p?.full_name) || id}</span>
                 <button onClick={() => setAssigneeIds(prev => prev.filter(x => x !== id))}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--purple-primary)', fontSize: 14, lineHeight: 1, padding: '0 2px' }}>×</button>
               </div>
@@ -2594,7 +2595,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             return (
               <button key={p.id} onClick={() => setAssigneeIds(prev => [...prev, p.id])}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', background: 'none', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer', textAlign: 'left', fontSize: 13 }}>
-                <span style={{ color: 'var(--text-primary)' }}>{p.full_name}</span>
+                <span style={{ color: 'var(--text-primary)' }}>{fmtName(p.full_name)}</span>
                 {pto && <span style={{ fontSize: 11, color: '#f59e0b', marginLeft: 'auto' }}>⚠ has PTO</span>}
               </button>
             );

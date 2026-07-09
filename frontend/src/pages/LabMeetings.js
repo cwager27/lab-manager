@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { fmtName, sortByLast } from '../lib/nameUtils';
 import { Plus, X, Star, AlertTriangle, CheckCircle, ExternalLink } from 'lucide-react';
 
 const ZOOM_KEY_OPTIONS = ['Meeting ID', 'Passcode', 'Webinar ID', 'Other'];
@@ -92,7 +93,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
     const all = allMeetings || [];
     setLabMeetings(all.filter(m => m.meeting_type !== 'adhoc_meeting'));
     setAdhocMeetings(all.filter(m => m.meeting_type === 'adhoc_meeting'));
-    setMembers(memberData || []);
+    setMembers(sortByLast(memberData || []));
     setVacations(vacData || []);
     if (!silent) setLoading(false);
   }, []);
@@ -240,7 +241,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
   function renderRow(meeting, table) {
     const ec = editingCell;
     const editing = (field) => ec?.id === meeting.id && ec?.field === field && ec?.table === table;
-    const presenterName = meeting.presenter?.full_name || meeting.guest_name || '';
+    const presenterName = fmtName(meeting.presenter?.full_name) || meeting.guest_name || '';
     const onVac = meeting.presenter_id && isOnVacationFn(meeting.presenter_id, meeting.meeting_date, vacations);
     const statusStyle = STATUS_STYLES[meeting.status] || STATUS_STYLES.scheduled;
     const isPast = meeting.meeting_date < today;
@@ -289,7 +290,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
                 <option value="">TBD</option>
                 {members.map(m => {
                   const ov = isOnVacationFn(m.id, meeting.meeting_date, vacations);
-                  return <option key={m.id} value={m.id}>{m.full_name}{ov ? ' ⚠' : ''}</option>;
+                  return <option key={m.id} value={m.id}>{fmtName(m.full_name)}{ov ? ' ⚠' : ''}</option>;
                 })}
                 <option value="guest">Guest speaker</option>
               </select>
@@ -462,7 +463,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
 
         {next && (
           <div style={{ background: 'var(--purple-faint)', border: '1px solid var(--purple-border)', borderRadius: 'var(--radius-sm)', padding: '8px 12px', marginBottom: '10px', fontSize: '12px', color: 'var(--purple-primary)' }}>
-            <strong>Next:</strong> {new Date(next.meeting_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · {next.presenter?.full_name || next.guest_name || 'TBD'}{next.is_sof ? ' · ⭐ SOF' : ''}
+            <strong>Next:</strong> {new Date(next.meeting_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · {fmtName(next.presenter?.full_name) || next.guest_name || 'TBD'}{next.is_sof ? ' · ⭐ SOF' : ''}
           </div>
         )}
 
@@ -536,7 +537,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
               <div style={{ flex: 1 }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
                   Presenter
-                  {suggested && !newMeeting.presenter_id && <span style={{ color: 'var(--purple-primary)', fontWeight: 400, textTransform: 'none', fontSize: '10px', marginLeft: '6px' }}>suggested: {suggested.full_name}</span>}
+                  {suggested && !newMeeting.presenter_id && <span style={{ color: 'var(--purple-primary)', fontWeight: 400, textTransform: 'none', fontSize: '10px', marginLeft: '6px' }}>suggested: {fmtName(suggested.full_name)}</span>}
                 </label>
                 <select value={newMeeting.presenter_id}
                   onChange={e => {
@@ -547,10 +548,10 @@ export default function LabMeetings({ userRole, userId, profile }) {
                     setNewMeeting(p => ({ ...p, presenter_id: val }));
                   }}
                   style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none' }}>
-                  <option value="">{suggested ? `Auto: ${suggested.full_name}` : 'Select…'}</option>
+                  <option value="">{suggested ? `Auto: ${fmtName(suggested.full_name)}` : 'Select…'}</option>
                   {members.map(m => {
                     const ov = isOnVacationFn(m.id, newMeeting.meeting_date, vacations);
-                    return <option key={m.id} value={m.id}>{m.full_name}{ov ? ' ⚠ out' : ''}</option>;
+                    return <option key={m.id} value={m.id}>{fmtName(m.full_name)}{ov ? ' ⚠ out' : ''}</option>;
                   })}
                   <option value="guest">Guest speaker</option>
                 </select>
