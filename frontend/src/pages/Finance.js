@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { AlertTriangle, Upload, Plus, Search, CheckCircle } from 'lucide-react';
+import { AlertTriangle, Upload, Plus, Search, CheckCircle, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import Vendors from './Vendors';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
 
@@ -162,6 +163,8 @@ export default function Finance({ userRole }) {
   const [editingOrder, setEditingOrder] = useState(null);
   const [editOrderForm, setEditOrderForm] = useState({});
   const [confirmDeleteOrder, setConfirmDeleteOrder] = useState(false);
+  const [ordersSortCol, setOrdersSortCol] = useState(null);
+  const [ordersSortDir, setOrdersSortDir] = useState('asc');
   const [showAddGrant, setShowAddGrant] = useState(false);
   const [grantForm, setGrantForm] = useState(EMPTY_GRANT);
   const [editingGrant, setEditingGrant] = useState(null);
@@ -407,6 +410,54 @@ export default function Finance({ userRole }) {
   const tableTotalProcessing = tableMonthRows.reduce((s, r) => s + r.processing, 0);
 
   const filteredOrders = orders.filter(o => searchQuery === '' || o.item?.toLowerCase().includes(searchQuery.toLowerCase()) || o.vendor?.toLowerCase().includes(searchQuery.toLowerCase()) || o.requisition_id?.toLowerCase().includes(searchQuery.toLowerCase()));
+
+  const sortedOrders = useMemo(() => {
+    if (!ordersSortCol) return filteredOrders;
+    return [...filteredOrders].sort((a, b) => {
+      let av = a[ordersSortCol], bv = b[ordersSortCol];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      const cmp = typeof av === 'number' && typeof bv === 'number'
+        ? av - bv : String(av).localeCompare(String(bv));
+      return ordersSortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [filteredOrders, ordersSortCol, ordersSortDir]);
+
+  function handleExportOrders() {
+    const rows = sortedOrders.map(o => ({
+      'Item': o.item || '',
+      'Vendor': o.vendor || '',
+      'Catalog Number': o.catalog_number || '',
+      'Category': o.category || '',
+      'Grant ID': o.grant_name || '',
+      'Requisition ID': o.requisition_id || '',
+      'Unit Description': o.unit_description || '',
+      'Unit Price': o.unit_price ?? '',
+      'Units (n)': o.units ?? '',
+      'Total Price': o.total_price ?? '',
+      'Date': o.order_date || '',
+      'Requestor': o.requestor || '',
+      'Status': o.status || '',
+      'Notes': o.notes || '',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Orders');
+    XLSX.writeFile(wb, `orders_${new Date().toISOString().split('T')[0]}.xlsx`);
+  }
+
+  function handleDownloadTemplate() {
+    const ws = XLSX.utils.json_to_sheet([{
+      'Item': '', 'Vendor': '', 'Catalog Number': '', 'Category': '',
+      'Grant ID': '', 'Requisition ID': '', 'Unit description': '',
+      'Unit price': '', 'Units (n)': '', 'Total price': '',
+      'Date': 'YYYY-MM-DD', 'Requestor': '', 'Status': 'pending', 'Notes': '',
+    }]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Orders');
+    XLSX.writeFile(wb, 'orders_import_template.xlsx');
+  }
   const totalSpend = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
   const alertGrants = grants.filter(g => { const pct = g.total_amount && g.remaining_balance ? (g.remaining_balance / g.total_amount) * 100 : null; const daysLeft = g.end_date ? Math.ceil((new Date(g.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null; return (pct !== null && pct < 25) || (daysLeft !== null && daysLeft <= 90); });
 
@@ -463,15 +514,40 @@ export default function Finance({ userRole }) {
             <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', background: activeTab === tab ? 'var(--purple-primary)' : 'transparent', color: activeTab === tab ? 'white' : 'var(--text-secondary)', border: 'none', fontWeight: activeTab === tab ? 600 : 400, fontSize: '13px', textTransform: 'capitalize' }}>{tab}</button>
           ))}
         </div>
-        {canManage && activeTab === 'grants' && (
-          <button onClick={() => { setGrantForm(EMPTY_GRANT); setShowAddGrant(true); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Grant</button>
-        )}
-        {canManage && activeTab === 'orders' && (
-          <button onClick={() => setShowAddOrder(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Order</button>
-        )}
-        {canManage && activeTab === 'reagents' && (
-          <button onClick={addReagentRow} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Reagent</button>
-        )}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {canManage && activeTab === 'grants' && (
+            <button onClick={() => { setGrantForm(EMPTY_GRANT); setShowAddGrant(true); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Grant</button>
+          )}
+          {activeTab === 'orders' && (
+            <button onClick={handleExportOrders} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
+              <Download size={14} /> Export
+            </button>
+          )}
+          {canManage && activeTab === 'orders' && (
+            <>
+              <button onClick={handleDownloadTemplate} title="Download blank import template" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
+                Template
+              </button>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
+                <Upload size={14} /> {uploadingFile ? 'Processing…' : 'Import'}
+                <input type="file" accept=".xlsx,.csv" style={{ display: 'none' }} onChange={async (e) => {
+                  const file = e.target.files[0]; if (!file) return;
+                  setUploadingFile(true);
+                  const formData = new FormData(); formData.append('file', file);
+                  const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/preview-orders`, { method: 'POST', body: formData });
+                  const data = await res.json();
+                  if (data.newOrders) setPreviewData(data.newOrders);
+                  setUploadingFile(false);
+                  e.target.value = '';
+                }} />
+              </label>
+              <button onClick={() => setShowAddOrder(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Order</button>
+            </>
+          )}
+          {canManage && activeTab === 'reagents' && (
+            <button onClick={addReagentRow} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Reagent</button>
+          )}
+        </div>
       </div>
 
       {previewData && (
@@ -589,19 +665,36 @@ export default function Finance({ userRole }) {
                   <Search size={14} color="var(--text-muted)" />
                   <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search orders..." style={{ border: 'none', outline: 'none', flex: 1, fontSize: '13px', background: 'transparent' }} />
                 </div>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{filteredOrders.length} orders</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{sortedOrders.length} orders</span>
               </div>
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
                 <table style={{ width: '100%', minWidth: '1000px', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: 'var(--bg-secondary)' }}>
-                      {['Item','Vendor','Category','Grant','Req ID','Price','Date','Requestor','Status'].map(h => (
-                        <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                      {[
+                        { label: 'Item', key: 'item' },
+                        { label: 'Vendor', key: 'vendor' },
+                        { label: 'Category', key: 'category' },
+                        { label: 'Grant', key: 'grant_name' },
+                        { label: 'Req ID', key: 'requisition_id' },
+                        { label: 'Price', key: 'total_price' },
+                        { label: 'Date', key: 'order_date' },
+                        { label: 'Requestor', key: 'requestor' },
+                        { label: 'Status', key: 'status' },
+                      ].map(({ label, key }) => (
+                        <th key={key}
+                          onClick={() => {
+                            if (ordersSortCol === key) setOrdersSortDir(d => d === 'asc' ? 'desc' : 'asc');
+                            else { setOrdersSortCol(key); setOrdersSortDir('asc'); }
+                          }}
+                          style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: ordersSortCol === key ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>
+                          {label}{ordersSortCol === key ? (ordersSortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                        </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredOrders.map(order => {
+                    {sortedOrders.map(order => {
                       const isDeleted = order.status === 'deleted';
                       const statusStyle = STATUS_STYLES[order.status] || STATUS_STYLES.pending;
                       return (
@@ -1115,7 +1208,7 @@ export default function Finance({ userRole }) {
               </div>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-              {[{label:'Item Name',key:'item',full:true},{label:'Catalog Number',key:'catalog_number'},{label:'Category',key:'category'},{label:'Requisition ID',key:'requisition_id'},{label:'Unit Description',key:'unit_description'},{label:'Unit Price ($)',key:'unit_price',type:'number'},{label:'Units',key:'units',type:'number'},{label:'Order Date',key:'order_date',type:'date'}].map(field => (
+              {[{label:'Item Name',key:'item',full:true},{label:'Catalog Number',key:'catalog_number'},{label:'Category',key:'category'},{label:'Requisition ID',key:'requisition_id'},{label:'Unit Description',key:'unit_description'},{label:'Unit Price ($)',key:'unit_price',type:'number'},{label:'Units (n)',key:'units',type:'number'},{label:'Order Date',key:'order_date',type:'date'}].map(field => (
                 <div key={field.key} style={{ gridColumn: field.full ? '1 / -1' : 'auto' }}>
                   <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
                   <input type={field.type || 'text'} value={newOrder[field.key]} onChange={e => setNewOrder(p => ({ ...p, [field.key]: e.target.value }))} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
@@ -1247,7 +1340,7 @@ export default function Finance({ userRole }) {
               </div>
 
               <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Units</label>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Units (n)</label>
                 <input type="number" value={editOrderForm.units} onChange={e => setEditOrderForm(p => ({ ...p, units: e.target.value }))}
                   style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
