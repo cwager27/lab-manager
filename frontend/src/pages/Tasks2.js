@@ -229,6 +229,9 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitDone, setSubmitDone] = useState(false);
 
+  // ── SOP exception state (taskId → { note, photo, photoPreview, submitting, submitted }) ──
+  const [sopExceptions, setSopExceptions] = useState({});
+
   // ── View All Tasks state ──────────────────────────────────────────────────
   const [vatTasks, setVatTasks] = useState([]);
   const [vatExisting, setVatExisting] = useState({});
@@ -378,6 +381,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           if (!myDefIds.has(t.id)) return true;
           const r = vatResponses[t.id]?.response;
           if (!r) return false;
+          // SOP task marked 'no' requires exception to be submitted first
+          if (t.sop_trigger && r === 'no' && !sopExceptions[t.id]?.submitted) return false;
           if (!t.sub_tasks?.length) return true;
           const trigger = t.sub_tasks[0]?.trigger || 'always';
           const triggered = trigger === 'always' || (trigger.startsWith('custom:') ? r === trigger.slice(7) : r === trigger);
@@ -399,7 +404,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       toUpdate.forEach(id => supabase.from('task_occurrences').update({ status: 'done', completed_at: now }).eq('id', id));
       setMyTaskOccs(prev => prev.map(occ => toUpdate.includes(occ.id) ? { ...occ, status: 'done', completed_at: now } : occ));
     }
-  }, [vatResponses]); // eslint-disable-line
+  }, [vatResponses, sopExceptions]); // eslint-disable-line
 
   useEffect(() => {
     localStorage.setItem('lab_maint_checks', JSON.stringify(maintChecks));
@@ -690,6 +695,55 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
   function handleVatNotes(taskId, value) {
     setVatResponses(p => ({ ...p, [taskId]: { ...p[taskId], notes: value } }));
+  }
+
+  function handleSopNote(taskId, note) {
+    setSopExceptions(p => ({ ...p, [taskId]: { ...(p[taskId] || {}), note } }));
+  }
+
+  function handleSopPhotoSelect(taskId, file) {
+    if (!file) return;
+    const preview = URL.createObjectURL(file);
+    setSopExceptions(p => ({ ...p, [taskId]: { ...(p[taskId] || {}), photo: file, photoPreview: preview } }));
+  }
+
+  async function handleSopSubmit(task) {
+    const exc = sopExceptions[task.id] || {};
+    if (!exc.note?.trim() && !exc.photo) return;
+    setSopExceptions(p => ({ ...p, [task.id]: { ...p[task.id], submitting: true } }));
+
+    let photoUrl = null;
+    if (exc.photo) {
+      const ext = exc.photo.name?.split('.').pop() || 'jpg';
+      const path = `sop-exceptions/${task.id}_${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('lab-files').upload(path, exc.photo, { contentType: exc.photo.type, upsert: false });
+      if (!upErr) {
+        const { data: urlData } = supabase.storage.from('lab-files').getPublicUrl(path);
+        photoUrl = urlData?.publicUrl || null;
+      }
+    }
+
+    await supabase.from('task_responses').insert([{
+      task_definition_id: task.id,
+      submitted_by: userId,
+      response: 'no',
+      notes: exc.note?.trim() || null,
+      sop_photo_url: photoUrl,
+    }]);
+
+    await fetch(`${API}/api/sop-alert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        taskTitle: task.title,
+        note: exc.note?.trim() || null,
+        photoUrl,
+        submittedByName: myProfile?.full_name || 'Lab member',
+        submittedByEmail: myProfile?.email || '',
+      }),
+    }).catch(() => {});
+
+    setSopExceptions(p => ({ ...p, [task.id]: { ...p[task.id], submitting: false, submitted: true, photoUrl } }));
   }
 
   // ── Wizard helpers ────────────────────────────────────────────────────────
@@ -1448,6 +1502,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     const isTaskComplete = task => {
       const r = vatResponses[task.id]?.response;
       if (!r) return false;
+      if (task.sop_trigger && r === 'no' && !sopExceptions[task.id]?.submitted) return false;
       if (!task.sub_tasks?.length) return true;
       const trigger = task.sub_tasks[0]?.trigger || 'always';
       const triggered = trigger === 'always' || (trigger.startsWith('custom:') ? r === trigger.slice(7) : r === trigger);
@@ -1714,6 +1769,41 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                                       <textarea value={resp?.notes || ''} onChange={e => handleVatNotes(task.id, e.target.value)} placeholder="Notes (optional)" rows={1}
                                         style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />
                                     )}
+                                    {task.sop_trigger && resp?.response === 'no' && (() => {
+                                      const exc = sopExceptions[task.id] || {};
+                                      return exc.submitted ? (
+                                        <div style={{ marginTop: 8, padding: '8px 12px', background: '#EAF7F0', border: '1px solid #A9DFBF', borderRadius: 'var(--radius-sm)', fontSize: '12px', color: '#27AE60', fontWeight: 500 }}>
+                                          ✓ Exception documented and PM notified.
+                                        </div>
+                                      ) : (
+                                        <div style={{ marginTop: 8, padding: '10px 12px', background: '#FFF8F0', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)' }}>
+                                          <div style={{ fontSize: '11px', fontWeight: 700, color: '#E67E22', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>⚠ SOP Exception — Action Required</div>
+                                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: 6 }}>Document the exception, corrective action taken, and upload a photo. This will be sent to PM.</div>
+                                          <textarea
+                                            value={exc.note || ''}
+                                            onChange={e => handleSopNote(task.id, e.target.value)}
+                                            placeholder="Describe the exception and corrective action taken…"
+                                            rows={2}
+                                            style={{ width: '100%', padding: '5px 8px', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', background: 'white', marginBottom: 6 }}
+                                          />
+                                          {exc.photoPreview && (
+                                            <img src={exc.photoPreview} alt="SOP correction" style={{ width: '100%', maxHeight: 120, objectFit: 'cover', borderRadius: 4, marginBottom: 6 }} />
+                                          )}
+                                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'white', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)', fontSize: '12px', cursor: 'pointer', color: '#E67E22', fontWeight: 500 }}>
+                                              <Upload size={12} /> {exc.photo ? 'Change photo' : 'Upload photo *'}
+                                              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleSopPhotoSelect(task.id, e.target.files[0])} />
+                                            </label>
+                                            <button
+                                              onClick={() => handleSopSubmit(task)}
+                                              disabled={!exc.note?.trim() || !exc.photo || exc.submitting}
+                                              style={{ padding: '5px 14px', background: (!exc.note?.trim() || !exc.photo || exc.submitting) ? 'var(--border)' : '#E67E22', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: '12px', fontWeight: 600, cursor: (!exc.note?.trim() || !exc.photo || exc.submitting) ? 'default' : 'pointer' }}>
+                                              {exc.submitting ? 'Submitting…' : 'Submit to PM'}
+                                            </button>
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
                                     {task.sub_tasks && task.sub_tasks.length > 0 && (() => {
                                       const trigger = task.sub_tasks[0]?.trigger || 'always';
                                       if (trigger === 'always') return true;
@@ -2158,6 +2248,41 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                               <textarea value={resp?.notes || ''} onChange={e => handleVatNotes(task.id, e.target.value)} placeholder="Notes (optional)" rows={1}
                                 style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />
                             )}
+                            {task.sop_trigger && resp?.response === 'no' && (() => {
+                              const exc = sopExceptions[task.id] || {};
+                              return exc.submitted ? (
+                                <div style={{ marginTop: 8, padding: '8px 12px', background: '#EAF7F0', border: '1px solid #A9DFBF', borderRadius: 'var(--radius-sm)', fontSize: '12px', color: '#27AE60', fontWeight: 500 }}>
+                                  ✓ Exception documented and PM notified.
+                                </div>
+                              ) : (
+                                <div style={{ marginTop: 8, padding: '10px 12px', background: '#FFF8F0', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)' }}>
+                                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#E67E22', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>⚠ SOP Exception — Action Required</div>
+                                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: 6 }}>Document the exception, corrective action taken, and upload a photo. This will be sent to PM.</div>
+                                  <textarea
+                                    value={exc.note || ''}
+                                    onChange={e => handleSopNote(task.id, e.target.value)}
+                                    placeholder="Describe the exception and corrective action taken…"
+                                    rows={2}
+                                    style={{ width: '100%', padding: '5px 8px', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', background: 'white', marginBottom: 6 }}
+                                  />
+                                  {exc.photoPreview && (
+                                    <img src={exc.photoPreview} alt="SOP correction" style={{ width: '100%', maxHeight: 120, objectFit: 'cover', borderRadius: 4, marginBottom: 6 }} />
+                                  )}
+                                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'white', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)', fontSize: '12px', cursor: 'pointer', color: '#E67E22', fontWeight: 500 }}>
+                                      <Upload size={12} /> {exc.photo ? 'Change photo' : 'Upload photo *'}
+                                      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleSopPhotoSelect(task.id, e.target.files[0])} />
+                                    </label>
+                                    <button
+                                      onClick={() => handleSopSubmit(task)}
+                                      disabled={!exc.note?.trim() || !exc.photo || exc.submitting}
+                                      style={{ padding: '5px 14px', background: (!exc.note?.trim() || !exc.photo || exc.submitting) ? 'var(--border)' : '#E67E22', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: '12px', fontWeight: 600, cursor: (!exc.note?.trim() || !exc.photo || exc.submitting) ? 'default' : 'pointer' }}>
+                                      {exc.submitting ? 'Submitting…' : 'Submit to PM'}
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })()}
                             {task.sub_tasks && task.sub_tasks.length > 0 && (() => {
                               const trigger = task.sub_tasks[0]?.trigger || 'always';
                               if (trigger === 'always') return true;

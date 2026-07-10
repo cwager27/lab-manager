@@ -128,7 +128,7 @@ router.post('/submit-checklist', async (req, res) => {
 });
 
 router.post('/sop-alert', async (req, res) => {
-  const { taskTitle, photoUrl, submittedByName, submittedByEmail } = req.body;
+  const { taskTitle, note, photoUrl, submittedByName, submittedByEmail } = req.body;
   try {
     const { data: managers } = await supabase
       .from('profiles').select('email, full_name').in('role', ['admin', 'pm']);
@@ -137,14 +137,15 @@ router.post('/sop-alert', async (req, res) => {
       await transporter.sendMail({
         from: `"Petljak Lab" <${process.env.GMAIL_USER}>`,
         to: manager.email,
-        subject: `Petljak Lab — SOP Correction Photo Submitted`,
+        subject: `Petljak Lab — SOP Exception Submitted by ${submittedByName}`,
         html: `
           <div style="font-family: Inter, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
             <div style="background: white; border-radius: 12px; padding: 32px; border: 1px solid #e8e4f0;">
               <h1 style="color: #7B3FA0;">PETLJAK LAB</h1>
-              <h2 style="color: #1A1A2E;">SOP Correction Submitted</h2>
-              <p style="color: #5A5A7A;"><strong>${submittedByName}</strong> submitted a correction photo for: <strong>${taskTitle}</strong></p>
-              ${photoUrl ? `<img src="${photoUrl}" style="width: 100%; border-radius: 8px; margin-top: 16px;" />` : ''}
+              <h2 style="color: #1A1A2E;">SOP Exception Documented</h2>
+              <p style="color: #5A5A7A;"><strong>${submittedByName}</strong> marked <strong>"${taskTitle}"</strong> as <span style="color:#e74c3c;font-weight:700;">No</span> and documented the exception.</p>
+              ${note ? `<div style="margin: 16px 0; padding: 12px 16px; background: #FFF8F0; border-left: 4px solid #E67E22; border-radius: 4px;"><p style="margin:0; color:#5A5A7A; font-size:14px;"><strong>Corrective action:</strong><br/>${note}</p></div>` : ''}
+              ${photoUrl ? `<p style="color:#5A5A7A; font-size:13px; margin-top:16px;"><strong>Documentation photo:</strong></p><img src="${photoUrl}" style="width:100%; border-radius:8px; margin-top:8px;" />` : '<p style="color:#9A9AB0; font-size:12px; margin-top:16px;">No photo attached.</p>'}
               <p style="color: #9A9AB0; font-size: 12px; margin-top: 16px;">Submitted by: ${submittedByName} (${submittedByEmail})</p>
             </div>
           </div>
