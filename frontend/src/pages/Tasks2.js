@@ -353,6 +353,12 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   useEffect(() => { if (tab === 'my-tasks' && userId) { loadMyTasks(); if (!vatLoaded) loadVatData(); } }, [tab, userId]); // eslint-disable-line
   useEffect(() => { if (tab === 'my-tasks' && myTaskSubTab === 'productivity') loadProductivity(prodPeriod); }, [tab, myTaskSubTab, prodPeriod]); // eslint-disable-line
 
+  // Save vatResponses to localStorage whenever they change so completions survive page reloads
+  useEffect(() => {
+    if (!userId || !Object.keys(vatResponses).length) return;
+    try { localStorage.setItem(`vat_${userId}`, JSON.stringify(vatResponses)); } catch {}
+  }, [vatResponses, userId]); // eslint-disable-line
+
   // Auto-persist completed task groups to DB
   useEffect(() => {
     if (!myTaskOccs.length || !vatTasks.length) return;
@@ -1106,6 +1112,23 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     ]);
     setMyTaskOccs(occs || []);
     setMyTaskOneOffs(oneOffs || []);
+
+    // Restore saved responses from localStorage (survives page reloads)
+    try {
+      const saved = localStorage.getItem(`vat_${userId}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Only keep responses for tasks currently assigned to this user
+        const currentDefIds = new Set((occs || []).map(o => o.task_def?.id).filter(Boolean));
+        const pruned = {};
+        Object.entries(parsed).forEach(([k, v]) => {
+          const baseId = k.split('_sub_')[0];
+          if (currentDefIds.has(baseId)) pruned[k] = v;
+        });
+        if (Object.keys(pruned).length) setVatResponses(pruned);
+      }
+    } catch {}
+
     setMyTaskLoading(false);
   }
 
@@ -1902,6 +1925,10 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             <div>
               <div style={{ textAlign: 'center', padding: '24px 20px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, marginBottom: 16 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Overall Score</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
+                  Based on your assigned tasks: on-time = full credit · late = 50% · missed = 0%<br />
+                  <span style={{ fontStyle: 'italic' }}>Score = (on-time + late × 0.5) ÷ matured tasks × 100 &nbsp;·&nbsp; Future tasks not yet due are excluded until their due date passes</span>
+                </div>
                 <div style={{ fontSize: 52, fontWeight: 900, color: scoreColor(myRow.combined.score), lineHeight: 1 }}>
                   {myRow.combined.score !== null ? myRow.combined.score : '—'}
                 </div>
