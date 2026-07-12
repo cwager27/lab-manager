@@ -59,6 +59,14 @@ function getDisplayName(contact) {
   return contact.full_name || '';
 }
 
+// "First Last" format — used only for deduplication against profiles.full_name
+function getRawName(contact) {
+  if (contact.first_name || contact.last_name) {
+    return [contact.first_name, contact.last_name].filter(Boolean).join(' ');
+  }
+  return contact.full_name || '';
+}
+
 // profiles table stores full_name as "First Last" — convert to "Last, First"
 function formatMemberName(fullName) {
   if (!fullName) return '';
@@ -687,7 +695,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
 
   const pendingLabContacts = contacts.filter(c => {
     if (c.role === 'external') return false;
-    if (memberNames.has(getDisplayName(c).toLowerCase().trim())) return false;
+    if (memberNames.has(getRawName(c).toLowerCase().trim())) return false;
     if (!labSearch) return true;
     const q = labSearch.toLowerCase();
     return [getDisplayName(c), c.email, c.phone, c.address, c.emergency_contact_name].some(v => v?.toLowerCase().includes(q));
