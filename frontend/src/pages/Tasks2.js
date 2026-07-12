@@ -291,7 +291,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const [myTaskOccs, setMyTaskOccs] = useState([]);
   const [myTaskOneOffs, setMyTaskOneOffs] = useState([]);
   const [myTaskLoading, setMyTaskLoading] = useState(false);
-  const [myTaskStatusFilter, setMyTaskStatusFilter] = useState('all');
+  const [myTaskSubTab, setMyTaskSubTab] = useState('summary');
   const [myTaskResponses, setMyTaskResponses] = useState({});
   const [myTaskNotes, setMyTaskNotes] = useState({});
   // Tracks occurrence IDs already auto-persisted as 'done' to avoid duplicate DB writes
@@ -351,6 +351,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   useEffect(() => { if (tab === 'productivity') loadProductivity(prodPeriod); }, [tab, prodPeriod, profiles.length]); // eslint-disable-line
   useEffect(() => { if (tab === 'oneoff') loadOneOffTab(); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (tab === 'my-tasks' && userId) { loadMyTasks(); if (!vatLoaded) loadVatData(); } }, [tab, userId]); // eslint-disable-line
+  useEffect(() => { if (tab === 'my-tasks' && myTaskSubTab === 'productivity') loadProductivity(prodPeriod); }, [tab, myTaskSubTab, prodPeriod]); // eslint-disable-line
 
   // Auto-persist completed task groups to DB
   useEffect(() => {
@@ -1464,34 +1465,36 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
   function renderMyTasksTab() {
     const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
 
-    const classifyOcc = occ => {
-      if (occ.status === 'done') return occ.completed_at && occ.completed_at.slice(0, 10) <= occ.due_date ? 'ontime' : 'late';
-      if (occ.due_date < today) return 'overdue';
-      return 'upcoming';
-    };
     const classifyOneOff = t => {
       if (t.status === 'completed') return t.completed_at && t.completed_at.slice(0, 10) <= t.due_date ? 'ontime' : 'late';
       if (t.due_date && t.due_date < today) return 'overdue';
       return 'upcoming';
     };
 
-    const FILTER_OPTIONS = [
-      { id: 'all',      label: 'All' },
-      { id: 'upcoming', label: 'Upcoming' },
-      { id: 'overdue',  label: 'Overdue' },
-      { id: 'ontime',   label: 'Completed On Time' },
-      { id: 'late',     label: 'Completed Late' },
-    ];
-
     const dateLabel = d => {
       if (!d || d === 'none') return 'No Due Date';
       if (d === today) return 'Today';
       const tom = new Date(); tom.setDate(tom.getDate() + 1);
       if (d === tom.toISOString().split('T')[0]) return 'Tomorrow';
-      return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     };
-    const dateIsOverdue = d => d && d !== 'none' && d < today;
+
+    // ── Time bucket helpers ─────────────────────────────────────────────────
+    const plus7 = new Date(now); plus7.setDate(plus7.getDate() + 7);
+    const endOfWeek = plus7.toISOString().split('T')[0];
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+    const end3Mo = new Date(now.getFullYear(), now.getMonth() + 3, now.getDate()).toISOString().split('T')[0];
+
+    const bucketFor = dueDate => {
+      if (!dueDate || dueDate === 'none') return 'nodate';
+      if (dueDate < today) return 'overdue';
+      if (dueDate <= endOfWeek) return 'week';
+      if (dueDate <= endOfMonth) return 'month';
+      if (dueDate <= end3Mo) return 'three';
+      return 'beyond';
+    };
 
     // Build task_def_id → occurrence map
     const occByDefId = {};
@@ -1519,18 +1522,11 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       }
       return groupTasks.every(t => !myDefIds.has(t.id) || isTaskComplete(t));
     };
-    const classifyGroup = g => {
-      if (isGroupComplete(g.tasks, g.groupName)) return 'ontime';
-      if (g.tasks.some(t => { const occ = occByDefId[t.id]; return occ && occ.status !== 'done' && occ.due_date < today; })) return 'overdue';
-      return 'upcoming';
-    };
-
-    // Find complete groups from vatTasks that include at least one assigned task
+    // Build group map
     const myGroupKeys = new Set();
     vatTasks.forEach(t => { if (myDefIds.has(t.id)) myGroupKeys.add(t.group_name || t.title || t.id); });
 
-    // Build ordered group list preserving vatTasks sort_order
-    const groupMap = new Map(); // groupKey → { groupName, category, tasks[], dueDate }
+    const groupMap = new Map();
     vatTasks.forEach(t => {
       const gKey = t.group_name || t.title || t.id;
       if (!myGroupKeys.has(gKey)) return;
@@ -1543,42 +1539,17 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       groupMap.get(gKey).tasks.push(t);
     });
 
-    // Apply status filter using group-level classification
-    const filteredGroups = [...groupMap.values()].filter(g => {
-      if (myTaskStatusFilter === 'all') return true;
-      return classifyGroup(g) === myTaskStatusFilter;
-    });
+    const allGroups = [...groupMap.values()];
 
-    // Group by date → category
-    const groupsByDate = {};
-    filteredGroups.forEach(g => {
-      const date = g.dueDate;
-      if (!groupsByDate[date]) groupsByDate[date] = {};
-      if (!groupsByDate[date][g.category]) groupsByDate[date][g.category] = [];
-      groupsByDate[date][g.category].push(g);
-    });
+    // Distribute into time buckets
+    const recBuckets = { overdue: [], week: [], month: [], three: [], beyond: [], nodate: [] };
+    allGroups.forEach(g => recBuckets[bucketFor(g.dueDate)].push(g));
 
-    // One-offs: group by date → category
-    const oneOffsByDate = {};
-    const oneOffDateOrder = [];
-    myTaskOneOffs
-      .filter(t => myTaskStatusFilter === 'all' || classifyOneOff(t) === myTaskStatusFilter)
-      .slice().sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''))
-      .forEach(t => {
-        const date = t.due_date || 'none';
-        const cat  = t.category || 'General';
-        if (!oneOffsByDate[date]) { oneOffsByDate[date] = {}; oneOffDateOrder.push(date); }
-        if (!oneOffsByDate[date][cat]) oneOffsByDate[date][cat] = [];
-        oneOffsByDate[date][cat].push(t);
-      });
+    const adhocBuckets = { overdue: [], week: [], month: [], three: [], beyond: [], nodate: [] };
+    [...myTaskOneOffs].sort((a, b) => (a.due_date || '').localeCompare(b.due_date || '')).forEach(t => adhocBuckets[bucketFor(t.due_date)].push(t));
 
-    const allDates = [...new Set([...Object.keys(groupsByDate), ...oneOffDateOrder])].sort((a, b) => {
-      if (a === 'none') return 1; if (b === 'none') return -1;
-      return a.localeCompare(b);
-    });
-
-    const overdueCt  = myTaskOccs.filter(o => classifyOcc(o) === 'overdue').length + myTaskOneOffs.filter(t => classifyOneOff(t) === 'overdue').length;
-    const upcomingCt = myTaskOccs.filter(o => classifyOcc(o) === 'upcoming').length + myTaskOneOffs.filter(t => classifyOneOff(t) === 'upcoming').length;
+    const overdueCt = recBuckets.overdue.filter(g => !isGroupComplete(g.tasks, g.groupName)).length + adhocBuckets.overdue.filter(t => t.status !== 'completed').length;
+    const upcomingCt = ['week','month','three','beyond','nodate'].reduce((s, b) => s + recBuckets[b].length + adhocBuckets[b].length, 0);
 
     // Render a one-off task card
     const renderOneOffTask = t => {
@@ -1616,64 +1587,9 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       );
     };
 
-    const isEmpty = allDates.length === 0;
-
-    return (
-      <div>
-        {/* Header */}
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>My Tasks</div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
-            {myProfile?.full_name || 'Your'} assigned tasks — {upcomingCt} upcoming{overdueCt > 0 ? `, ${overdueCt} overdue` : ''}
-          </div>
-        </div>
-
-        {/* Status filter */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 20 }}>
-          {FILTER_OPTIONS.map(({ id, label }) => (
-            <button key={id} onClick={() => setMyTaskStatusFilter(id)}
-              style={{ padding: '6px 16px', borderRadius: 20, border: `1.5px solid ${myTaskStatusFilter === id ? 'var(--purple-primary)' : 'var(--border)'}`, background: myTaskStatusFilter === id ? 'var(--purple-primary)' : 'transparent', color: myTaskStatusFilter === id ? '#fff' : 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {myTaskLoading ? (
-          <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
-        ) : isEmpty ? (
-          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>No tasks match this filter.</div>
-        ) : (
-          allDates.map(date => {
-            const catMapForDate = groupsByDate[date] || {};
-            const oneOffCatMap  = oneOffsByDate[date] || {};
-            const allCats = [...new Set([...Object.keys(catMapForDate), ...Object.keys(oneOffCatMap)])].sort();
-            if (allCats.length === 0) return null;
-            const isOverdue = dateIsOverdue(date);
-
-            return (
-              <div key={date} style={{ marginBottom: 32 }}>
-                {/* Date header */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: isOverdue ? '#ef4444' : 'var(--text-primary)' }}>
-                    {dateLabel(date)}
-                    {date !== 'none' && <span style={{ fontWeight: 400, fontSize: 13, color: 'var(--text-muted)', marginLeft: 8 }}>
-                      {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>}
-                  </div>
-                  {isOverdue && <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', padding: '2px 8px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 10 }}>OVERDUE</span>}
-                  <div style={{ flex: 1, height: 2, background: isOverdue ? '#fca5a5' : 'var(--purple-primary)', opacity: 0.25, borderRadius: 1 }} />
-                </div>
-
-                {/* Categories */}
-                {allCats.map(cat => (
-                  <div key={cat} style={{ marginBottom: 20 }}>
-                    {allCats.length > 1 && (
-                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10, paddingLeft: 2 }}>{cat}</div>
-                    )}
-
-                    {/* Complete task groups — exact same markup as Tasks tab */}
-                    {(catMapForDate[cat] || []).map(({ groupName, tasks: groupTasks }) => {
-                      const groupDone = isGroupComplete(groupTasks, groupName);
+    // ── renderFullGroup: full interactive rendering for active/overdue ─────────
+    const renderFullGroup = ({ groupName, tasks: groupTasks }) => {
+      const groupDone = isGroupComplete(groupTasks, groupName);
 
                       // ── Completed: show only the parent task as a summary ──
                       if (groupDone) {
@@ -1856,15 +1772,219 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                           )}
                         </div>
                       );
-                    })}
+    };
 
-                    {/* One-off tasks within this category */}
-                    {(oneOffCatMap[cat] || []).map(t => renderOneOffTask(t))}
-                  </div>
-                ))}
+    // ── Compact renderers for future buckets ──────────────────────────────
+    const CAT_COLORS = { MISC: { bg: '#f5eefb', fg: '#8b5cf6' }, PM: { bg: '#eff6ff', fg: '#3b82f6' }, Equipment: { bg: '#fffbeb', fg: '#f59e0b' } };
+
+    const renderCompactGroup = g => {
+      const isDone = isGroupComplete(g.tasks, g.groupName);
+      const { bg, fg } = CAT_COLORS[g.category] || { bg: '#f3f4f6', fg: '#6b7280' };
+      return (
+        <div key={g.groupName || (g.tasks[0] && g.tasks[0].id)} style={{ padding: '10px 12px', background: 'var(--bg-card)', border: `1px solid ${isDone ? '#A9DFBF' : 'var(--border)'}`, borderRadius: 8, marginBottom: 5, opacity: isDone ? 0.7 : 1 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <div style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${isDone ? '#22c55e' : 'var(--border)'}`, background: isDone ? '#22c55e' : 'transparent', flexShrink: 0, marginTop: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {isDone && <span style={{ color: 'white', fontSize: 10, lineHeight: 1 }}>✓</span>}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: isDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.4 }}>
+                {g.groupName || (g.tasks[0] && g.tasks[0].title) || 'Task'}
               </div>
-            );
-          })
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+                {g.dueDate && g.dueDate !== 'none' && (
+                  <span style={{ fontSize: 11, color: bucketFor(g.dueDate) === 'overdue' && !isDone ? '#ef4444' : 'var(--text-muted)' }}>
+                    {dateLabel(g.dueDate)}
+                  </span>
+                )}
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: bg, color: fg }}>{g.category}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const renderCompactAdhoc = t => {
+      const isDone = t.status === 'completed';
+      const isOvd = !isDone && t.due_date && t.due_date < today;
+      return (
+        <div key={t.id} style={{ padding: '10px 12px', background: 'var(--bg-card)', border: `1px solid ${isDone ? '#A9DFBF' : 'var(--border)'}`, borderRadius: 8, marginBottom: 5, opacity: isDone ? 0.7 : 1 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <div style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${isDone ? '#22c55e' : 'var(--border)'}`, background: isDone ? '#22c55e' : 'transparent', flexShrink: 0, marginTop: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {isDone && <span style={{ color: 'white', fontSize: 10, lineHeight: 1 }}>✓</span>}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: isDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.4 }}>{t.title}</div>
+              {t.due_date && (
+                <div style={{ fontSize: 11, color: isOvd ? '#ef4444' : 'var(--text-muted)', marginTop: 3 }}>
+                  {dateLabel(t.due_date)}
+                  {t.assigner?.full_name && <span style={{ color: 'var(--text-muted)' }}> · by {t.assigner.full_name}</span>}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // ── Summary sub-tab ────────────────────────────────────────────────────
+    const BUCKET_CONFIG = [
+      { id: 'overdue', label: 'Overdue',       headColor: '#ef4444',              headBg: '#fef2f2',             isActive: true  },
+      { id: 'week',    label: 'This Week',      headColor: 'var(--purple-primary)', headBg: '#f5eefb',             isActive: true  },
+      { id: 'month',   label: 'This Month',     headColor: 'var(--text-primary)',   headBg: 'var(--bg-secondary)', isActive: false },
+      { id: 'three',   label: 'Next 3 Months',  headColor: 'var(--text-secondary)', headBg: 'var(--bg-secondary)', isActive: false },
+      { id: 'beyond',  label: 'Beyond',          headColor: 'var(--text-muted)',     headBg: 'var(--bg-secondary)', isActive: false },
+      { id: 'nodate',  label: 'No Due Date',     headColor: 'var(--text-muted)',     headBg: 'var(--bg-secondary)', isActive: false },
+    ];
+
+    const renderSummary = () => (
+      <div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 4 }}>
+          <div style={{ padding: '6px 0 8px', fontSize: 12, fontWeight: 700, color: 'var(--purple-primary)', textTransform: 'uppercase', letterSpacing: '0.07em', borderBottom: '2px solid var(--purple-primary)' }}>
+            Recurrent Tasks
+          </div>
+          <div style={{ padding: '6px 0 8px', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', borderBottom: '2px solid var(--border)' }}>
+            Ad hoc Tasks
+          </div>
+        </div>
+        {BUCKET_CONFIG.map(({ id, label, headColor, headBg, isActive }) => {
+          const recItems = recBuckets[id];
+          const adhocItems = adhocBuckets[id];
+          if (recItems.length === 0 && adhocItems.length === 0) return null;
+          const count = recItems.length + adhocItems.length;
+          return (
+            <div key={id} style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 10px', background: headBg, borderRadius: 6, marginBottom: 10 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: headColor, textTransform: 'uppercase', letterSpacing: '0.05em', flex: 1 }}>{label}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{count} task{count !== 1 ? 's' : ''}</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  {recItems.length === 0
+                    ? <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '6px 4px' }}>None</div>
+                    : recItems.map(g => isActive ? renderFullGroup(g) : renderCompactGroup(g))}
+                </div>
+                <div>
+                  {adhocItems.length === 0
+                    ? <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '6px 4px' }}>None</div>
+                    : adhocItems.map(t => isActive ? renderOneOffTask(t) : renderCompactAdhoc(t))}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {allGroups.length + myTaskOneOffs.length === 0 && (
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>No tasks assigned to you yet.</div>
+        )}
+      </div>
+    );
+
+    // ── Productivity sub-tab ───────────────────────────────────────────────
+    const scoreColor = s => s === null ? 'var(--text-muted)' : s >= 90 ? '#22c55e' : s >= 70 ? '#f59e0b' : s >= 50 ? '#f97316' : '#ef4444';
+
+    const renderMyProductivity = () => {
+      const myRow = prodRows.find(r => r.profile.id === userId);
+      const periods = [
+        { id: 'current', label: 'Currently' },
+        { id: '30d',     label: 'Last 30 Days' },
+        { id: 'all',     label: 'Since Joining' },
+      ];
+
+      const ScoreBar = ({ stats, label: barLabel }) => {
+        const { onTime, late, missed, matured, score } = stats;
+        const col = scoreColor(score);
+        return (
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>{barLabel}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ textAlign: 'center', minWidth: 56 }}>
+                <div style={{ fontSize: 28, fontWeight: 800, color: col, lineHeight: 1 }}>{score !== null ? score : '—'}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{score !== null ? '/ 100' : 'no data'}</div>
+              </div>
+              {matured > 0 && (
+                <div style={{ flex: 1 }}>
+                  <div style={{ height: 6, borderRadius: 3, overflow: 'hidden', display: 'flex', marginBottom: 6 }}>
+                    <div style={{ flex: onTime, background: '#22c55e', minWidth: onTime > 0 ? 2 : 0 }} />
+                    <div style={{ flex: late, background: '#f59e0b', minWidth: late > 0 ? 2 : 0 }} />
+                    <div style={{ flex: missed, background: '#ef4444', minWidth: missed > 0 ? 2 : 0 }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 12 }}><span style={{ color: '#22c55e', fontWeight: 700 }}>{onTime}</span> on time</span>
+                    <span style={{ fontSize: 12 }}><span style={{ color: '#f59e0b', fontWeight: 700 }}>{late}</span> late</span>
+                    <span style={{ fontSize: 12 }}><span style={{ color: '#ef4444', fontWeight: 700 }}>{missed}</span> missed</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      };
+
+      return (
+        <div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
+            {periods.map(({ id, label }) => (
+              <button key={id} onClick={() => setProdPeriod(id)}
+                style={{ padding: '7px 18px', borderRadius: 20, border: `1.5px solid ${prodPeriod === id ? 'var(--purple-primary)' : 'var(--border)'}`, background: prodPeriod === id ? 'var(--purple-primary)' : 'transparent', color: prodPeriod === id ? '#fff' : 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {prodLoading ? (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
+          ) : !myRow ? (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>No productivity data found.</div>
+          ) : (
+            <div>
+              <div style={{ textAlign: 'center', padding: '24px 20px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Overall Score</div>
+                <div style={{ fontSize: 52, fontWeight: 900, color: scoreColor(myRow.combined.score), lineHeight: 1 }}>
+                  {myRow.combined.score !== null ? myRow.combined.score : '—'}
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{myRow.combined.score !== null ? '/ 100' : 'no data yet'}</div>
+                {myRow.combined.matured > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginTop: 12, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 13 }}><span style={{ color: '#22c55e', fontWeight: 700 }}>{myRow.combined.onTime}</span> on time</span>
+                    <span style={{ fontSize: 13 }}><span style={{ color: '#f59e0b', fontWeight: 700 }}>{myRow.combined.late}</span> late</span>
+                    <span style={{ fontSize: 13 }}><span style={{ color: '#ef4444', fontWeight: 700 }}>{myRow.combined.missed}</span> missed</span>
+                    {myRow.pmReminders > 0 && <span style={{ fontSize: 13 }}><span style={{ color: '#f59e0b', fontWeight: 700 }}>{myRow.pmReminders}</span> PM reminders</span>}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <ScoreBar stats={myRow.recurring} label="Recurrent Tasks" />
+                <ScoreBar stats={myRow.oneOff} label="Ad hoc Tasks" />
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    // ── Main render ────────────────────────────────────────────────────────
+    return (
+      <div>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>My Tasks</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
+            {myProfile?.full_name ? `${myProfile.full_name}'s dashboard` : 'Your dashboard'}
+            {' '}— {upcomingCt} upcoming{overdueCt > 0 ? `, ${overdueCt} overdue` : ''}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', marginBottom: 24, borderBottom: '2px solid var(--border)' }}>
+          {[{ id: 'summary', label: 'Task Summary' }, { id: 'productivity', label: 'My Productivity' }].map(({ id, label }) => (
+            <button key={id} onClick={() => setMyTaskSubTab(id)}
+              style={{ padding: '8px 20px', fontSize: 14, fontWeight: 600, border: 'none', background: 'transparent', cursor: 'pointer', color: myTaskSubTab === id ? 'var(--purple-primary)' : 'var(--text-muted)', borderBottom: `2px solid ${myTaskSubTab === id ? 'var(--purple-primary)' : 'transparent'}`, marginBottom: -2 }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {myTaskLoading ? (
+          <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
+        ) : (
+          myTaskSubTab === 'summary' ? renderSummary() : renderMyProductivity()
         )}
       </div>
     );
