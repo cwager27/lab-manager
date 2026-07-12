@@ -378,8 +378,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         if (lcResp === 'no') complete = true;
         else if (lcResp === 'yes') complete = group.tasks.filter(t => t.response_type === 'checkbox').every(t => vatResponses[t.id]?.response === 'checked');
       } else {
-        complete = group.tasks.every(t => {
-          if (!myDefIds.has(t.id)) return true;
+        const myAssigned = group.tasks.filter(t => myDefIds.has(t.id));
+        complete = myAssigned.length > 0 && myAssigned.every(t => {
           const r = vatResponses[t.id]?.response;
           if (!r) return false;
           // SOP task marked 'no' requires exception to be submitted first
