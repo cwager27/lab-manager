@@ -6,7 +6,6 @@ import {
   ChevronDown, ChevronUp, Search
 } from 'lucide-react';
 
-const ROLE_ORDER = { admin: 1, pm: 2, member: 3, intern: 4 };
 const ROLE_LABELS = { admin: 'Supervisor', pm: 'Program Manager', member: 'Lab Member', intern: 'Intern', external: 'NYU Contact' };
 const ROLE_COLORS = {
   admin:    { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
@@ -54,10 +53,26 @@ function formatAddress(raw) {
 }
 
 function getDisplayName(contact) {
-  if (contact.first_name || contact.last_name) {
-    return [contact.first_name, contact.last_name].filter(Boolean).join(' ');
-  }
+  if (contact.last_name && contact.first_name) return `${contact.last_name}, ${contact.first_name}`;
+  if (contact.last_name) return contact.last_name;
+  if (contact.first_name) return contact.first_name;
   return contact.full_name || '';
+}
+
+// profiles table stores full_name as "First Last" — convert to "Last, First"
+function formatMemberName(fullName) {
+  if (!fullName) return '';
+  const parts = fullName.trim().split(' ');
+  if (parts.length === 1) return parts[0];
+  const last = parts[parts.length - 1];
+  const first = parts.slice(0, parts.length - 1).join(' ');
+  return `${last}, ${first}`;
+}
+
+function getMemberLastName(fullName) {
+  if (!fullName) return '';
+  const parts = fullName.trim().split(' ');
+  return parts[parts.length - 1] || '';
 }
 
 const labelStyle = {
@@ -284,7 +299,7 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
             <div style={{ width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0, background: roleColors.bg, border: `2px solid ${roleColors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <span style={{ fontSize: '12px', fontWeight: 700, color: roleColors.text }}>{member.full_name?.charAt(0).toUpperCase()}</span>
             </div>
-            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{member.full_name}</span>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{formatMemberName(member.full_name)}</span>
           </div>
         </td>
         <td style={{ padding: '10px 14px', fontSize: '12px' }}>
@@ -453,7 +468,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   async function fetchData(silent = false) {
     if (!silent) setLoading(true);
     const [{ data: contactData }, { data: memberData }] = await Promise.all([
-      supabase.from('lab_contacts').select('*').order('sort_order').order('last_name').order('first_name'),
+      supabase.from('lab_contacts').select('*').order('last_name').order('first_name'),
       supabase.from('profiles').select('*').order('full_name')
     ]);
     setContacts(contactData || []);
@@ -641,15 +656,20 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   }
 
   const memberNames = new Set(members.map(m => m.full_name?.toLowerCase().trim()).filter(Boolean));
-  const sortedMembers = [...members].sort((a, b) => (ROLE_ORDER[a.role] || 99) - (ROLE_ORDER[b.role] || 99));
+  const sortedMembers = [...members].sort((a, b) =>
+    getMemberLastName(a.full_name).localeCompare(getMemberLastName(b.full_name)) ||
+    (a.full_name || '').localeCompare(b.full_name || '')
+  );
 
-  const filteredAdminContacts = contacts.filter(c => {
-    if (c.role !== 'external') return false;
-    if (!adminSearch) return true;
-    const q = adminSearch.toLowerCase();
-    return [getDisplayName(c), c.title, c.email, c.phone, c.notes, c.role, c.address]
-      .some(v => v?.toLowerCase().includes(q));
-  });
+  const filteredAdminContacts = contacts
+    .filter(c => {
+      if (c.role !== 'external') return false;
+      if (!adminSearch) return true;
+      const q = adminSearch.toLowerCase();
+      return [getDisplayName(c), c.title, c.email, c.phone, c.notes, c.role, c.address]
+        .some(v => v?.toLowerCase().includes(q));
+    })
+    .sort((a, b) => (a.last_name || '').localeCompare(b.last_name || '') || (a.first_name || '').localeCompare(b.first_name || ''));
 
   const filteredLabMembers = sortedMembers.filter(m => {
     if (m.lab_status === 'alumni') return false;
