@@ -669,12 +669,21 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
     (a.full_name || '').localeCompare(b.full_name || '')
   );
 
-  const filteredAdminContacts = contacts
+  const countFields = c => [c.first_name, c.last_name, c.email, c.personal_email, c.phone, c.alternative_email, c.title, c.address, c.notes, c.supervisor, c.emergency_contact_name].filter(v => v && String(v).trim()).length;
+
+  const filteredAdminContacts = Object.values(
+    contacts
+      .filter(c => c.role === 'external')
+      .reduce((acc, c) => {
+        const key = `${(c.last_name || '').toLowerCase().trim()}__${(c.first_name || '').toLowerCase().trim()}`;
+        if (!acc[key] || countFields(c) > countFields(acc[key])) acc[key] = c;
+        return acc;
+      }, {})
+  )
     .filter(c => {
-      if (c.role !== 'external') return false;
       if (!adminSearch) return true;
       const q = adminSearch.toLowerCase();
-      return [getDisplayName(c), c.title, c.email, c.phone, c.notes, c.role, c.address]
+      return [getDisplayName(c), c.title, c.email, c.phone, c.notes, c.address]
         .some(v => v?.toLowerCase().includes(q));
     })
     .sort((a, b) => (a.last_name || '').localeCompare(b.last_name || '') || (a.first_name || '').localeCompare(b.first_name || ''));
