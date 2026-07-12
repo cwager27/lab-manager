@@ -3675,7 +3675,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   // ── Step indicator ────────────────────────────────────────────────────────
 
   function renderStepIndicator() {
-    const steps = ['Scope', 'Tasks', 'Assignees', 'Date range', 'Occurrences', 'Preview'];
+    const steps = ['Scope', 'Recurrent Tasks', 'Assignees', 'Date range', 'Occurrences', 'Preview'];
     return (
       <div style={{ display: 'flex', gap: 0, marginBottom: 28 }}>
         {steps.map((s, i) => {
