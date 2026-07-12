@@ -3721,7 +3721,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   }).length;
 
   const tabs = [
-    { id: 'view-all',     label: 'Tasks' },
+    { id: 'view-all',     label: 'Recurrent Tasks' },
     { id: 'oneoff',       label: 'Ad hoc Tasks' },
     { id: 'calendar',     label: 'Calendar' },
     { id: 'productivity', label: 'Productivity' },
