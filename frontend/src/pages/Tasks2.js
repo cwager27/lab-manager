@@ -1760,6 +1760,9 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                                       <button onClick={() => openTaskDefEditor(task)} title="Edit task" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '1px 3px', display: 'flex', flexShrink: 0, opacity: 0.5 }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}><Pencil size={12} /></button>
                                     </div>
                                     {task.sop_trigger && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px', padding: '2px 7px', background: '#FEF0F0', color: 'var(--danger)', borderRadius: '12px', fontSize: '10px', fontWeight: 600 }}><AlertTriangle size={9} /> {task.conditional_text ? <a href={task.conditional_text} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--danger)', textDecoration: 'underline' }}>SOP</a> : 'SOP'}</span>}
+                                    {!task.sop_trigger && task.conditional_text && !task.conditional_text.startsWith('http') && (
+                                      <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', margin: '3px 0 0', lineHeight: 1.4 }}>{task.conditional_text}</p>
+                                    )}
                                     {vatExisting[task.id] && (
                                       <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
                                         <span style={{ color: 'var(--success)' }}>✓</span> Done by {vatExisting[task.id].assignment?.profile?.full_name || '?'} on {new Date(vatExisting[task.id].responded_at).toLocaleDateString()}
@@ -2239,6 +2242,9 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                               <button onClick={() => openTaskDefEditor(task)} title="Edit task" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '1px 3px', display: 'flex', flexShrink: 0, opacity: 0.5 }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}><Pencil size={12} /></button>
                             </div>
                             {task.sop_trigger && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px', padding: '2px 7px', background: '#FEF0F0', color: 'var(--danger)', borderRadius: '12px', fontSize: '10px', fontWeight: 600 }}><AlertTriangle size={9} /> {task.conditional_text ? <a href={task.conditional_text} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--danger)', textDecoration: 'underline' }}>SOP</a> : 'SOP'}</span>}
+                            {!task.sop_trigger && task.conditional_text && !task.conditional_text.startsWith('http') && (
+                              <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', margin: '3px 0 0', lineHeight: 1.4 }}>{task.conditional_text}</p>
+                            )}
                             {vatExisting[task.id] && (
                               <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
                                 <span style={{ color: 'var(--success)' }}>✓</span> Done by {vatExisting[task.id].assignment?.profile?.full_name || '?'} on {new Date(vatExisting[task.id].responded_at).toLocaleDateString()}
