@@ -1520,7 +1520,9 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         if (lcResp === 'no') return true;
         return groupTasks.filter(t => t.response_type === 'checkbox').every(t => vatResponses[t.id]?.response === 'checked');
       }
-      return groupTasks.every(t => !myDefIds.has(t.id) || isTaskComplete(t));
+      const myAssigned = groupTasks.filter(t => myDefIds.has(t.id));
+      if (myAssigned.length === 0) return false;
+      return myAssigned.every(t => isTaskComplete(t));
     };
     // Build group map
     const myGroupKeys = new Set();
