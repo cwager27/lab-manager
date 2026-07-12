@@ -370,7 +370,7 @@ export default function Dashboard({ profile, userRole, userId }) {
             {/* Recurring task status */}
             <TaskStatusCard
               icon={<ClipboardList size={13} color="var(--purple-primary)" />}
-              title="Recurring task status"
+              title="Recurrent task status"
               tasks={myRecurOccs}
               getTitle={t => t.task_def?.title || 'Task'}
               dateKey="due_date"

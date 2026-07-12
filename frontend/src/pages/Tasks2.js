@@ -1219,8 +1219,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                 <tr>
                   <th style={{ ...thLeftStyle, borderRight: '1px solid var(--border)' }} rowSpan={2}>Name</th>
                   <th style={{ ...thStyle, borderRight: '1px solid var(--border)' }} rowSpan={2}>Overall<br />Score</th>
-                  <th style={{ ...thStyle, borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }} colSpan={4}>Recurring Tasks</th>
-                  <th style={{ ...thStyle, borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }} colSpan={4}>One-off Tasks</th>
+                  <th style={{ ...thStyle, borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }} colSpan={4}>Recurrent Tasks</th>
+                  <th style={{ ...thStyle, borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }} colSpan={4}>Ad hoc Tasks</th>
                   <th style={thStyle} rowSpan={2}>PM<br />Reminders</th>
                 </tr>
                 <tr>
@@ -3356,7 +3356,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       <div>
         {/* Create form */}
         <div style={{ marginBottom: 24, padding: 20, background: 'var(--bg-secondary)', borderRadius: 10, border: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Create One-off Task</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Create Ad hoc Task</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Title</label>
@@ -3423,7 +3423,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         ) : (
           <>
             {pending.length === 0 && done.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 14 }}>No one-off tasks yet.</div>
+              <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 14 }}>No ad hoc tasks yet.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {[...pending, ...done].map(task => {
@@ -3611,7 +3611,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
   const tabs = [
     { id: 'view-all',     label: 'Tasks' },
-    { id: 'oneoff',       label: 'One-off Tasks' },
+    { id: 'oneoff',       label: 'Ad hoc Tasks' },
     { id: 'calendar',     label: 'Calendar' },
     { id: 'productivity', label: 'Productivity' },
     { id: 'assigned',     label: 'Insights', badge: unassignedCount || null },
@@ -3623,7 +3623,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>Task assignment</h1>
-        <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: 14 }}>Recurring tasks · admin view</p>
+        <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: 14 }}>Recurrent tasks · admin view</p>
       </div>
 
       {/* Tab bar */}
@@ -3674,7 +3674,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 16, fontWeight: 700 }}>Task Productivity Evaluations</div>
             <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
-              Score 0–100 based on % of tasks completed on time. Recurring = MISC/PM/Equipment. One-off = all other assigned tasks.
+              Score 0–100 based on % of tasks completed on time. Recurrent = MISC/PM/Equipment. Ad hoc = all other assigned tasks.
             </div>
           </div>
           {renderProductivity()}

@@ -489,7 +489,7 @@ export default function Tasks({ userRole, userId, profile }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
         <div>
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Tasks</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>Lab responsibilities and one-off assignments</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>Lab responsibilities and ad hoc assignments</p>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           {canManage && (
@@ -501,7 +501,7 @@ export default function Tasks({ userRole, userId, profile }) {
           {canManage && tab !== 'equipment' && (
             <button onClick={() => tab === 'recurring' ? setShowRecurForm(true) : setShowSporForm(true)}
               style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px' }}>
-              <Plus size={16} /> {tab === 'recurring' ? 'Add Task' : 'New One-off'}
+              <Plus size={16} /> {tab === 'recurring' ? 'Add Task' : 'New Ad hoc'}
             </button>
           )}
           {!canManage && tab === 'one-off' && (
@@ -515,7 +515,7 @@ export default function Tasks({ userRole, userId, profile }) {
 
       {/* Tab bar */}
       <div style={{ display: 'flex', gap: '2px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '3px', marginBottom: '20px', width: 'fit-content' }}>
-        {[{ id: 'recurring', label: 'Recurring' }, { id: 'one-off', label: 'One-off Tasks' }, { id: 'equipment', label: 'Equipment' }].map(t => (
+        {[{ id: 'recurring', label: 'Recurrent' }, { id: 'one-off', label: 'Ad hoc Tasks' }, { id: 'equipment', label: 'Equipment' }].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             padding: '7px 18px', borderRadius: 'var(--radius-sm)', border: 'none', fontSize: '13px', fontWeight: tab === t.id ? 600 : 400,
             background: tab === t.id ? 'var(--purple-primary)' : 'transparent',
@@ -1095,7 +1095,7 @@ export default function Tasks({ userRole, userId, profile }) {
       {showRecurForm && canManage && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '520px', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)', maxHeight: '90vh', overflowY: 'auto' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>Add Recurring Task</h2>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>Add Recurrent Task</h2>
             <div style={{ marginBottom: '14px' }}>
               <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '5px', textTransform: 'uppercase' }}>Description</label>
               <textarea value={newRecur.title} onChange={e => setNewRecur(p => ({ ...p, title: e.target.value }))} rows={3} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
@@ -1146,7 +1146,7 @@ export default function Tasks({ userRole, userId, profile }) {
       {showSporForm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '520px', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>{canManage ? 'Create One-off Task' : 'Request a Task'}</h2>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>{canManage ? 'Create Ad hoc Task' : 'Request a Task'}</h2>
             <div style={{ marginBottom: '14px' }}>
               <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '5px', textTransform: 'uppercase' }}>Title</label>
               <input value={newSpor.title} onChange={e => setNewSpor(p => ({ ...p, title: e.target.value }))} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />

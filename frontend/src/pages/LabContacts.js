@@ -17,8 +17,8 @@ const ROLE_COLORS = {
 };
 
 const PERMISSIONS = [
-  { key: 'can_assign_tasks', label: 'Assign Tasks', description: 'Can assign recurring and sporadic tasks' },
-  { key: 'can_approve_sporadic', label: 'Approve Task Requests', description: 'Can approve or deny sporadic task requests' },
+  { key: 'can_assign_tasks', label: 'Assign Tasks', description: 'Can assign recurrent and ad hoc tasks' },
+  { key: 'can_approve_sporadic', label: 'Approve Task Requests', description: 'Can approve or deny ad hoc task requests' },
   { key: 'can_edit_meetings', label: 'Edit Meeting Presenter', description: 'Can change who presents at lab meetings' },
   { key: 'can_view_finance', label: 'View Finance', description: 'Can see grants, orders and reagents' },
   { key: 'can_edit_samples', label: 'Edit Sample Inventory', description: 'Can add, edit and remove samples' },
