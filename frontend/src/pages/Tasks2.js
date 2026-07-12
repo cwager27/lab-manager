@@ -1593,46 +1593,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     const renderFullGroup = ({ groupName, tasks: groupTasks }) => {
       const groupDone = isGroupComplete(groupTasks, groupName);
 
-                      // ── Completed: show only the parent task as a summary ──
-                      if (groupDone) {
-                        const parentTask = groupTasks.find(t => t.response_type === 'yes_no' || t.response_type === 'yes_no_na') || groupTasks[0];
-                        const parentResp = parentTask ? vatResponses[parentTask.id]?.response : null;
-                        return (
-                          <div key={groupName || 'ungrouped'} style={{ marginBottom: '4px', opacity: 0.8 }}>
-                            {groupName && (
-                              <div style={{ padding: '12px 2px 6px', borderBottom: '2px solid var(--success)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--success)' }}>{groupName}</span>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--success)', background: '#EAF7F0', padding: '2px 8px', borderRadius: 10, border: '1px solid #A9DFBF' }}>✓ Completed</span>
-                              </div>
-                            )}
-                            {parentTask && (
-                              <div style={{ background: 'var(--bg-card)', border: '1px solid #A9DFBF', borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px' }}>
-                                  <div style={{ display: 'flex', gap: '5px', flexShrink: 0, marginTop: '2px' }}>
-                                    {(parentTask.response_type === 'yes_no' || parentTask.response_type === 'yes_no_na') ? (
-                                      parentResp === 'yes' ? (
-                                        <div style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid var(--success)', background: 'var(--success)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CheckCircle size={13} /></div>
-                                      ) : parentResp === 'no' ? (
-                                        <div style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid var(--danger)', background: 'var(--danger)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><XCircle size={13} /></div>
-                                      ) : (
-                                        <div style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid var(--success)', background: 'var(--success)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CheckCircle size={13} /></div>
-                                      )
-                                    ) : (
-                                      <div style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid var(--success)', background: 'var(--success)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CheckCircle size={13} /></div>
-                                    )}
-                                  </div>
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', textDecoration: 'line-through', lineHeight: 1.5, margin: 0 }}>{parentTask.title}</p>
-                                    {!groupName && <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, color: 'var(--success)' }}>✓ Completed</div>}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      }
-
-                      // ── Incomplete: full group rendering identical to Tasks tab ──
+                      // ── Always render the full group — never collapse in My Tasks ──
                       const isLiveCellGroup = groupName === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time';
                       const lcParent = isLiveCellGroup ? groupTasks.find(t => t.response_type === 'yes_no') : null;
                       const lcParentResp = lcParent ? vatResponses[lcParent.id]?.response : null;
@@ -1642,8 +1603,9 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                       return (
                         <div key={groupName || 'ungrouped'} style={{ marginBottom: '4px' }}>
                           {groupName && (
-                            <div style={{ padding: '12px 2px 6px', borderBottom: '2px solid var(--purple-primary)', marginBottom: '8px' }}>
-                              <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--purple-primary)' }}>{groupName}</span>
+                            <div style={{ padding: '12px 2px 6px', borderBottom: `2px solid ${groupDone ? 'var(--success)' : 'var(--purple-primary)'}`, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: '14px', fontWeight: 700, color: groupDone ? 'var(--success)' : 'var(--purple-primary)' }}>{groupName}</span>
+                              {groupDone && <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--success)', background: '#EAF7F0', padding: '2px 8px', borderRadius: 10, border: '1px solid #A9DFBF' }}>✓ Completed</span>}
                             </div>
                           )}
                           {groupTasks.map(task => {
