@@ -46,7 +46,7 @@ function TaskStatusCard({ icon, title, tasks, getTitle, dateKey }) {
           <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderTop: '1px solid var(--border)' }}>
             <span style={{ fontSize: 12, color: 'var(--text-primary)', flex: 1, lineHeight: 1.3 }}>{getTitle(t)}</span>
             {t[dateKey] && (
-              <span style={{ fontSize: 10, color: headColor === '#E74C3C' ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(t[dateKey])}</span>
+              <span style={{ fontSize: 10, color: headBg === '#ef4444' ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(t[dateKey])}</span>
             )}
           </div>
         ))}
@@ -64,7 +64,7 @@ function TaskStatusCard({ icon, title, tasks, getTitle, dateKey }) {
         <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Nothing missed or due in the next 30 days.</p>
       ) : (
         <>
-          {renderSection('Missed', missed, '#FEF5F5', '#E74C3C')}
+          {renderSection('Missed', missed, '#ef4444', '#fff')}
           {renderSection('Upcoming — next 2 weeks', twoWeeks, '#FFFBF0', '#D68910')}
           {renderSection('Upcoming — next 30 days', thirty, 'var(--bg-secondary)', 'var(--text-secondary)')}
         </>
