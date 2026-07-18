@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import {
   Plus, Edit2, Trash2, Phone, Mail,
   Shield, Key, Eye, EyeOff,
-  ChevronDown, ChevronUp, Search
+  ChevronDown, ChevronUp, Search, CheckCircle, XCircle
 } from 'lucide-react';
 
 const ROLE_LABELS = { admin: 'Supervisor', pm: 'Program Manager', member: 'Lab Member', intern: 'Intern', external: 'NYU Contact' };
@@ -33,10 +33,13 @@ const EMPTY_CONTACT = {
 };
 
 const EMPTY_MEMBER = {
-  full_name: '', email: '', role: 'member',
+  first_name: '', last_name: '', email: '', password: '', role: 'member',
   can_assign_tasks: false, can_approve_sporadic: false,
   can_edit_meetings: false, can_view_finance: true,
-  can_edit_samples: true, can_view_contacts: false, can_add_members: false
+  can_edit_samples: true, can_view_contacts: false, can_add_members: false,
+  title: '', personal_email: '', phone: '', address: '',
+  emergency_contact_name: '', emergency_contact_phone: '',
+  emergency_contact_email: '', emergency_contact_relationship: '',
 };
 
 function formatPhone(raw) {
@@ -202,12 +205,12 @@ function AdminContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, o
 }
 
 // Each lab member row fetches its own contact data by full_name — completely isolated
-function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin, onUpdatePermissions, onUpdateRole, onUpdateLabStatus, onDelete, onChangePassword, rowIndex }) {
+function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin, onUpdatePermissions, onUpdateRole, onUpdateLabStatus, onDelete, onChangePassword, onUpdateOffboarding, isAlumni, rowIndex }) {
   const [extraData, setExtraData] = useState(null);
   const [showContactEdit, setShowContactEdit] = useState(false);
   const [showPerms, setShowPerms] = useState(false);
   const [form, setForm] = useState({
-    phone: '', personal_email: '', address: '',
+    phone: '', personal_email: '', address: '', dietary_restrictions: '',
     emergency_contact_name: '', emergency_contact_phone: '',
     emergency_contact_email: '', emergency_contact_relationship: '',
   });
@@ -248,6 +251,7 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
       phone: extraData?.phone || '',
       personal_email: extraData?.personal_email || '',
       address: extraData?.address || '',
+      dietary_restrictions: extraData?.dietary_restrictions || '',
       emergency_contact_name: extraData?.emergency_contact_name || '',
       emergency_contact_phone: extraData?.emergency_contact_phone || '',
       emergency_contact_email: extraData?.emergency_contact_email || '',
@@ -264,6 +268,7 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
         phone: form.phone || '',
         personal_email: form.personal_email || '',
         address: form.address || '',
+        dietary_restrictions: form.dietary_restrictions || '',
         emergency_contact_name: form.emergency_contact_name || '',
         emergency_contact_phone: form.emergency_contact_phone || '',
         emergency_contact_email: form.emergency_contact_email || '',
@@ -319,6 +324,9 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
         <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
           {extraData?.phone ? <a href={`tel:${extraData.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{extraData.phone}</a> : '—'}
         </td>
+        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {extraData?.dietary_restrictions || '—'}
+        </td>
         {canViewPersonalPhone && (
           <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '200px' }}>
             {extraData?.emergency_contact_name ? (
@@ -333,6 +341,32 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
         {canViewPersonalPhone && (
           <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>
             {extraData?.address || '—'}
+          </td>
+        )}
+        {isAlumni && canManage && (
+          <td style={{ padding: '10px 14px' }}>
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+              {[
+                { key: 'offboarding_slack', label: 'Slack' },
+                { key: 'offboarding_platform', label: 'Platform' },
+                { key: 'offboarding_gdrive', label: 'Gdrive' },
+              ].map(({ key, label }) => {
+                const done = !!member[key];
+                return (
+                  <button key={key} onClick={() => onUpdateOffboarding && onUpdateOffboarding(member.id, key, !done)}
+                    style={{
+                      padding: '3px 8px', borderRadius: '12px', cursor: 'pointer',
+                      border: `1px solid ${done ? '#A9DFBF' : '#FADBD8'}`,
+                      background: done ? '#EAF7F0' : '#FEF0F0',
+                      color: done ? '#27AE60' : '#E74C3C',
+                      fontSize: '11px', fontWeight: 600,
+                      display: 'flex', alignItems: 'center', gap: '3px'
+                    }}>
+                    {done ? <CheckCircle size={10} /> : <XCircle size={10} />}{label}
+                  </button>
+                );
+              })}
+            </div>
           </td>
         )}
         {canManage && (
@@ -391,6 +425,11 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
                     onBlur={e => setForm(p => ({ ...p, address: formatAddress(e.target.value) }))} />
                 </div>
               )}
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={labelStyle}>Dietary Restrictions</label>
+              <input style={inpStyle} type="text" value={form.dietary_restrictions || ''} placeholder="e.g. Vegetarian, Nut allergy, Gluten-free…"
+                onChange={e => setForm(p => ({ ...p, dietary_restrictions: e.target.value }))} />
             </div>
             <div style={{ marginBottom: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
               <span style={{ ...labelStyle, display: 'inline' }}>Emergency Contact</span>
@@ -459,6 +498,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   const [pwSaving, setPwSaving] = useState(false);
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState(false);
+  const [showFormPw, setShowFormPw] = useState(false);
 
   const canManage = userRole === 'admin' || (permissions?.can_add_members);
   const canViewPersonalPhone = userRole === 'admin' || userRole === 'pm' || profile?.full_name?.toLowerCase().startsWith('mia');
@@ -527,15 +567,17 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
     setSaving(true);
     setMemberError('');
     try {
-      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/members/invite`, {
+      const fullName = `${memberForm.first_name} ${memberForm.last_name}`.trim();
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/members/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: memberForm.email,
-          fullName: memberForm.full_name,
+          password: memberForm.password,
+          fullName,
           role: memberForm.role,
-          invitedById: userId,
-          invitedByName: profile?.full_name,
+          createdById: userId,
+          createdByName: profile?.full_name,
           permissions: {
             can_assign_tasks: memberForm.can_assign_tasks,
             can_approve_sporadic: memberForm.can_approve_sporadic,
@@ -544,21 +586,32 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
             can_edit_samples: memberForm.can_edit_samples,
             can_view_contacts: memberForm.can_view_contacts,
             can_add_members: memberForm.can_add_members,
-          }
+          },
+          contactInfo: {
+            title: memberForm.title,
+            personal_email: memberForm.personal_email,
+            phone: memberForm.phone,
+            address: memberForm.address,
+            emergency_contact_name: memberForm.emergency_contact_name,
+            emergency_contact_phone: memberForm.emergency_contact_phone,
+            emergency_contact_email: memberForm.emergency_contact_email,
+            emergency_contact_relationship: memberForm.emergency_contact_relationship,
+          },
         })
       });
       const result = await res.json();
       if (!res.ok) {
-        setMemberError(result.error || 'Failed to send invite');
+        setMemberError(result.error || 'Failed to create member');
         setSaving(false);
         return;
       }
+      await fetchData();
       setShowMemberForm(false);
       setMemberForm(EMPTY_MEMBER);
-      fetchData();
+      setShowFormPw(false);
     } catch (err) {
       setMemberError('Network error — please try again');
-      console.error('Invite error:', err);
+      console.error('Create member error:', err);
     }
     setSaving(false);
   }
@@ -586,8 +639,36 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   }
 
   async function handleUpdateLabStatus(memberId, status) {
-    await supabase.from('profiles').update({ lab_status: status }).eq('id', memberId);
+    const { error } = await supabase.from('profiles').update({ lab_status: status }).eq('id', memberId);
+    if (error) {
+      alert(`Could not update lab status: ${error.message}\n\nIf this keeps happening, run the SQL migration in Supabase:\nalter table profiles add column if not exists lab_status text default 'active';`);
+      return;
+    }
+
+    // Update local state immediately and sync with DB
     setMembers(prev => prev.map(m => m.id === memberId ? { ...m, lab_status: status } : m));
+    fetchData(true);
+
+    if (status === 'alumni') {
+      const member = members.find(m => m.id === memberId);
+      const name = member?.full_name || 'Member';
+      // Assign offboarding tasks to the PM, fall back to current user
+      const { data: pmData } = await supabase.from('profiles').select('id').eq('role', 'pm').limit(1);
+      const assignTo = pmData?.[0]?.id || userId;
+      const due = new Date();
+      due.setDate(due.getDate() + 7);
+      const dueDate = due.toISOString().split('T')[0];
+      await supabase.from('sporadic_tasks').insert([
+        { title: `Remove ${name} — Slack access`, category: 'MISC', response_type: 'checkbox', status: 'approved', assigned_to: assignTo, assigned_by: userId, due_date: dueDate },
+        { title: `Remove ${name} — Lab Platform access`, category: 'MISC', response_type: 'checkbox', status: 'approved', assigned_to: assignTo, assigned_by: userId, due_date: dueDate },
+        { title: `Remove ${name} — Google Drive access`, category: 'MISC', response_type: 'checkbox', status: 'approved', assigned_to: assignTo, assigned_by: userId, due_date: dueDate },
+      ]);
+    }
+  }
+
+  async function handleUpdateOffboarding(memberId, key, value) {
+    await supabase.from('profiles').update({ [key]: value }).eq('id', memberId);
+    setMembers(prev => prev.map(m => m.id === memberId ? { ...m, [key]: value } : m));
   }
 
   function setDefaultPermissions(role) {
@@ -664,6 +745,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   }
 
   const memberNames = new Set(members.map(m => m.full_name?.toLowerCase().trim()).filter(Boolean));
+  const memberEmails = new Set(members.map(m => m.email?.toLowerCase().trim()).filter(Boolean));
   const sortedMembers = [...members].sort((a, b) =>
     getMemberLastName(a.full_name).localeCompare(getMemberLastName(b.full_name)) ||
     (a.full_name || '').localeCompare(b.full_name || '')
@@ -705,6 +787,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   const pendingLabContacts = contacts.filter(c => {
     if (c.role === 'external') return false;
     if (memberNames.has(getRawName(c).toLowerCase().trim())) return false;
+    if (c.email && memberEmails.has(c.email.toLowerCase().trim())) return false;
     if (!labSearch) return true;
     const q = labSearch.toLowerCase();
     return [getDisplayName(c), c.email, c.phone, c.address, c.emergency_contact_name].some(v => v?.toLowerCase().includes(q));
@@ -805,7 +888,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                 <thead>
                   <tr style={{ background: 'var(--bg-secondary)' }}>
                     {[
-                      'First / Last Name', 'Work Email', 'Personal Email', 'Phone Number',
+                      'First / Last Name', 'Work Email', 'Personal Email', 'Phone Number', 'Dietary Restrictions',
                       ...(canViewPersonalPhone ? ['Emergency Contact'] : []),
                       ...(canViewPersonalPhone ? ['Address'] : []),
                       ...(canManage ? [''] : [])
@@ -867,9 +950,10 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                 <thead>
                   <tr style={{ background: 'var(--bg-secondary)' }}>
                     {[
-                      'First / Last Name', 'Work Email', 'Personal Email', 'Phone Number',
+                      'First / Last Name', 'Work Email', 'Personal Email', 'Phone Number', 'Dietary Restrictions',
                       ...(canViewPersonalPhone ? ['Emergency Contact'] : []),
                       ...(canViewPersonalPhone ? ['Address'] : []),
+                      ...(canManage ? ['Offboarding'] : []),
                       ...(canManage ? [''] : [])
                     ].map(h => (
                       <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', fontWeight: 600 }}>{h}</th>
@@ -892,6 +976,8 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                       onUpdateLabStatus={canManage ? handleUpdateLabStatus : null}
                       onDelete={setConfirmDeleteMember}
                       onChangePassword={setPasswordTarget}
+                      onUpdateOffboarding={canManage ? handleUpdateOffboarding : null}
+                      isAlumni={true}
                       rowIndex={i}
                     />
                   ))}
@@ -1020,78 +1106,138 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
       {/* Add Member Modal */}
       {showMemberForm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
-          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '560px', maxHeight: '85vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '580px', maxHeight: '90vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
             <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>Add Team Member</h2>
 
-            {memberError && (
-              <div style={{ padding: '10px 14px', background: '#FEF0F0', border: '1px solid #FADBD8', borderRadius: 'var(--radius-md)', color: 'var(--danger)', fontSize: '13px', marginBottom: '16px' }}>
-                {memberError}
-              </div>
-            )}
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
-              {[
-                { key: 'full_name', label: 'Full Name', full: true },
-                { key: 'email', label: 'Email', type: 'email' },
-              ].map(field => (
-                <div key={field.key} style={{ gridColumn: field.full ? '1 / -1' : 'auto' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
-                  <input type={field.type || 'text'} value={memberForm[field.key] || ''}
-                    onChange={e => setMemberForm(p => ({ ...p, [field.key]: e.target.value }))}
+            {/* Account */}
+            <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }}>Account</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+              {[{ key: 'first_name', label: 'First Name' }, { key: 'last_name', label: 'Last Name' }].map(f => (
+                <div key={f.key}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{f.label}</label>
+                  <input type="text" value={memberForm[f.key] || ''} onChange={e => setMemberForm(p => ({ ...p, [f.key]: e.target.value }))}
                     style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
                 </div>
               ))}
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Role</label>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {['admin', 'pm', 'member', 'intern'].map(role => (
-                    <button key={role} onClick={() => setDefaultPermissions(role)} style={{
-                      flex: 1, padding: '8px', borderRadius: 'var(--radius-md)',
-                      border: `2px solid ${memberForm.role === role ? (ROLE_COLORS[role]?.border || 'var(--purple-primary)') : 'var(--border)'}`,
-                      background: memberForm.role === role ? (ROLE_COLORS[role]?.bg || 'var(--purple-faint)') : 'transparent',
-                      color: memberForm.role === role ? (ROLE_COLORS[role]?.text || 'var(--purple-primary)') : 'var(--text-secondary)',
-                      fontWeight: memberForm.role === role ? 600 : 400, fontSize: '12px', cursor: 'pointer'
-                    }}>{ROLE_LABELS[role]}</button>
-                  ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Work Email</label>
+                <input type="email" value={memberForm.email || ''} onChange={e => setMemberForm(p => ({ ...p, email: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Password</label>
+                <div style={{ position: 'relative' }}>
+                  <input type={showFormPw ? 'text' : 'password'} value={memberForm.password || ''} onChange={e => setMemberForm(p => ({ ...p, password: e.target.value }))}
+                    placeholder="Min. 8 characters"
+                    style={{ width: '100%', padding: '8px 36px 8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                  <button type="button" onClick={() => setShowFormPw(v => !v)}
+                    style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+                    {showFormPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
                 </div>
+                {memberForm.password && memberForm.password.length < 8 && (
+                  <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--danger)' }}>{memberForm.password.length}/8 characters</p>
+                )}
               </div>
             </div>
-
-            <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '16px', marginBottom: '20px', border: '1px solid var(--border)' }}>
-              <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Permissions</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {PERMISSIONS.map(perm => (
-                  <div key={perm.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-                    <div>
-                      <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{perm.label}</p>
-                      <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>{perm.description}</p>
-                    </div>
-                    <button onClick={() => setMemberForm(p => ({ ...p, [perm.key]: !p[perm.key] }))}
-                      style={{
-                        width: '40px', height: '22px', borderRadius: '11px', border: 'none',
-                        background: memberForm[perm.key] ? 'var(--purple-primary)' : 'var(--border)',
-                        cursor: 'pointer', position: 'relative', transition: 'background 0.2s ease', flexShrink: 0
-                      }}>
-                      <div style={{
-                        width: '16px', height: '16px', borderRadius: '50%', background: 'white',
-                        position: 'absolute', top: '3px',
-                        left: memberForm[perm.key] ? '21px' : '3px',
-                        transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                      }} />
-                    </button>
-                  </div>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Role</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {['admin', 'pm', 'member', 'intern'].map(role => (
+                  <button key={role} type="button" onClick={() => setDefaultPermissions(role)} style={{
+                    flex: 1, padding: '8px', borderRadius: 'var(--radius-md)',
+                    border: `2px solid ${memberForm.role === role ? (ROLE_COLORS[role]?.border || 'var(--purple-primary)') : 'var(--border)'}`,
+                    background: memberForm.role === role ? (ROLE_COLORS[role]?.bg || 'var(--purple-faint)') : 'transparent',
+                    color: memberForm.role === role ? (ROLE_COLORS[role]?.text || 'var(--purple-primary)') : 'var(--text-secondary)',
+                    fontWeight: memberForm.role === role ? 600 : 400, fontSize: '12px', cursor: 'pointer'
+                  }}>{ROLE_LABELS[role]}</button>
                 ))}
               </div>
             </div>
 
+            {/* Contact Details */}
+            <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px', paddingTop: '4px', borderTop: '1px solid var(--border)' }}>Contact Details</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Personal Email</label>
+                <input type="email" value={memberForm.personal_email || ''} onChange={e => setMemberForm(p => ({ ...p, personal_email: e.target.value }))} placeholder="name@gmail.com"
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Phone</label>
+                <input type="text" value={memberForm.phone || ''} onChange={e => setMemberForm(p => ({ ...p, phone: formatPhone(e.target.value) }))} placeholder="xxx-xxx-xxxx"
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Title</label>
+                <input type="text" value={memberForm.title || ''} onChange={e => setMemberForm(p => ({ ...p, title: e.target.value }))} placeholder="e.g. PhD Student"
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Address</label>
+                <input type="text" value={memberForm.address || ''} onChange={e => setMemberForm(p => ({ ...p, address: e.target.value }))} onBlur={e => setMemberForm(p => ({ ...p, address: formatAddress(e.target.value) }))} placeholder="123 Main St, Apt 4B…"
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+            </div>
+
+            {/* Emergency Contact */}
+            <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px', paddingTop: '4px', borderTop: '1px solid var(--border)' }}>Emergency Contact <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
+              {[
+                { key: 'emergency_contact_name', label: 'Name', ph: 'Jane Doe' },
+                { key: 'emergency_contact_relationship', label: 'Relationship', ph: 'e.g. Parent' },
+                { key: 'emergency_contact_phone', label: 'Phone', ph: 'xxx-xxx-xxxx', fmt: formatPhone },
+                { key: 'emergency_contact_email', label: 'Email', ph: 'name@example.com' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{f.label}</label>
+                  <input type="text" value={memberForm[f.key] || ''} placeholder={f.ph}
+                    onChange={e => setMemberForm(p => ({ ...p, [f.key]: f.fmt ? f.fmt(e.target.value) : e.target.value }))}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+              ))}
+            </div>
+
+            {/* Permissions */}
+            <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px', paddingTop: '4px', borderTop: '1px solid var(--border)' }}>Permissions</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '24px' }}>
+              {PERMISSIONS.map(perm => (
+                <div key={perm.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{perm.label}</p>
+                    <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>{perm.description}</p>
+                  </div>
+                  <button type="button" onClick={() => setMemberForm(p => ({ ...p, [perm.key]: !p[perm.key] }))}
+                    style={{ width: '40px', height: '22px', borderRadius: '11px', border: 'none', background: memberForm[perm.key] ? 'var(--purple-primary)' : 'var(--border)', cursor: 'pointer', position: 'relative', transition: 'background 0.2s ease', flexShrink: 0 }}>
+                    <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: 'white', position: 'absolute', top: '3px', left: memberForm[perm.key] ? '21px' : '3px', transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {memberError && (
+              <div style={{ padding: '10px 14px', background: '#FEF0F0', border: '1px solid #FADBD8', borderRadius: 'var(--radius-md)', color: 'var(--danger)', fontSize: '13px', marginBottom: '12px' }}>
+                {memberError}
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button onClick={() => { setShowMemberForm(false); setMemberForm(EMPTY_MEMBER); setMemberError(''); }} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500 }}>Cancel</button>
-              <button onClick={handleAddMember} disabled={saving || !memberForm.full_name || !memberForm.email} style={{
-                padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none',
-                background: saving || !memberForm.full_name || !memberForm.email ? 'var(--border)' : 'var(--purple-primary)',
-                color: saving || !memberForm.full_name || !memberForm.email ? 'var(--text-muted)' : 'white',
-                fontWeight: 600
-              }}>{saving ? 'Sending...' : 'Send Invite'}</button>
+              <button type="button" onClick={() => { setShowMemberForm(false); setMemberForm(EMPTY_MEMBER); setMemberError(''); setShowFormPw(false); }}
+                style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+              {(() => {
+                const isDisabled = saving || !memberForm.first_name || !memberForm.last_name || !memberForm.email || !memberForm.password || memberForm.password.length < 8;
+                return (
+                  <button type="button" onClick={handleAddMember} disabled={isDisabled}
+                    style={{
+                      padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none',
+                      background: isDisabled ? 'var(--border)' : 'var(--purple-primary)',
+                      color: isDisabled ? 'var(--text-muted)' : 'white',
+                      fontWeight: 600, cursor: isDisabled ? 'not-allowed' : 'pointer'
+                    }}>{saving ? 'Creating…' : 'Create Member'}</button>
+                );
+              })()}
             </div>
           </div>
         </div>

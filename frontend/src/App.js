@@ -13,6 +13,7 @@ import Login from './pages/Login';
 import SetNewPassword from './pages/SetNewPassword';
 import Onboarding from './pages/Onboarding';
 import Tasks2 from './pages/Tasks2';
+import LabPoliciesSOPs from './pages/LabPoliciesSOPs';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
@@ -187,6 +188,7 @@ export default function App() {
         {currentPage === 'meetings' && <LabMeetings userRole={userRole} userId={user.id} profile={profile} permissions={permissions} />}
         {currentPage === 'finance' && permissions.can_view_finance && <Finance userRole={userRole} />}
         {currentPage === 'inventory' && <SampleInventory userRole={userRole} userId={user.id} profile={profile} />}
+        {currentPage === 'policies' && <LabPoliciesSOPs userRole={userRole} userId={user.id} />}
         {currentPage === 'compliance' && <Compliance userRole={userRole} userId={user.id} profile={profile} />}
         {currentPage === 'contacts' && (permissions.can_view_contacts || userRole === 'admin' || userRole === 'pm') && <LabContacts userRole={userRole} userId={user.id} profile={profile} permissions={permissions} />}
         {currentPage === 'contacts' && !permissions.can_view_contacts && userRole !== 'admin' && userRole !== 'pm' && (
@@ -194,7 +196,7 @@ export default function App() {
             You don't have permission to view the contact directory.
           </div>
         )}
-        {!['dashboard', 'tasks2', 'vacation', 'meetings', 'finance', 'inventory', 'compliance', 'contacts'].includes(currentPage) && (
+        {!['dashboard', 'tasks2', 'vacation', 'meetings', 'finance', 'inventory', 'policies', 'compliance', 'contacts'].includes(currentPage) && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--text-muted)', fontSize: '15px' }}>
             This system is coming soon.
           </div>

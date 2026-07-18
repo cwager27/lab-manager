@@ -67,25 +67,34 @@ CREATE TABLE IF NOT EXISTS task_responses (
 
 -- 5. sporadic_tasks (one-off tasks)
 CREATE TABLE IF NOT EXISTS sporadic_tasks (
-  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  title         text NOT NULL,
-  description   text,
-  category      text DEFAULT 'MISC',
-  response_type text DEFAULT 'yes_no',
-  assigned_to   uuid REFERENCES profiles(id),
-  assigned_by   uuid REFERENCES profiles(id),
-  due_date      date,
-  status        text DEFAULT 'requested',
-  completed_at  timestamptz,
+  id                       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  title                    text NOT NULL,
+  description              text,
+  category                 text DEFAULT 'MISC',
+  response_type            text DEFAULT 'yes_no',
+  assigned_to              uuid REFERENCES profiles(id),
+  assigned_by              uuid REFERENCES profiles(id),
+  due_date                 date,
+  status                   text DEFAULT 'requested',
+  response                 text,
+  photo_url                text,
+  submitted_at             timestamptz,
+  completed_at             timestamptz,
   show_on_public_dashboard boolean DEFAULT false,
-  file_url      text,
-  notes         text,
-  created_at    timestamptz DEFAULT now()
+  file_url                 text,
+  notes                    text,
+  created_at               timestamptz DEFAULT now()
 );
 
 -- Migration (run in Supabase SQL editor if table already exists):
--- ALTER TABLE sporadic_tasks ADD COLUMN IF NOT EXISTS completed_at timestamptz;
--- ALTER TABLE sporadic_tasks ADD COLUMN IF NOT EXISTS show_on_public_dashboard boolean DEFAULT false;
+ALTER TABLE sporadic_tasks ADD COLUMN IF NOT EXISTS description text;
+ALTER TABLE sporadic_tasks ADD COLUMN IF NOT EXISTS response text;
+ALTER TABLE sporadic_tasks ADD COLUMN IF NOT EXISTS photo_url text;
+ALTER TABLE sporadic_tasks ADD COLUMN IF NOT EXISTS submitted_at timestamptz;
+ALTER TABLE sporadic_tasks ADD COLUMN IF NOT EXISTS completed_at timestamptz;
+ALTER TABLE sporadic_tasks ADD COLUMN IF NOT EXISTS show_on_public_dashboard boolean DEFAULT false;
+ALTER TABLE sporadic_tasks ADD COLUMN IF NOT EXISTS file_url text;
+ALTER TABLE sporadic_tasks ADD COLUMN IF NOT EXISTS notes text;
 -- ALTER TABLE tasks_definitions ADD COLUMN IF NOT EXISTS response_options jsonb;
 -- ALTER TABLE tasks_definitions ADD COLUMN IF NOT EXISTS sub_tasks jsonb;
 

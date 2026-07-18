@@ -279,8 +279,11 @@ export default function SporadicTasks({ userRole, userId, profile }) {
           <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '520px', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
             <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>{canManage ? 'Create Sporadic Task' : 'Request a Task'}</h2>
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Task Title</label>
-              <input value={newTask.title} onChange={e => setNewTask(p => ({ ...p, title: e.target.value }))} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Task Name</label>
+                {(() => { const wc = newTask.title.trim() ? newTask.title.trim().split(/\s+/).length : 0; return wc > 8 ? <span style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 600 }}>⚠ {wc}/8 words — keep it short</span> : wc > 0 ? <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{wc}/8 words</span> : null; })()}
+              </div>
+              <input value={newTask.title} onChange={e => setNewTask(p => ({ ...p, title: e.target.value }))} placeholder="Short task name (8 words max)" style={{ width: '100%', padding: '10px 12px', border: `1px solid ${newTask.title.trim().split(/\s+/).filter(Boolean).length > 8 ? '#f59e0b' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
             <div style={{ marginBottom: '16px' }}>
               <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Description (optional)</label>

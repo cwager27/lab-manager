@@ -11,20 +11,21 @@ import {
 const API = process.env.REACT_APP_BACKEND_URL;
 
 const FREQ_COLORS = {
-  daily:     { bg: '#EBF5FB', text: '#2980B9', border: '#AED6F1' },
-  weekly:    { bg: '#EAF7F0', text: '#27AE60', border: '#A9DFBF' },
-  biweekly:  { bg: '#FEF9E7', text: '#F39C12', border: '#FAD7A0' },
-  monthly:   { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
-  quarterly: { bg: '#FDEBD0', text: '#D35400', border: '#F0B27A' },
-  yearly:    { bg: '#FDEDEC', text: '#E74C3C', border: '#F1948A' },
+  daily:      { bg: '#EBF5FB', text: '#2980B9', border: '#AED6F1' },
+  weekly:     { bg: '#EAF7F0', text: '#27AE60', border: '#A9DFBF' },
+  biweekly:   { bg: '#FEF9E7', text: '#F39C12', border: '#FAD7A0' },
+  monthly:    { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
+  bimonthly:  { bg: '#E8F8F5', text: '#1A7A6A', border: '#A2D9CE' },
+  quarterly:  { bg: '#FDEBD0', text: '#D35400', border: '#F0B27A' },
+  yearly:     { bg: '#FDEDEC', text: '#E74C3C', border: '#F1948A' },
 };
-const ALL_FREQS = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'];
+const ALL_FREQS = ['daily', 'weekly', 'biweekly', 'monthly', 'bimonthly', 'quarterly', 'yearly'];
 
-const FREQ_ORDER = ['yearly', 'quarterly', 'monthly', 'biweekly', 'weekly', 'daily'];
-const FREQ_LABEL = { yearly: 'Yearly', quarterly: 'Quarterly', monthly: 'Monthly', biweekly: 'Biweekly', weekly: 'Weekly', daily: 'Daily' };
+const FREQ_ORDER = ['yearly', 'quarterly', 'bimonthly', 'monthly', 'biweekly', 'weekly', 'daily'];
+const FREQ_LABEL = { yearly: 'Yearly', quarterly: 'Quarterly', bimonthly: 'Bimonthly', monthly: 'Monthly', biweekly: 'Biweekly', weekly: 'Weekly', daily: 'Daily' };
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const LOOKAHEAD = { daily: 7, weekly: 14, biweekly: 30, monthly: 60, quarterly: 90, yearly: 90 };
+const LOOKAHEAD = { daily: 7, weekly: 14, biweekly: 30, monthly: 60, bimonthly: 75, quarterly: 90, yearly: 90 };
 
 // ── Style helpers ─────────────────────────────────────────────────────────────
 
@@ -189,9 +190,28 @@ function weekItems() {
   });
 }
 
+function bimonthlyItems() {
+  const now = new Date();
+  const items = [];
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i * 2, 1);
+    const y = d.getFullYear(); const m = d.getMonth();
+    const m2 = m + 1;
+    const ld = new Date(y, m2 + 1, 0).getDate();
+    items.push({
+      key: `${y}-${String(m + 1).padStart(2,'0')}`,
+      label: `${MONTHS_SHORT[m]}–${MONTHS_SHORT[m2]} ${y}`,
+      startISO: `${y}-${String(m + 1).padStart(2,'0')}-01`,
+      endISO: `${y}-${String(m2 + 1).padStart(2,'0')}-${ld}`,
+    });
+  }
+  return items;
+}
+
 function pickerFor(freq, value, onChange) {
   if (freq === 'yearly') return <RangeList items={yearItems()} value={value} onChange={onChange} />;
   if (freq === 'quarterly') return <RangeList items={quarterItems()} value={value} onChange={onChange} />;
+  if (freq === 'bimonthly') return <RangeList items={bimonthlyItems()} value={value} onChange={onChange} />;
   if (freq === 'monthly') return <RangeList items={monthItems()} value={value} onChange={onChange} />;
   if (freq === 'weekly') return <RangeList items={weekItems()} value={value} onChange={onChange} />;
   return <DateRangeInputs value={value} onChange={onChange} />;
@@ -202,7 +222,8 @@ function pickerFor(freq, value, onChange) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Tasks2({ userRole, userId, profile: myProfile }) {
-  const [tab, setTab] = useState('view-all');
+  const canManage = userRole === 'admin' || userRole === 'pm';
+  const [tab, setTab] = useState(canManage ? 'view-all' : 'my-tasks');
 
   // Shared data
   const [tasks, setTasks] = useState([]);
@@ -239,6 +260,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const [vatCategory, setVatCategory] = useState('MISC');
   const [vatFreq, setVatFreq] = useState('daily');
   const [vatSearch, setVatSearch] = useState('');
+  const [vatExpandedGroups, setVatExpandedGroups] = useState(new Set());
+  const [vatExpandedAuditAreas, setVatExpandedAuditAreas] = useState(new Set());
   const [vatLoading, setVatLoading] = useState(false);
   const [vatLoaded, setVatLoaded] = useState(false);
   const [maintChecks, setMaintChecks] = useState(() => {
@@ -257,27 +280,25 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   // ── Assigned Tasks log state ──────────────────────────────────────────────
   const [assignedOccs, setAssignedOccs] = useState([]);
   const [assignedLoading, setAssignedLoading] = useState(false);
-  const [assignedFrom, setAssignedFrom] = useState(() => {
-    const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0];
-  });
-  const [assignedTo, setAssignedTo] = useState(() => {
-    const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString().split('T')[0];
-  });
+  const [unassignedOccs, setUnassignedOccs] = useState([]);
+  const [unassignedOccsLoading, setUnassignedOccsLoading] = useState(false);
+  const [unassignedTimeTab, setUnassignedTimeTab] = useState('month');
+  const [unassignedMinimized, setUnassignedMinimized] = useState(false);
+  const [assignedPersonTab, setAssignedPersonTab] = useState('all');
+  const [assignedTimePeriod, setAssignedTimePeriod] = useState('all');
+  const [assignedFrom] = useState(() => new Date().toISOString().split('T')[0]);
+  const [assignedTo] = useState(() => `${new Date().getFullYear()}-12-31`);
   const [editingOccId, setEditingOccId] = useState(null);
   const [editAssigneeId, setEditAssigneeId] = useState('');
   const [editSaving, setEditSaving] = useState(false);
   const [remindingId, setRemindingId] = useState(null);
   const [remindedIds, setRemindedIds] = useState(new Set());
 
-  // ── Performance report state ──────────────────────────────────────────────
-  const [reportPeriod, setReportPeriod] = useState('current');
-  const [reportRows, setReportRows] = useState([]);
-  const [reportLoading, setReportLoading] = useState(false);
-
   // ── Productivity state ────────────────────────────────────────────────────
   const [prodPeriod, setProdPeriod] = useState('current');
   const [prodRows, setProdRows] = useState([]);
   const [prodLoading, setProdLoading] = useState(false);
+  const [prodDirty, setProdDirty] = useState(0);
   const [prodSelected, setProdSelected] = useState(new Set());
   const [prodDropdownOpen, setProdDropdownOpen] = useState(false);
   const [prodDetailPerson, setProdDetailPerson] = useState(null);
@@ -330,10 +351,12 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   // ── One-off Tasks state ───────────────────────────────────────────────────
   const [oneOffTasks, setOneOffTasks] = useState([]);
   const [oneOffLoading, setOneOffLoading] = useState(false);
-  const [oneOffForm, setOneOffForm] = useState({ title: '', assigneeIds: [], dueDate: '', showOnPublic: false });
+  const [oneOffForm, setOneOffForm] = useState({ title: '', description: '', assigneeIds: [], dueDate: '', showOnPublic: false });
   const [oneOffSaving, setOneOffSaving] = useState(false);
   const [oneOffError, setOneOffError] = useState('');
   const [confirmDeleteOneOff, setConfirmDeleteOneOff] = useState(null);
+  const [oneOffPersonTab, setOneOffPersonTab] = useState('all');
+  const [oneOffSearch, setOneOffSearch] = useState('');
 
   // ── Load initial data ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -346,59 +369,81 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   useEffect(() => { if (tab === 'calendar') loadCalendar(); }, [tab, calYear, calMonth]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (tab === 'unassigned') loadUnassigned(); }, [tab]);
   useEffect(() => { if (tab === 'view-all' && !vatLoaded) loadVatData(); }, [tab, vatLoaded]); // eslint-disable-line
-  useEffect(() => { if (tab === 'assigned') loadAssignedTasks(assignedFrom, assignedTo); }, [tab, assignedFrom, assignedTo]); // eslint-disable-line
-  useEffect(() => { if (tab === 'assigned') loadReport(reportPeriod, assignedFrom, assignedTo); }, [tab, reportPeriod, assignedFrom, assignedTo]); // eslint-disable-line
-  useEffect(() => { if (tab === 'productivity') loadProductivity(prodPeriod); }, [tab, prodPeriod, profiles.length]); // eslint-disable-line
+  useEffect(() => { if (tab === 'assigned') { loadAssignedTasks(assignedFrom, assignedTo); loadUnassignedOccs(); } }, [tab, assignedFrom, assignedTo]); // eslint-disable-line
+  useEffect(() => { if (tab === 'productivity') loadProductivity(prodPeriod); }, [tab, prodPeriod, profiles.length, prodDirty]); // eslint-disable-line
   useEffect(() => { if (tab === 'oneoff') loadOneOffTab(); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (tab === 'my-tasks' && userId) { loadMyTasks(); if (!vatLoaded) loadVatData(); } }, [tab, userId]); // eslint-disable-line
-  useEffect(() => { if (tab === 'my-tasks' && myTaskSubTab === 'productivity') loadProductivity(prodPeriod); }, [tab, myTaskSubTab, prodPeriod]); // eslint-disable-line
+  useEffect(() => { if (tab === 'my-tasks' && myTaskSubTab === 'productivity') loadProductivity(prodPeriod); }, [tab, myTaskSubTab, prodPeriod, prodDirty]); // eslint-disable-line
 
-  // Save vatResponses to localStorage whenever they change so completions survive page reloads
+  // Save vatResponses to localStorage — only real completions (keys scoped to a due date via '::')
+  // View-all demo uses bare taskId keys and must not persist across sessions
   useEffect(() => {
-    if (!userId || !Object.keys(vatResponses).length) return;
-    try { localStorage.setItem(`vat_${userId}`, JSON.stringify(vatResponses)); } catch {}
+    if (!userId) return;
+    const toSave = Object.fromEntries(Object.entries(vatResponses).filter(([k]) => k.includes('::')));
+    if (!Object.keys(toSave).length) return;
+    try { localStorage.setItem(`vat_${userId}`, JSON.stringify(toSave)); } catch {}
   }, [vatResponses, userId]); // eslint-disable-line
+
+  // Restore my-tasks completions from localStorage on mount
+  useEffect(() => {
+    if (!userId) return;
+    try {
+      const saved = localStorage.getItem(`vat_${userId}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Object.keys(parsed).length) setVatResponses(parsed);
+      }
+    } catch {}
+  }, [userId]); // eslint-disable-line
 
   // Auto-persist completed task groups to DB
   useEffect(() => {
     if (!myTaskOccs.length || !vatTasks.length) return;
-    const occByDefId = {};
-    myTaskOccs.forEach(occ => { if (occ.task_def?.id) occByDefId[occ.task_def.id] = occ; });
-    const myDefIds = new Set(Object.keys(occByDefId));
-    const myGroupKeys = new Set();
-    vatTasks.forEach(t => { if (myDefIds.has(t.id)) myGroupKeys.add(t.group_name || t.title || t.id); });
+    // Build occsByDefAndDate: taskDefId → { dueDate → occ }
+    const occsByDefAndDate = {};
+    myTaskOccs.forEach(occ => {
+      if (!occ.task_def?.id) return;
+      if (!occsByDefAndDate[occ.task_def.id]) occsByDefAndDate[occ.task_def.id] = {};
+      occsByDefAndDate[occ.task_def.id][occ.due_date] = occ;
+    });
+    const myDefIds = new Set(Object.keys(occsByDefAndDate));
+    // Build per-date group map: "groupName__dueDate" → { groupName, dueDate, tasks }
     const groupMap = new Map();
     vatTasks.forEach(t => {
-      const gKey = t.group_name || t.title || t.id;
-      if (!myGroupKeys.has(gKey)) return;
-      if (!groupMap.has(gKey)) groupMap.set(gKey, { groupName: t.group_name || '', tasks: [] });
-      groupMap.get(gKey).tasks.push(t);
+      if (!myDefIds.has(t.id)) return;
+      const gName = t.group_name || t.title || t.id;
+      Object.keys(occsByDefAndDate[t.id] || {}).forEach(dueDate => {
+        const mapKey = `${gName}__${dueDate}`;
+        if (!groupMap.has(mapKey)) groupMap.set(mapKey, { groupName: gName, dueDate, tasks: [] });
+        groupMap.get(mapKey).tasks.push(t);
+      });
     });
     const toUpdate = [];
     groupMap.forEach(group => {
-      const isLiveCell = group.groupName === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time';
+      const { groupName, dueDate, tasks } = group;
+      const isLiveCell = groupName === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time';
       let complete = false;
+      const vKey = id => `${id}::${dueDate}`;
       if (isLiveCell) {
-        const lcParent = group.tasks.find(t => t.response_type === 'yes_no');
-        const lcResp = lcParent ? vatResponses[lcParent.id]?.response : null;
+        const lcParent = tasks.find(t => t.response_type === 'yes_no');
+        const lcResp = lcParent ? vatResponses[vKey(lcParent.id)]?.response : null;
         if (lcResp === 'no') complete = true;
-        else if (lcResp === 'yes') complete = group.tasks.filter(t => t.response_type === 'checkbox').every(t => vatResponses[t.id]?.response === 'checked');
+        else if (lcResp === 'yes') complete = tasks.filter(t => t.response_type === 'checkbox').every(t => vatResponses[vKey(t.id)]?.response === 'checked');
       } else {
-        const myAssigned = group.tasks.filter(t => myDefIds.has(t.id));
+        const myAssigned = tasks.filter(t => myDefIds.has(t.id));
         complete = myAssigned.length > 0 && myAssigned.every(t => {
-          const r = vatResponses[t.id]?.response;
+          const r = vatResponses[vKey(t.id)]?.response;
           if (!r) return false;
-          // SOP task marked 'no' requires exception to be submitted first
           if (t.sop_trigger && r === 'no' && !sopExceptions[t.id]?.submitted) return false;
           if (!t.sub_tasks?.length) return true;
           const trigger = t.sub_tasks[0]?.trigger || 'always';
           const triggered = trigger === 'always' || (trigger.startsWith('custom:') ? r === trigger.slice(7) : r === trigger);
-          return !triggered || t.sub_tasks.every(st => vatResponses[`${t.id}_sub_${st.id}`]?.response === 'checked');
+          return !triggered || t.sub_tasks.every(st => vatResponses[`${t.id}_sub_${st.id}::${dueDate}`]?.response === 'checked');
         });
       }
       if (complete) {
-        group.tasks.forEach(t => {
-          const occ = occByDefId[t.id];
+        tasks.forEach(t => {
+          const occ = occsByDefAndDate[t.id]?.[dueDate];
           if (occ && occ.status !== 'done' && !persistedCompletionsRef.current.has(occ.id)) {
             persistedCompletionsRef.current.add(occ.id);
             toUpdate.push(occ.id);
@@ -408,8 +453,13 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     });
     if (toUpdate.length > 0) {
       const now = new Date().toISOString();
-      toUpdate.forEach(id => supabase.from('task_occurrences').update({ status: 'done', completed_at: now }).eq('id', id));
-      setMyTaskOccs(prev => prev.map(occ => toUpdate.includes(occ.id) ? { ...occ, status: 'done', completed_at: now } : occ));
+      (async () => {
+        await Promise.all(toUpdate.map(id =>
+          supabase.from('task_occurrences').update({ status: 'done', completed_at: now }).eq('id', id)
+        ));
+        setMyTaskOccs(prev => prev.map(occ => toUpdate.includes(occ.id) ? { ...occ, status: 'done', completed_at: now } : occ));
+        setProdDirty(d => d + 1);
+      })();
     }
   }, [vatResponses, sopExceptions]); // eslint-disable-line
 
@@ -474,6 +524,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       title: src.title || '',
       category: src.category || defaults?.category || 'MISC',
       frequency: src.frequency || defaults?.frequency || 'weekly',
+      audit_area: src.audit_area || defaults?.audit_area || '',
+      newAuditAreaMode: false,
       group_name: src.group_name || defaults?.group_name || '',
       newGroupMode: false,
       sort_order: src.sort_order ?? 0,
@@ -510,6 +562,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       title: taskDefForm.title.trim(),
       category: taskDefForm.category,
       frequency: taskDefForm.frequency,
+      audit_area: taskDefForm.audit_area.trim() || null,
       group_name: taskDefForm.group_name.trim() || null,
       sort_order: parseInt(taskDefForm.sort_order) || 0,
       sop_trigger: taskDefForm.sop_trigger,
@@ -562,14 +615,33 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
               <input value={f.title} onChange={e => tdf({ title: e.target.value })} onBlur={e => tdf({ title: e.target.value.trim().replace(/\b\w/g, c => c.toUpperCase()) })} placeholder="Task title…" style={inputStyle} />
             </div>
             {/* Category + Frequency */}
+            {(() => {
+              const existingCats = [...new Set(['MISC', 'PM', 'Equipment', ...vatTasks.map(t => t.category).filter(Boolean)])].sort((a, b) => {
+                const order = ['MISC', 'PM', 'Equipment'];
+                const ai = order.indexOf(a); const bi = order.indexOf(b);
+                if (ai >= 0 && bi >= 0) return ai - bi;
+                if (ai >= 0) return -1; if (bi >= 0) return 1;
+                return a.localeCompare(b);
+              });
+              const showNewCat = f.newCategoryMode;
+              const catSelectVal = showNewCat ? '__new__' : (f.category || '');
+              return (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Category</label>
-                <select value={f.category} onChange={e => tdf({ category: e.target.value })} style={inputStyle}>
-                  <option value="MISC">MISC</option>
-                  <option value="PM">PM</option>
-                  <option value="Equipment">Equipment</option>
+                <select value={catSelectVal} onChange={e => {
+                  if (e.target.value === '__new__') tdf({ category: '', newCategoryMode: true });
+                  else tdf({ category: e.target.value, newCategoryMode: false });
+                }} style={inputStyle}>
+                  <option value="">Select category…</option>
+                  {existingCats.map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="__new__">+ New category…</option>
                 </select>
+                {showNewCat && (
+                  <input value={f.category} onChange={e => tdf({ category: e.target.value })}
+                    onBlur={e => tdf({ category: e.target.value.trim().replace(/\b\w/g, c => c.toUpperCase()) })}
+                    placeholder="New category name…" autoFocus style={{ ...inputStyle, marginTop: 6 }} />
+                )}
               </div>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Frequency</label>
@@ -578,34 +650,52 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                 </select>
               </div>
             </div>
-            {/* Group */}
+              );
+            })()}
+            {/* Audit Area */}
             {(() => {
-              const existingGroups = [...new Set(vatTasks.filter(t => t.group_name && t.category === f.category && t.frequency === f.frequency).map(t => t.group_name))].sort();
+              const existingAuditAreas = [...new Set(vatTasks.filter(t => t.audit_area && t.category === f.category).map(t => t.audit_area))].sort();
+              const showNewAA = f.newAuditAreaMode;
+              const aaSelectVal = showNewAA ? '__new__' : (f.audit_area || '');
+              return (
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Audit Area <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'var(--text-muted)', fontSize: 11 }}>(optional top-level grouping)</span></label>
+              <select value={aaSelectVal} onChange={e => {
+                if (e.target.value === '__new__') tdf({ audit_area: '', newAuditAreaMode: true });
+                else tdf({ audit_area: e.target.value, newAuditAreaMode: false });
+              }} style={inputStyle}>
+                <option value="">No audit area</option>
+                {existingAuditAreas.map(a => <option key={a} value={a}>{a}</option>)}
+                <option value="__new__">+ New audit area…</option>
+              </select>
+              {showNewAA && (
+                <input value={f.audit_area} onChange={e => tdf({ audit_area: e.target.value })}
+                  onBlur={e => tdf({ audit_area: e.target.value.trim().replace(/\b\w/g, c => c.toUpperCase()) })}
+                  placeholder="New audit area name…" autoFocus style={{ ...inputStyle, marginTop: 6 }} />
+              )}
+            </div>
+              );
+            })()}
+            {/* Section (previously Group Name) */}
+            {(() => {
+              const existingSections = [...new Set(vatTasks.filter(t => t.group_name && t.category === f.category && (!f.audit_area || t.audit_area === f.audit_area)).map(t => t.group_name))].sort();
               const showNewInput = f.newGroupMode;
               const selectVal = showNewInput ? '__new__' : (f.group_name || '');
               return (
             <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Group Name</label>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Section <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'var(--text-muted)', fontSize: 11 }}>(groups tasks under a heading)</span></label>
               <select value={selectVal} onChange={e => {
-                if (e.target.value === '__new__') {
-                  tdf({ group_name: '', newGroupMode: true });
-                } else {
-                  tdf({ group_name: e.target.value, newGroupMode: false });
-                }
+                if (e.target.value === '__new__') tdf({ group_name: '', newGroupMode: true });
+                else tdf({ group_name: e.target.value, newGroupMode: false });
               }} style={inputStyle}>
-                <option value="">No group</option>
-                {existingGroups.map(g => <option key={g} value={g}>{g}</option>)}
-                <option value="__new__">+ Add new group…</option>
+                <option value="">No section</option>
+                {existingSections.map(g => <option key={g} value={g}>{g}</option>)}
+                <option value="__new__">+ New section…</option>
               </select>
               {showNewInput && (
-                <input
-                  value={f.group_name}
-                  onChange={e => tdf({ group_name: e.target.value })}
+                <input value={f.group_name} onChange={e => tdf({ group_name: e.target.value })}
                   onBlur={e => tdf({ group_name: e.target.value.trim().replace(/\b\w/g, c => c.toUpperCase()) })}
-                  placeholder="New group name…"
-                  autoFocus
-                  style={{ ...inputStyle, marginTop: 6 }}
-                />
+                  placeholder="New section name…" autoFocus style={{ ...inputStyle, marginTop: 6 }} />
               )}
             </div>
               );
@@ -761,7 +851,15 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
   // ── Scope tree helpers ────────────────────────────────────────────────────
 
-  const CAT_ORDER = ['MISC', 'PM', 'Equipment'];
+  const CAT_ORDER = (() => {
+    const known = new Set(['MISC', 'PM', 'Equipment', ...tasks.map(t => t.category).filter(Boolean)]);
+    return [...known].sort((a, b) => {
+      const pri = { MISC: 0, PM: 1, Equipment: 999 };
+      const ap = pri[a] ?? 100; const bp = pri[b] ?? 100;
+      if (ap !== bp) return ap - bp;
+      return a.localeCompare(b);
+    });
+  })();
 
   function buildTree() {
     const catFreqs = {};
@@ -867,16 +965,58 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
   async function loadOccurrences(rangesOverride) {
     const rangesToUse = rangesOverride || dateRanges;
-    const ranges = Object.values(rangesToUse).filter(r => r?.start && r?.end);
-    if (!ranges.length || !selectedTaskIds.size) return;
-    const start = ranges.map(r => r.start).sort()[0];
-    const end = ranges.map(r => r.end).sort().reverse()[0];
-    const ids = [...selectedTaskIds].join(',');
+    if (!selectedTaskIds.size) return;
     setOccsLoading(true);
-    const data = await fetch(`${API}/api/tasks2/occurrences?taskIds=${ids}&start=${start}&end=${end}`)
-      .then(r => r.json()).catch(() => []);
-    setOccs(data);
-    setCheckedIds(new Set(data.map(o => o.id)));
+
+    // Group selected task IDs by frequency using `tasks` (always loaded at mount)
+    const tasksByFreq = {};
+    tasks.forEach(t => {
+      if (!selectedTaskIds.has(t.id)) return;
+      const freq = t.frequency || 'daily';
+      if (!tasksByFreq[freq]) tasksByFreq[freq] = [];
+      tasksByFreq[freq].push(t.id);
+    });
+
+    // Fallback: if tasks aren't loaded yet, use a single combined range
+    if (Object.keys(tasksByFreq).length === 0) {
+      const ranges = Object.values(rangesToUse).filter(r => r?.start && r?.end);
+      if (ranges.length) {
+        const start = ranges.map(r => r.start).sort()[0];
+        const end = ranges.map(r => r.end).sort().reverse()[0];
+        await fetch(`${API}/api/tasks2/ensure-occurrences`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ taskIds: [...selectedTaskIds], start, end }),
+        }).catch(() => {});
+        const data = await fetch(`${API}/api/tasks2/occurrences?taskIds=${[...selectedTaskIds].join(',')}&start=${start}&end=${end}`)
+          .then(r => r.json()).catch(() => []);
+        setOccs(data);
+        setCheckedIds(new Set(data.map(o => o.id)));
+      }
+      setOccsLoading(false);
+      setStep(5);
+      return;
+    }
+
+    // Ensure occurrences exist in DB (backfills gaps for past/new tasks), then fetch
+    const allData = [];
+    for (const [freq, taskIds] of Object.entries(tasksByFreq)) {
+      const range = rangesToUse[freq];
+      if (!range?.start || !range?.end) continue;
+      // Fill any missing occurrence rows (e.g. past dates or newly-created tasks)
+      await fetch(`${API}/api/tasks2/ensure-occurrences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskIds, start: range.start, end: range.end }),
+      }).catch(() => {});
+      const fetched = await fetch(
+        `${API}/api/tasks2/occurrences?taskIds=${taskIds.join(',')}&start=${range.start}&end=${range.end}`
+      ).then(r => r.json()).catch(() => []);
+      allData.push(...fetched);
+    }
+
+    setOccs(allData);
+    setCheckedIds(new Set(allData.map(o => o.id)));
     setOccsLoading(false);
     setStep(5);
   }
@@ -936,12 +1076,27 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     setAssignedLoading(true);
     const { data } = await supabase
       .from('task_occurrences')
-      .select('id, due_date, status, assigned_to, completed_at, notes, task_def:tasks_definitions(id, title, category, frequency, group_name), assignee:profiles!assigned_to(id, full_name)')
+      .select('id, due_date, status, assigned_to, completed_at, notes, task_def:tasks_definitions(id, title, category, frequency, audit_area, group_name), assignee:profiles!assigned_to(id, full_name)')
       .gte('due_date', from)
       .lte('due_date', to)
       .order('due_date');
     setAssignedOccs(data || []);
     setAssignedLoading(false);
+  }
+
+  async function loadUnassignedOccs() {
+    setUnassignedOccsLoading(true);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const endOfYear = `${new Date().getFullYear()}-12-31`;
+    const { data } = await supabase
+      .from('task_occurrences')
+      .select('id, due_date, task_def:tasks_definitions(id, title, category, frequency, audit_area, group_name)')
+      .is('assigned_to', null)
+      .gte('due_date', todayStr)
+      .lte('due_date', endOfYear)
+      .order('due_date');
+    setUnassignedOccs(data || []);
+    setUnassignedOccsLoading(false);
   }
 
   async function saveAssignment(occId) {
@@ -960,6 +1115,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     }));
     setEditingOccId(null);
     setEditSaving(false);
+    loadUnassignedOccs();
   }
 
   async function sendReminder(occId) {
@@ -982,47 +1138,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       console.error('Reminder failed', e);
     }
     setRemindingId(null);
-  }
-
-  async function loadReport(period, from, to) {
-    setReportLoading(true);
-    const today = new Date().toISOString().split('T')[0];
-    let qFrom = from, qTo = to;
-    if (period === '30d') {
-      qFrom = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
-      qTo = today;
-    } else if (period === 'all') {
-      qFrom = '2020-01-01';
-      qTo = '2099-12-31';
-    }
-    const { data } = await supabase
-      .from('task_occurrences')
-      .select('id, due_date, status, completed_at, assigned_to')
-      .not('assigned_to', 'is', null)
-      .gte('due_date', qFrom)
-      .lte('due_date', qTo);
-    const todayStr = new Date().toISOString().split('T')[0];
-    const byPerson = {};
-    (data || []).forEach(occ => {
-      if (!byPerson[occ.assigned_to]) byPerson[occ.assigned_to] = [];
-      byPerson[occ.assigned_to].push(occ);
-    });
-    const rows = profiles
-      .map(p => {
-        const occs = byPerson[p.id] || [];
-        if (!occs.length) return null;
-        const onTime  = occs.filter(o => o.status === 'done' && o.completed_at && o.completed_at.slice(0, 10) <= o.due_date).length;
-        const late    = occs.filter(o => o.status === 'done' && o.completed_at && o.completed_at.slice(0, 10) > o.due_date).length;
-        const missed  = occs.filter(o => o.status !== 'done' && o.due_date < todayStr).length;
-        const pending = occs.filter(o => o.status !== 'done' && o.due_date >= todayStr).length;
-        const matured = onTime + late + missed;
-        const score   = matured > 0 ? Math.round((onTime + late * 0.5) / matured * 100) : null;
-        return { profile: p, total: occs.length, onTime, late, missed, pending, score };
-      })
-      .filter(Boolean)
-      .sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
-    setReportRows(rows);
-    setReportLoading(false);
   }
 
   async function loadProductivity(period) {
@@ -1055,8 +1170,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     const allProfiles = (profData && profData.length > 0) ? profData : profiles;
     if (profData && profData.length > 0) setProfiles(profData);
 
-    const RECURRING_CATS = new Set(['MISC', 'PM', 'Equipment']);
-
     function calcScore(arr) {
       const onTime  = arr.filter(o => o.status === 'done' && o.completed_at && o.completed_at.slice(0,10) <= o.due_date).length;
       const late    = arr.filter(o => o.status === 'done' && o.completed_at && o.completed_at.slice(0,10) > o.due_date).length;
@@ -1075,8 +1188,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     const rows = allProfiles
       .map(p => {
         const occs    = byPerson[p.id] || [];
-        const recurring = occs.filter(o => RECURRING_CATS.has(o.task_def?.category));
-        const oneOff    = occs.filter(o => !RECURRING_CATS.has(o.task_def?.category));
+        const recurring = occs.filter(o => o.task_def?.category);
+        const oneOff    = occs.filter(o => !o.task_def?.category);
         const occIds    = new Set(occs.map(o => o.id));
         const pmCount   = Object.entries(pmReminders)
           .filter(([id]) => occIds.has(id))
@@ -1106,28 +1219,38 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         .order('due_date', { ascending: true }),
       supabase
         .from('sporadic_tasks')
-        .select('*, assigner:profiles!assigned_by(full_name)')
+        .select('*')
         .eq('assigned_to', userId)
         .order('due_date', { ascending: true }),
     ]);
     setMyTaskOccs(occs || []);
     setMyTaskOneOffs(oneOffs || []);
 
-    // Restore saved responses from localStorage (survives page reloads)
+    // Restore saved responses — first from localStorage, then fill gaps from DB (done occurrences)
+    const currentDefIds = new Set((occs || []).map(o => o.task_def?.id).filter(Boolean));
+    const merged = {};
     try {
       const saved = localStorage.getItem(`vat_${userId}`);
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Only keep responses for tasks currently assigned to this user
-        const currentDefIds = new Set((occs || []).map(o => o.task_def?.id).filter(Boolean));
-        const pruned = {};
         Object.entries(parsed).forEach(([k, v]) => {
-          const baseId = k.split('_sub_')[0];
-          if (currentDefIds.has(baseId)) pruned[k] = v;
+          const taskDefId = k.split('_sub_')[0].split('::')[0];
+          if (currentDefIds.has(taskDefId)) merged[k] = v;
         });
-        if (Object.keys(pruned).length) setVatResponses(pruned);
       }
     } catch {}
+    // Synthesize responses for done occurrences not covered by localStorage
+    for (const occ of (occs || [])) {
+      if (occ.status !== 'done' || !occ.task_def?.id) continue;
+      const k = `${occ.task_def.id}::${occ.due_date}`;
+      if (!merged[k]) {
+        merged[k] = { response: occ.task_def.response_type === 'checkbox' ? 'checked' : 'yes' };
+        (occ.task_def.sub_tasks || []).forEach(st => {
+          merged[`${occ.task_def.id}_sub_${st.id}::${occ.due_date}`] = { response: 'checked' };
+        });
+      }
+    }
+    if (Object.keys(merged).length) setVatResponses(merged);
 
     setMyTaskLoading(false);
   }
@@ -1327,8 +1450,13 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     };
 
     const cutoff = periodCutoff(prodDetailHistoryPeriod);
-    const historyTasks = prodDetailTasks
-      .filter(o => classify(o) !== 'upcoming' && o.due_date >= cutoff)
+    const historyPeriodTasks = prodDetailTasks.filter(o => classify(o) !== 'upcoming' && o.due_date >= cutoff);
+    const histGreen  = historyPeriodTasks.filter(o => classify(o) === 'green');
+    const histYellow = historyPeriodTasks.filter(o => classify(o) === 'yellow');
+    const histRed    = historyPeriodTasks.filter(o => classify(o) === 'red');
+    const histTotal  = historyPeriodTasks.length;
+    const histPct    = n => histTotal > 0 ? Math.round(n / histTotal * 100) : 0;
+    const historyTasks = historyPeriodTasks
       .filter(o => prodDetailColorFilter.size === 0 || prodDetailColorFilter.has(classify(o)));
 
     const upcomingTasks = prodDetailTasks.filter(o => classify(o) === 'upcoming');
@@ -1449,7 +1577,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
               <div style={{ padding: '14px 18px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
                 <div style={sectionLabel}>History</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
                   {historyPeriods.map(({ id, label }) => (
                     <button key={id} onClick={() => setProdDetailHistoryPeriod(id)}
                       style={{ padding: '5px 13px', borderRadius: 20, border: `1.5px solid ${prodDetailHistoryPeriod === id ? 'var(--purple-primary)' : 'var(--border)'}`, background: prodDetailHistoryPeriod === id ? 'var(--purple-primary)' : 'transparent', color: prodDetailHistoryPeriod === id ? '#fff' : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
@@ -1457,6 +1585,28 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                     </button>
                   ))}
                 </div>
+                {histTotal > 0 && (
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                    {[['green', histGreen], ['yellow', histYellow], ['red', histRed]].map(([key, arr]) => {
+                      const m = STATUS_META[key];
+                      return (
+                        <div key={key} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', border: `1.5px solid ${m.border}`, borderRadius: 8, background: m.bg }}>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: m.color, lineHeight: 1 }}>{histPct(arr.length)}%</div>
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: m.color }}>{m.label}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{arr.length} of {histTotal}</div>
+                          </div>
+                          <div style={{ marginLeft: 'auto', width: 36, height: 36, borderRadius: '50%', background: 'white', border: `2px solid ${m.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div style={{ width: 36, height: 36, borderRadius: '50%', position: 'relative', overflow: 'hidden' }}>
+                              <div style={{ position: 'absolute', inset: 0, background: `conic-gradient(${m.color} 0% ${histPct(arr.length)}%, var(--border) ${histPct(arr.length)}% 100%)`, borderRadius: '50%' }} />
+                              <div style={{ position: 'absolute', inset: 4, background: m.bg, borderRadius: '50%' }} />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 6 }}>
                   {Object.entries(STATUS_META).map(([key, m]) => {
                     const active = prodDetailColorFilter.has(key);
@@ -1491,18 +1641,15 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     const now = new Date();
 
     const classifyOneOff = t => {
-      if (t.status === 'completed') return t.completed_at && t.completed_at.slice(0, 10) <= t.due_date ? 'ontime' : 'late';
+      if (t.status === 'submitted' || t.status === 'completed') {
+        const finishedAt = (t.submitted_at || t.completed_at || '').slice(0, 10);
+        return !finishedAt || !t.due_date || finishedAt <= t.due_date ? 'ontime' : 'late';
+      }
       if (t.due_date && t.due_date < today) return 'overdue';
       return 'upcoming';
     };
 
-    const dateLabel = d => {
-      if (!d || d === 'none') return 'No Due Date';
-      if (d === today) return 'Today';
-      const tom = new Date(); tom.setDate(tom.getDate() + 1);
-      if (d === tom.toISOString().split('T')[0]) return 'Tomorrow';
-      return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    };
+
 
     // ── Time bucket helpers ─────────────────────────────────────────────────
     const plus7 = new Date(now); plus7.setDate(plus7.getDate() + 7);
@@ -1519,49 +1666,54 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       return 'beyond';
     };
 
-    // Build task_def_id → occurrence map
-    const occByDefId = {};
-    myTaskOccs.forEach(occ => { if (occ.task_def?.id) occByDefId[occ.task_def.id] = occ; });
-    const myDefIds = new Set(Object.keys(occByDefId));
+    // Build occsByDefAndDate: taskDefId → { dueDate → occ }
+    const occsByDefAndDate = {};
+    myTaskOccs.forEach(occ => {
+      if (!occ.task_def?.id) return;
+      if (!occsByDefAndDate[occ.task_def.id]) occsByDefAndDate[occ.task_def.id] = {};
+      occsByDefAndDate[occ.task_def.id][occ.due_date] = occ;
+    });
+    const myDefIds = new Set(Object.keys(occsByDefAndDate));
 
-    // Completion helpers
-    const isTaskComplete = task => {
-      const r = vatResponses[task.id]?.response;
+    // vatResponses key scoped to a specific occurrence date
+    const vKey = (taskId, dueDate) => `${taskId}::${dueDate}`;
+
+    // Completion helpers (date-scoped so each occurrence date is independent)
+    const isTaskComplete = (task, dueDate) => {
+      const r = vatResponses[vKey(task.id, dueDate)]?.response;
       if (!r) return false;
       if (task.sop_trigger && r === 'no' && !sopExceptions[task.id]?.submitted) return false;
       if (!task.sub_tasks?.length) return true;
       const trigger = task.sub_tasks[0]?.trigger || 'always';
       const triggered = trigger === 'always' || (trigger.startsWith('custom:') ? r === trigger.slice(7) : r === trigger);
-      return !triggered || task.sub_tasks.every(st => vatResponses[`${task.id}_sub_${st.id}`]?.response === 'checked');
+      return !triggered || task.sub_tasks.every(st => vatResponses[`${task.id}_sub_${st.id}::${dueDate}`]?.response === 'checked');
     };
-    const isGroupComplete = (groupTasks, groupName) => {
+    const isGroupComplete = (groupTasks, groupName, dueDate) => {
       const isLiveCell = groupName === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time';
       if (isLiveCell) {
         const lcParent = groupTasks.find(t => t.response_type === 'yes_no');
-        const lcResp = lcParent ? vatResponses[lcParent.id]?.response : null;
+        const lcResp = lcParent ? vatResponses[vKey(lcParent.id, dueDate)]?.response : null;
         if (!lcResp) return false;
         if (lcResp === 'no') return true;
-        return groupTasks.filter(t => t.response_type === 'checkbox').every(t => vatResponses[t.id]?.response === 'checked');
+        return groupTasks.filter(t => t.response_type === 'checkbox').every(t => vatResponses[vKey(t.id, dueDate)]?.response === 'checked');
       }
       const myAssigned = groupTasks.filter(t => myDefIds.has(t.id));
       if (myAssigned.length === 0) return false;
-      return myAssigned.every(t => isTaskComplete(t));
+      return myAssigned.every(t => isTaskComplete(t, dueDate));
     };
-    // Build group map
-    const myGroupKeys = new Set();
-    vatTasks.forEach(t => { if (myDefIds.has(t.id)) myGroupKeys.add(t.group_name || t.title || t.id); });
 
+    // Build group map: one entry per (groupName, dueDate) pair
     const groupMap = new Map();
     vatTasks.forEach(t => {
-      const gKey = t.group_name || t.title || t.id;
-      if (!myGroupKeys.has(gKey)) return;
-      if (!groupMap.has(gKey)) {
-        const groupOccDates = vatTasks
-          .filter(vt => (vt.group_name || vt.title || vt.id) === gKey && myDefIds.has(vt.id))
-          .map(vt => occByDefId[vt.id]?.due_date).filter(Boolean).sort();
-        groupMap.set(gKey, { groupName: t.group_name || '', category: t.category || 'MISC', tasks: [], dueDate: groupOccDates[0] || 'none' });
-      }
-      groupMap.get(gKey).tasks.push(t);
+      if (!myDefIds.has(t.id)) return;
+      const gName = t.group_name || t.title || t.id;
+      Object.keys(occsByDefAndDate[t.id] || {}).forEach(dueDate => {
+        const mapKey = `${gName}__${dueDate}`;
+        if (!groupMap.has(mapKey)) {
+          groupMap.set(mapKey, { groupName: gName, category: t.category || 'MISC', tasks: [], dueDate });
+        }
+        groupMap.get(mapKey).tasks.push(t);
+      });
     });
 
     const allGroups = [...groupMap.values()];
@@ -1573,7 +1725,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     const adhocBuckets = { overdue: [], week: [], month: [], three: [], beyond: [], nodate: [] };
     [...myTaskOneOffs].sort((a, b) => (a.due_date || '').localeCompare(b.due_date || '')).forEach(t => adhocBuckets[bucketFor(t.due_date)].push(t));
 
-    const overdueCt = recBuckets.overdue.filter(g => !isGroupComplete(g.tasks, g.groupName)).length + adhocBuckets.overdue.filter(t => t.status !== 'completed').length;
+    const overdueCt = recBuckets.overdue.filter(g => !isGroupComplete(g.tasks, g.groupName, g.dueDate)).length + adhocBuckets.overdue.filter(t => t.status !== 'completed').length;
     const upcomingCt = ['week','month','three','beyond','nodate'].reduce((s, b) => s + recBuckets[b].length + adhocBuckets[b].length, 0);
 
     // Render a one-off task card
@@ -1583,7 +1735,18 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       const key = `oneoff-${t.id}`;
       const resp = myTaskResponses[key] || '';
       const notes = myTaskNotes[key] ?? (t.notes || '');
-      const toggleResp = () => setMyTaskResponses(p => ({ ...p, [key]: p[key] === 'checked' ? '' : 'checked' }));
+      const toggleResp = async () => {
+        const nowDone = !(resp === 'checked' || isDone);
+        setMyTaskResponses(p => ({ ...p, [key]: nowDone ? 'checked' : '' }));
+        const now = new Date().toISOString();
+        if (nowDone) {
+          await supabase.from('sporadic_tasks').update({ status: 'submitted', response: 'checked', submitted_at: now }).eq('id', t.id);
+          setMyTaskOneOffs(prev => prev.map(x => x.id === t.id ? { ...x, status: 'submitted', submitted_at: now } : x));
+        } else {
+          await supabase.from('sporadic_tasks').update({ status: 'pending', response: null, submitted_at: null }).eq('id', t.id);
+          setMyTaskOneOffs(prev => prev.map(x => x.id === t.id ? { ...x, status: 'pending', submitted_at: null } : x));
+        }
+      };
       const updateNotes = v => setMyTaskNotes(p => ({ ...p, [key]: v }));
       return (
         <div key={t.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
@@ -1595,9 +1758,9 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
               <p style={{ fontSize: '13px', color: isDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.5, margin: 0 }}>{t.title}</p>
               {t.description && <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: 3 }}>{t.description}</div>}
               {t.assigner?.full_name && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 2 }}>Assigned by {t.assigner.full_name}</div>}
-              {isDone && t.completed_at && (
+              {isDone && (t.submitted_at || t.completed_at) && (
                 <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
-                  <span style={{ color: 'var(--success)' }}>✓</span> Completed on {new Date(t.completed_at).toLocaleDateString()}
+                  <span style={{ color: 'var(--success)' }}>✓</span> Completed on {new Date(t.submitted_at || t.completed_at).toLocaleDateString()}
                   {cls === 'late' && <span style={{ color: '#f59e0b', marginLeft: 4 }}>(late)</span>}
                 </div>
               )}
@@ -1613,27 +1776,29 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     };
 
     // ── renderFullGroup: full interactive rendering for active/overdue ─────────
-    const renderFullGroup = ({ groupName, tasks: groupTasks }) => {
-      const groupDone = isGroupComplete(groupTasks, groupName);
+    const renderFullGroup = ({ groupName, tasks: groupTasks, dueDate }, bucketId = 'week') => {
+      const groupDone = isGroupComplete(groupTasks, groupName, dueDate);
 
-                      // ── Always render the full group — never collapse in My Tasks ──
                       const isLiveCellGroup = groupName === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time';
                       const lcParent = isLiveCellGroup ? groupTasks.find(t => t.response_type === 'yes_no') : null;
-                      const lcParentResp = lcParent ? vatResponses[lcParent.id]?.response : null;
+                      const lcParentResp = lcParent ? vatResponses[vKey(lcParent.id, dueDate)]?.response : null;
                       const lcSubTasks = isLiveCellGroup ? groupTasks.filter(t => t.response_type === 'checkbox') : [];
-                      const lcAllChecked = lcSubTasks.length > 0 && lcSubTasks.every(t => vatResponses[t.id]?.response === 'checked');
+                      const lcAllChecked = lcSubTasks.length > 0 && lcSubTasks.every(t => vatResponses[vKey(t.id, dueDate)]?.response === 'checked');
 
                       return (
-                        <div key={groupName || 'ungrouped'} style={{ marginBottom: '4px' }}>
+                        <div key={`${groupName || 'ungrouped'}__${dueDate}`} style={{ marginBottom: '4px' }}>
                           {groupName && (
                             <div style={{ padding: '12px 2px 6px', borderBottom: `2px solid ${groupDone ? 'var(--success)' : 'var(--purple-primary)'}`, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: 8 }}>
                               <span style={{ fontSize: '14px', fontWeight: 700, color: groupDone ? 'var(--success)' : 'var(--purple-primary)' }}>{groupName}</span>
+                              {dueDate && dueDate !== 'none' && (
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>· Due {fmtDate(dueDate)}</span>
+                              )}
                               {groupDone && <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--success)', background: '#EAF7F0', padding: '2px 8px', borderRadius: 10, border: '1px solid #A9DFBF' }}>✓ Completed</span>}
                             </div>
                           )}
                           {groupTasks.map(task => {
                             if (isLiveCellGroup && task.response_type === 'checkbox' && lcParentResp !== 'yes') return null;
-                            const resp = vatResponses[task.id];
+                            const resp = vatResponses[vKey(task.id, dueDate)];
                             const done = resp?.response === 'yes' || resp?.response === 'checked';
                             if (task.response_type === 'placeholder') {
                               return <div key={task.id} style={{ padding: '8px 14px', color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>Tasks to be defined.</div>;
@@ -1644,12 +1809,12 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                                   <div style={{ display: 'flex', gap: '5px', flexShrink: 0, marginTop: '2px' }}>
                                     {(task.response_type === 'yes_no' || task.response_type === 'yes_no_na') ? (
                                       <>
-                                        <button onClick={() => handleVatResponse(task.id, resp?.response === 'yes' ? '' : 'yes')} title="Yes" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'yes' ? 'var(--success)' : 'var(--border)', background: resp?.response === 'yes' ? 'var(--success)' : 'transparent', color: resp?.response === 'yes' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
-                                        <button onClick={() => handleVatResponse(task.id, resp?.response === 'no' ? '' : 'no')} title="No" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'no' ? 'var(--danger)' : 'var(--border)', background: resp?.response === 'no' ? 'var(--danger)' : 'transparent', color: resp?.response === 'no' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><XCircle size={13} /></button>
-                                        {task.response_type === 'yes_no_na' && <button onClick={() => handleVatResponse(task.id, resp?.response === 'na' ? '' : 'na')} style={{ padding: '0 7px', height: '26px', borderRadius: '13px', border: '2px solid', borderColor: resp?.response === 'na' ? 'var(--text-muted)' : 'var(--border)', background: resp?.response === 'na' ? 'var(--text-muted)' : 'transparent', color: resp?.response === 'na' ? 'white' : 'var(--text-muted)', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}>N/A</button>}
+                                        <button onClick={() => handleVatResponse(vKey(task.id, dueDate), resp?.response === 'yes' ? '' : 'yes')} title="Yes" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'yes' ? 'var(--success)' : 'var(--border)', background: resp?.response === 'yes' ? 'var(--success)' : 'transparent', color: resp?.response === 'yes' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
+                                        <button onClick={() => handleVatResponse(vKey(task.id, dueDate), resp?.response === 'no' ? '' : 'no')} title="No" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'no' ? 'var(--danger)' : 'var(--border)', background: resp?.response === 'no' ? 'var(--danger)' : 'transparent', color: resp?.response === 'no' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><XCircle size={13} /></button>
+                                        {task.response_type === 'yes_no_na' && <button onClick={() => handleVatResponse(vKey(task.id, dueDate), resp?.response === 'na' ? '' : 'na')} style={{ padding: '0 7px', height: '26px', borderRadius: '13px', border: '2px solid', borderColor: resp?.response === 'na' ? 'var(--text-muted)' : 'var(--border)', background: resp?.response === 'na' ? 'var(--text-muted)' : 'transparent', color: resp?.response === 'na' ? 'white' : 'var(--text-muted)', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}>N/A</button>}
                                       </>
                                     ) : task.response_type === 'checkbox' ? (
-                                      <button onClick={() => handleVatResponse(task.id, resp?.response === 'checked' ? '' : 'checked')} style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid', borderColor: resp?.response === 'checked' ? 'var(--purple-primary)' : 'var(--border)', background: resp?.response === 'checked' ? 'var(--purple-primary)' : 'transparent', color: resp?.response === 'checked' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
+                                      <button onClick={() => handleVatResponse(vKey(task.id, dueDate), resp?.response === 'checked' ? '' : 'checked')} style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid', borderColor: resp?.response === 'checked' ? 'var(--purple-primary)' : 'var(--border)', background: resp?.response === 'checked' ? 'var(--purple-primary)' : 'transparent', color: resp?.response === 'checked' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
                                     ) : (
                                       <label style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', cursor: 'pointer' }}>
                                         <Upload size={13} />
@@ -1659,7 +1824,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                                   </div>
                                   <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                                      <p style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', lineHeight: 1.5, margin: 0, flex: 1 }}>{task.title}</p>
+                                      <p style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : bucketId === 'overdue' ? '#ef4444' : 'var(--purple-primary)', textDecoration: done ? 'line-through' : 'none', lineHeight: 1.5, margin: 0, flex: 1 }}>{task.title}</p>
                                       <button onClick={() => openTaskDefEditor(task)} title="Edit task" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '1px 3px', display: 'flex', flexShrink: 0, opacity: 0.5 }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}><Pencil size={12} /></button>
                                     </div>
                                     {task.sop_trigger && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px', padding: '2px 7px', background: '#FEF0F0', color: 'var(--danger)', borderRadius: '12px', fontSize: '10px', fontWeight: 600 }}><AlertTriangle size={9} /> {task.conditional_text ? <a href={task.conditional_text} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--danger)', textDecoration: 'underline' }}>SOP</a> : 'SOP'}</span>}
@@ -1672,7 +1837,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                                       </div>
                                     )}
                                     {resp?.response && (
-                                      <textarea value={resp?.notes || ''} onChange={e => handleVatNotes(task.id, e.target.value)} placeholder="Notes (optional)" rows={1}
+                                      <textarea value={resp?.notes || ''} onChange={e => handleVatNotes(vKey(task.id, dueDate), e.target.value)} placeholder="Notes (optional)" rows={1}
                                         style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />
                                     )}
                                     {task.sop_trigger && resp?.response === 'no' && (() => {
@@ -1719,7 +1884,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                                     })() && (
                                       <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
                                         {task.sub_tasks.map((st, si) => {
-                                          const stKey = `${task.id}_sub_${st.id}`;
+                                          const stKey = `${task.id}_sub_${st.id}::${dueDate}`;
                                           const stDone = vatResponses[stKey]?.response === 'checked';
                                           return (
                                             <div key={si} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
@@ -1765,24 +1930,26 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     const CAT_COLORS = { MISC: { bg: '#f5eefb', fg: '#8b5cf6' }, PM: { bg: '#eff6ff', fg: '#3b82f6' }, Equipment: { bg: '#fffbeb', fg: '#f59e0b' } };
 
     const renderCompactGroup = g => {
-      const isDone = isGroupComplete(g.tasks, g.groupName);
+      const isDone = isGroupComplete(g.tasks, g.groupName, g.dueDate);
       const { bg, fg } = CAT_COLORS[g.category] || { bg: '#f3f4f6', fg: '#6b7280' };
       return (
-        <div key={g.groupName || (g.tasks[0] && g.tasks[0].id)} style={{ padding: '10px 12px', background: 'var(--bg-card)', border: `1px solid ${isDone ? '#A9DFBF' : 'var(--border)'}`, borderRadius: 8, marginBottom: 5, opacity: isDone ? 0.7 : 1 }}>
+        <div key={`${g.groupName || (g.tasks[0] && g.tasks[0].id)}__${g.dueDate}`} style={{ padding: '10px 12px', background: 'var(--bg-card)', border: `1px solid ${isDone ? '#A9DFBF' : 'var(--border)'}`, borderRadius: 8, marginBottom: 5, opacity: isDone ? 0.7 : 1 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
             <div style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${isDone ? '#22c55e' : 'var(--border)'}`, background: isDone ? '#22c55e' : 'transparent', flexShrink: 0, marginTop: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {isDone && <span style={{ color: 'white', fontSize: 10, lineHeight: 1 }}>✓</span>}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: isDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.4 }}>
-                {g.groupName || (g.tasks[0] && g.tasks[0].title) || 'Task'}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: isDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.4 }}>
+                  {g.groupName || (g.tasks[0] && g.tasks[0].title) || 'Task'}
+                </span>
                 {g.dueDate && g.dueDate !== 'none' && (
-                  <span style={{ fontSize: 11, color: bucketFor(g.dueDate) === 'overdue' && !isDone ? '#ef4444' : 'var(--text-muted)' }}>
-                    {dateLabel(g.dueDate)}
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, whiteSpace: 'nowrap' }}>
+                    · Due {fmtDate(g.dueDate)}
                   </span>
                 )}
+              </div>
+              <div style={{ marginTop: 3 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: bg, color: fg }}>{g.category}</span>
               </div>
             </div>
@@ -1801,12 +1968,19 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
               {isDone && <span style={{ color: 'white', fontSize: 10, lineHeight: 1 }}>✓</span>}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: isDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.4 }}>{t.title}</div>
-              {t.due_date && (
-                <div style={{ fontSize: 11, color: isOvd ? '#ef4444' : 'var(--text-muted)', marginTop: 3 }}>
-                  {dateLabel(t.due_date)}
-                  {t.assigner?.full_name && <span style={{ color: 'var(--text-muted)' }}> · by {t.assigner.full_name}</span>}
-                </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: isDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.4 }}>{t.title}</span>
+                {t.due_date && (
+                  <span style={{ fontSize: 11, color: isOvd ? '#ef4444' : 'var(--text-muted)', fontWeight: 400, whiteSpace: 'nowrap' }}>
+                    · Due {fmtDate(t.due_date)}
+                  </span>
+                )}
+              </div>
+              {t.description && (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3, lineHeight: 1.4 }}>{t.description}</div>
+              )}
+              {t.assigner?.full_name && (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>by {t.assigner.full_name}</div>
               )}
             </div>
           </div>
@@ -1838,18 +2012,16 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           const recItems = recBuckets[id];
           const adhocItems = adhocBuckets[id];
           if (recItems.length === 0 && adhocItems.length === 0) return null;
-          const count = recItems.length + adhocItems.length;
           return (
             <div key={id} style={{ marginBottom: 24 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 10px', background: headBg, borderRadius: 6, marginBottom: 10 }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: headColor, textTransform: 'uppercase', letterSpacing: '0.05em', flex: 1 }}>{label}</span>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{count} task{count !== 1 ? 's' : ''}</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: headColor, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div>
                   {recItems.length === 0
                     ? <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '6px 4px' }}>None</div>
-                    : recItems.map(g => isActive ? renderFullGroup(g) : renderCompactGroup(g))}
+                    : recItems.map(g => isActive ? renderFullGroup(g, id) : renderCompactGroup(g))}
                 </div>
                 <div>
                   {adhocItems.length === 0
@@ -1957,10 +2129,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       <div>
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 16, fontWeight: 700 }}>My Tasks</div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
-            {myProfile?.full_name ? `${myProfile.full_name}'s dashboard` : 'Your dashboard'}
-            {' '}— {upcomingCt} upcoming{overdueCt > 0 ? `, ${overdueCt} overdue` : ''}
-          </div>
         </div>
 
         <div style={{ display: 'flex', marginBottom: 24, borderBottom: '2px solid var(--border)' }}>
@@ -1982,240 +2150,328 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   }
 
   function renderAssignedTab() {
-    const today = new Date().toISOString().split('T')[0];
+    const todayDate = new Date();
+    const today = todayDate.toISOString().split('T')[0];
     const members = sortByLast(profiles);
 
-    const assignedList   = assignedOccs.filter(o => o.assigned_to);
-    const unassignedList = assignedOccs.filter(o => !o.assigned_to);
-    const completed      = assignedList.filter(o => o.status === 'done' || o.completed_at);
-    const overdue        = assignedList.filter(o => o.status !== 'done' && !o.completed_at && o.due_date < today);
-    const upcoming       = assignedList.filter(o => o.status !== 'done' && !o.completed_at && o.due_date >= today);
+    // ── Unassigned section (top) ──────────────────────────────────────────────
+    const unassignedTimeTabs = [
+      { id: 'month', label: 'This Month', end: (() => { const d = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0); return d.toISOString().split('T')[0]; })() },
+      { id: '3mo',   label: '3 Months',   end: (() => { const d = new Date(todayDate); d.setMonth(d.getMonth() + 3); return d.toISOString().split('T')[0]; })() },
+      { id: '6mo',   label: '6 Months',   end: (() => { const d = new Date(todayDate); d.setMonth(d.getMonth() + 6); return d.toISOString().split('T')[0]; })() },
+      { id: 'year',  label: 'Current Year', end: `${todayDate.getFullYear()}-12-31` },
+    ];
+    const activeTimeTab = unassignedTimeTabs.find(t => t.id === unassignedTimeTab) || unassignedTimeTabs[0];
+    const filteredUnassigned = unassignedOccs.filter(o => o.due_date <= activeTimeTab.end);
 
-    const tableHeader = () => (
-      <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 160px 100px auto', gap: '0 12px', padding: '8px 14px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', marginBottom: '4px' }}>
-        {['Due date', 'Task', 'Assigned to', 'Status', ''].map(h => (
-          <span key={h} style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</span>
-        ))}
-      </div>
-    );
+    // Build category → audit_area → occurrences tree
+    const unassignedTree = {};
+    filteredUnassigned.forEach(occ => {
+      const cat = occ.task_def?.category || 'MISC';
+      const aa  = occ.task_def?.audit_area || '';
+      if (!unassignedTree[cat]) unassignedTree[cat] = {};
+      if (!unassignedTree[cat][aa]) unassignedTree[cat][aa] = [];
+      unassignedTree[cat][aa].push(occ);
+    });
+    const catOrder = CAT_ORDER.filter(c => unassignedTree[c]);
 
-    const renderOccRow = (occ, isUnassignedSection) => {
-      const isDone    = occ.status === 'done' || !!occ.completed_at;
-      const isOverdue = !isDone && occ.due_date < today;
-      const taskDef   = occ.task_def;
-      const taskLabel = taskDef?.group_name || taskDef?.title || '—';
+    const renderUnassignedRow = occ => {
+      const taskDef = occ.task_def;
+      const freq = taskDef?.frequency || '';
+      const fc = FREQ_COLORS[freq] || {};
       const isEditing = editingOccId === occ.id;
-      const freqColor = FREQ_COLORS[taskDef?.frequency] || {};
-
-      const statusChip = isUnassignedSection
-        ? { label: 'Unassigned', color: '#7B3FA0', bg: '#F5EEF8' }
-        : isDone
-          ? { label: 'Done', color: '#27AE60', bg: '#EAF7F0' }
-          : isOverdue
-            ? { label: 'Overdue', color: '#E74C3C', bg: '#FDEDEC' }
-            : { label: 'Upcoming', color: '#2980B9', bg: '#EBF5FB' };
-
+      const dateStr = new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const thStyle = { padding: '9px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' };
       if (isEditing) {
         return (
-          <div key={occ.id} style={{ padding: '12px 14px', background: 'var(--bg-card)', border: '2px solid var(--purple-primary)', borderRadius: 'var(--radius-md)', marginBottom: '4px', boxShadow: 'var(--shadow-sm)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-              <div style={{ flexShrink: 0, fontSize: '13px', fontWeight: 600, color: isOverdue ? '#E74C3C' : 'var(--text-primary)' }}>
-                {new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          <tr key={occ.id} style={{ background: '#F0EBF8' }}>
+            <td colSpan={4} style={{ ...thStyle, borderLeft: '3px solid var(--purple-primary)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', flexShrink: 0 }}>{dateStr}</span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{taskDef?.title || '—'}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>Assign to:</span>
+                <select value={editAssigneeId} onChange={e => setEditAssigneeId(e.target.value)}
+                  style={{ padding: '5px 8px', border: '1px solid var(--purple-primary)', borderRadius: 'var(--radius-sm)', fontSize: 12, background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}>
+                  <option value="">— Select —</option>
+                  {members.map(m => <option key={m.id} value={m.id}>{fmtName(m.full_name)}</option>)}
+                </select>
+                <button onClick={() => saveAssignment(occ.id)} disabled={!editAssigneeId || editSaving}
+                  style={{ padding: '5px 12px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+                  {editSaving ? '…' : 'Save'}
+                </button>
+                <button onClick={() => setEditingOccId(null)} style={{ padding: '5px 8px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 12, cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0 }}>✕</button>
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{taskLabel}</div>
-                <div style={{ display: 'flex', gap: '5px', marginTop: '2px' }}>
-                  {taskDef?.category && <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>{taskDef.category}</span>}
-                  {taskDef?.frequency && <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', background: freqColor.bg || 'var(--bg-secondary)', color: freqColor.text || 'var(--text-muted)', border: `1px solid ${freqColor.border || 'var(--border)'}` }}>{taskDef.frequency}</span>}
-                </div>
-              </div>
-              <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '10px', background: statusChip.bg, color: statusChip.color, flexShrink: 0 }}>{statusChip.label}</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)', flexShrink: 0 }}>Assign to:</span>
-              <select value={editAssigneeId} onChange={e => setEditAssigneeId(e.target.value)}
-                style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--purple-primary)', borderRadius: 'var(--radius-md)', fontSize: '13px', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}>
-                {!isUnassignedSection && <option value="">— Unassign —</option>}
-                {isUnassignedSection && <option value="">— Select member —</option>}
-                {members.map(m => <option key={m.id} value={m.id}>{fmtName(m.full_name)}</option>)}
-              </select>
-              <button onClick={() => saveAssignment(occ.id)} disabled={editSaving}
-                style={{ padding: '7px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
-                {editSaving ? 'Saving…' : 'Save'}
-              </button>
-              <button onClick={() => setEditingOccId(null)}
-                style={{ padding: '7px 12px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', cursor: 'pointer', flexShrink: 0 }}>
-                Cancel
-              </button>
-            </div>
-          </div>
+            </td>
+          </tr>
         );
       }
-
-      const isReminding = remindingId === occ.id;
-      const wasReminded = remindedIds.has(occ.id);
-
       return (
-        <div key={occ.id} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 160px 100px auto', gap: '0 12px', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '4px', boxShadow: 'var(--shadow-sm)', opacity: isDone ? 0.75 : 1 }}>
-          <div>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: isOverdue ? '#E74C3C' : 'var(--text-primary)' }}>
-              {new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              {new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric' })}
-            </div>
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{taskLabel}</div>
-            <div style={{ display: 'flex', gap: '5px', marginTop: '3px', flexWrap: 'wrap' }}>
-              {taskDef?.category && <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>{taskDef.category}</span>}
-              {taskDef?.frequency && <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', background: freqColor.bg || 'var(--bg-secondary)', color: freqColor.text || 'var(--text-muted)', border: `1px solid ${freqColor.border || 'var(--border)'}` }}>{taskDef.frequency}</span>}
-            </div>
-          </div>
-          <div>
-            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{fmtName(occ.assignee?.full_name) || '—'}</span>
-          </div>
-          <div>
-            <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '10px', background: statusChip.bg, color: statusChip.color, whiteSpace: 'nowrap' }}>{statusChip.label}</span>
-            {isDone && occ.completed_at && (
-              <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                {new Date(occ.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-              </div>
-            )}
-          </div>
-          <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-            <button onClick={() => { setEditingOccId(occ.id); setEditAssigneeId(occ.assigned_to || ''); }}
-              style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--text-muted)', fontSize: isUnassignedSection ? '15px' : '13px' }}
-              title={isUnassignedSection ? 'Assign' : 'Edit assignee'}>
-              {isUnassignedSection ? '+' : '✎'}
+        <tr key={occ.id} style={{ background: 'var(--bg-card)' }}>
+          <td style={{ ...thStyle, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{dateStr}</td>
+          <td style={{ ...thStyle, fontSize: 13, color: 'var(--text-primary)', maxWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{taskDef?.title || '—'}</td>
+          <td style={{ ...thStyle, whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: fc.bg || 'var(--bg-secondary)', color: fc.text || 'var(--text-muted)', border: `1px solid ${fc.border || 'var(--border)'}` }}>
+              {freq ? freq.charAt(0).toUpperCase() + freq.slice(1) : '—'}
+            </span>
+          </td>
+          <td style={{ ...thStyle, textAlign: 'right' }}>
+            <button onClick={() => { setEditingOccId(occ.id); setEditAssigneeId(''); }}
+              style={{ padding: '4px 12px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              Assign
             </button>
-            {!isUnassignedSection && (
-              <button onClick={() => sendReminder(occ.id)} disabled={isReminding || wasReminded}
-                title={`Remind ${occ.assignee?.full_name || 'assignee'}`}
-                style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: wasReminded ? '#EAF7F0' : 'transparent', border: `1px solid ${wasReminded ? '#A9DFBF' : 'var(--border)'}`, borderRadius: 'var(--radius-sm)', cursor: isReminding ? 'wait' : 'pointer', color: wasReminded ? '#27AE60' : 'var(--text-muted)', transition: 'all 0.2s' }}>
-                <Bell size={12} />
-              </button>
-            )}
-          </div>
-        </div>
+          </td>
+        </tr>
       );
     };
 
+    const assignedList = assignedOccs.filter(o => o.assigned_to);
+
     return (
       <div>
-        {/* Date range controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '20px' }}>
-          <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>From</span>
-          <input type="date" value={assignedFrom} onChange={e => setAssignedFrom(e.target.value)}
-            style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }} />
-          <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>to</span>
-          <input type="date" value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
-            style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }} />
-        </div>
-
-        {/* Stats row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '24px' }}>
-          {[
-            { label: 'Unassigned', value: unassignedList.length, color: '#7B3FA0', bg: '#F5EEF8' },
-            { label: 'Upcoming',   value: upcoming.length,       color: '#2980B9', bg: '#EBF5FB' },
-            { label: 'Overdue',    value: overdue.length,        color: '#E74C3C', bg: '#FDEDEC' },
-            { label: 'Done',       value: completed.length,      color: '#27AE60', bg: '#EAF7F0' },
-          ].map(s => (
-            <div key={s.label} style={{ padding: '12px 14px', background: s.bg, borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-              <div style={{ fontSize: '22px', fontWeight: 700, color: s.color }}>{s.value}</div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-
-        {assignedLoading ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
-        ) : (
-          <>
-            {/* ── Assigned section ── */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>Assigned</span>
-              <span style={{ fontSize: '11px', background: 'var(--bg-secondary)', color: 'var(--text-muted)', borderRadius: '10px', padding: '1px 8px', border: '1px solid var(--border)' }}>{assignedList.length}</span>
-            </div>
-            {assignedList.length === 0 ? (
-              <div style={{ padding: '20px', textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: '13px', marginBottom: '24px' }}>No assigned tasks in this date range.</div>
-            ) : (
-              <div style={{ marginBottom: '28px' }}>
-                {tableHeader()}
-                {assignedList.map(occ => renderOccRow(occ, false))}
-              </div>
-            )}
-
-            {/* ── Unassigned section ── */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>Unassigned</span>
-              <span style={{ fontSize: '11px', background: unassignedList.length > 0 ? '#F5EEF8' : 'var(--bg-secondary)', color: unassignedList.length > 0 ? '#7B3FA0' : 'var(--text-muted)', borderRadius: '10px', padding: '1px 8px', border: `1px solid ${unassignedList.length > 0 ? '#D7BDE2' : 'var(--border)'}`, fontWeight: unassignedList.length > 0 ? 700 : 400 }}>{unassignedList.length}</span>
-            </div>
-            {unassignedList.length === 0 ? (
-              <div style={{ padding: '20px', textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: '13px' }}>All tasks in this range are assigned.</div>
-            ) : (
-              <div>
-                {tableHeader()}
-                {unassignedList.map(occ => renderOccRow(occ, true))}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ── Performance Report ─────────────────────────────────────────── */}
-        <div style={{ marginTop: 36, paddingTop: 28, borderTop: '2px solid var(--border)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-            <span style={{ fontSize: '14px', fontWeight: 700 }}>Performance Report</span>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {[['current', 'Current Range'], ['30d', 'Last 30 Days'], ['all', 'Since Joining']].map(([key, label]) => (
-                <button key={key} onClick={() => setReportPeriod(key)}
-                  style={{ padding: '5px 14px', borderRadius: 20, border: `1px solid ${reportPeriod === key ? 'var(--purple-primary)' : 'var(--border)'}`, background: reportPeriod === key ? 'var(--purple-primary)' : 'transparent', color: reportPeriod === key ? 'white' : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                  {label}
-                </button>
-              ))}
-            </div>
+        {/* ══ UNASSIGNED (top) ══════════════════════════════════════════════════ */}
+        <div style={{ marginBottom: 36 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <button onClick={() => setUnassignedMinimized(p => !p)} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+              <ChevronDown size={16} style={{ transform: unassignedMinimized ? 'rotate(-90deg)' : 'none', transition: 'transform 0.2s', color: 'var(--text-muted)' }} />
+              <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Unassigned</span>
+            </button>
+            <span style={{ fontSize: 11, fontWeight: 700, background: filteredUnassigned.length > 0 ? '#F5EEF8' : 'var(--bg-secondary)', color: filteredUnassigned.length > 0 ? '#7B3FA0' : 'var(--text-muted)', borderRadius: 10, padding: '1px 8px', border: `1px solid ${filteredUnassigned.length > 0 ? '#D7BDE2' : 'var(--border)'}` }}>{filteredUnassigned.length}</span>
+            <button onClick={loadUnassignedOccs} style={{ marginLeft: 'auto', padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'transparent', fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer' }}>Refresh</button>
           </div>
 
-          {reportLoading ? (
-            <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Loading report…</div>
-          ) : reportRows.length === 0 ? (
-            <div style={{ padding: '20px', textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: '13px' }}>No assigned tasks found for this period.</div>
+          {!unassignedMinimized && <>{/* Time period tabs */}
+          <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 3, width: 'fit-content', marginBottom: 16 }}>
+            {unassignedTimeTabs.map(t => (
+              <button key={t.id} onClick={() => setUnassignedTimeTab(t.id)}
+                style={{ padding: '6px 16px', borderRadius: 'var(--radius-sm)', border: 'none', fontSize: 12, fontWeight: unassignedTimeTab === t.id ? 600 : 400, background: unassignedTimeTab === t.id ? 'var(--purple-primary)' : 'transparent', color: unassignedTimeTab === t.id ? 'white' : 'var(--text-secondary)', cursor: 'pointer' }}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {unassignedOccsLoading ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
+          ) : filteredUnassigned.length === 0 ? (
+            <div style={{ padding: 24, textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: 13 }}>All tasks in this window are assigned. 🎉</div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
-              {reportRows.map(({ profile, total, onTime, late, missed, pending, score }) => {
-                const scoreCol = score === null ? 'var(--text-muted)' : score >= 90 ? '#22c55e' : score >= 70 ? '#f59e0b' : score >= 50 ? '#f97316' : '#ef4444';
-                const matured = onTime + late + missed;
-                return (
-                  <div key={profile.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 16, background: 'var(--bg-card)' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 14 }}>{profile.full_name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{total} task{total !== 1 ? 's' : ''} assigned</div>
-                      </div>
-                      <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 8 }}>
-                        <div style={{ fontSize: 28, fontWeight: 800, color: scoreCol, lineHeight: 1 }}>{score !== null ? score : '—'}</div>
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>/ 100</div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 10px', fontSize: 12, marginBottom: matured > 0 ? 10 : 0 }}>
-                      <div style={{ color: '#22c55e' }}>✓ On time: <strong>{onTime}</strong></div>
-                      <div style={{ color: '#ef4444' }}>✗ Missed: <strong>{missed}</strong></div>
-                      <div style={{ color: '#f59e0b' }}>⚠ Late: <strong>{late}</strong></div>
-                      <div style={{ color: 'var(--text-muted)' }}>⏳ Pending: <strong>{pending}</strong></div>
-                    </div>
-                    {matured > 0 && (
-                      <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-secondary)', overflow: 'hidden', display: 'flex' }}>
-                        <div style={{ flex: onTime, background: '#22c55e', minWidth: onTime > 0 ? 2 : 0 }} />
-                        <div style={{ flex: late, background: '#f59e0b', minWidth: late > 0 ? 2 : 0 }} />
-                        <div style={{ flex: missed, background: '#ef4444', minWidth: missed > 0 ? 2 : 0 }} />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+            <div>
+              {catOrder.map(cat => (
+                <div key={cat} style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 8, paddingBottom: 4, borderBottom: '1px solid var(--border)' }}>{cat}</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--bg-secondary)' }}>
+                        <th style={{ width: 100, padding: '8px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '2px solid var(--border)' }}>Due Date</th>
+                        <th style={{ padding: '8px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '2px solid var(--border)' }}>Task</th>
+                        <th style={{ width: 140, padding: '8px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '2px solid var(--border)' }}>Recurrence</th>
+                        <th style={{ width: 80, padding: '8px 14px', borderBottom: '2px solid var(--border)' }}></th>
+                      </tr>
+                    </thead>
+                    {Object.entries(unassignedTree[cat]).map(([aa, occs]) => (
+                      <tbody key={aa || '__none__'}>
+                        {aa && (
+                          <tr style={{ background: '#F5EEF8' }}>
+                            <td colSpan={4} style={{ padding: '5px 14px', fontSize: 12, fontWeight: 600, color: 'var(--purple-primary)', borderBottom: '1px solid #E8D5F0' }}>{aa}</td>
+                          </tr>
+                        )}
+                        {occs.map(occ => renderUnassignedRow(occ))}
+                      </tbody>
+                    ))}
+                  </table>
+                </div>
+              ))}
             </div>
           )}
+          </>}
         </div>
+
+        <div style={{ borderTop: '2px solid var(--border)', paddingTop: 28, marginBottom: 24 }}>
+          {/* ══ ASSIGNED (below) ══════════════════════════════════════════════ */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Assigned</span>
+            <span style={{ fontSize: 11, background: 'var(--bg-secondary)', color: 'var(--text-muted)', borderRadius: 10, padding: '1px 8px', border: '1px solid var(--border)' }}>{assignedList.length}</span>
+            <button onClick={() => loadAssignedTasks(assignedFrom, assignedTo)} style={{ marginLeft: 'auto', padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'transparent', fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer' }}>Refresh</button>
+          </div>
+
+          {(() => {
+            const todayD = new Date();
+            const assignedPeriods = [
+              { id: 'all',   label: 'All Tasks',    end: '9999-12-31' },
+              { id: 'month', label: 'This Month',   end: new Date(todayD.getFullYear(), todayD.getMonth() + 1, 0).toISOString().split('T')[0] },
+              { id: '3mo',   label: '3 Months',     end: (() => { const d = new Date(todayD); d.setMonth(d.getMonth() + 3); return d.toISOString().split('T')[0]; })() },
+              { id: '6mo',   label: '6 Months',     end: (() => { const d = new Date(todayD); d.setMonth(d.getMonth() + 6); return d.toISOString().split('T')[0]; })() },
+              { id: 'year',  label: 'Current Year', end: `${todayD.getFullYear()}-12-31` },
+            ];
+            const activePeriod = assignedPeriods.find(p => p.id === assignedTimePeriod) || assignedPeriods[0];
+            const timeFiltered = assignedList.filter(o => o.due_date <= activePeriod.end);
+
+            const personsMap = new Map();
+            timeFiltered.forEach(o => {
+              if (o.assigned_to && !personsMap.has(o.assigned_to)) {
+                personsMap.set(o.assigned_to, o.assignee?.full_name || o.assigned_to);
+              }
+            });
+            const persons = [...personsMap.entries()].sort((a, b) => (a[1] || '').localeCompare(b[1] || ''));
+
+            const displayList = assignedPersonTab === 'all'
+              ? timeFiltered
+              : timeFiltered.filter(o => o.assigned_to === assignedPersonTab);
+
+            const showAssignedTo = assignedPersonTab === 'all';
+            const numCols = showAssignedTo ? 6 : 5;
+            const thStyle = { padding: '8px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '2px solid var(--border)', background: 'var(--bg-secondary)' };
+            const tdStyle = { padding: '10px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' };
+
+            return (
+              <>
+                {/* Time period selector */}
+                <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 3, width: 'fit-content', marginBottom: 16 }}>
+                  {assignedPeriods.map(p => (
+                    <button key={p.id} onClick={() => setAssignedTimePeriod(p.id)}
+                      style={{ padding: '6px 16px', borderRadius: 'var(--radius-sm)', border: 'none', fontSize: 12, fontWeight: assignedTimePeriod === p.id ? 600 : 400, background: assignedTimePeriod === p.id ? 'var(--purple-primary)' : 'transparent', color: assignedTimePeriod === p.id ? 'white' : 'var(--text-secondary)', cursor: 'pointer' }}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Person tabs */}
+                {persons.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+                    <button onClick={() => setAssignedPersonTab('all')}
+                      style={{ padding: '6px 14px', borderRadius: 20, border: `1px solid ${assignedPersonTab === 'all' ? 'var(--purple-primary)' : 'var(--border)'}`, background: assignedPersonTab === 'all' ? 'var(--purple-primary)' : 'transparent', color: assignedPersonTab === 'all' ? 'white' : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      All
+                    </button>
+                    {persons.map(([pid, name]) => (
+                      <button key={pid} onClick={() => setAssignedPersonTab(pid)}
+                        style={{ padding: '6px 14px', borderRadius: 20, border: `1px solid ${assignedPersonTab === pid ? 'var(--purple-primary)' : 'var(--border)'}`, background: assignedPersonTab === pid ? 'var(--purple-primary)' : 'transparent', color: assignedPersonTab === pid ? 'white' : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                        {fmtName(name)}
+                        <span style={{ marginLeft: 6, fontSize: 10, background: assignedPersonTab === pid ? 'rgba(255,255,255,0.25)' : 'var(--bg-secondary)', borderRadius: 8, padding: '1px 5px' }}>
+                          {timeFiltered.filter(o => o.assigned_to === pid).length}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Table */}
+                {assignedLoading ? (
+                  <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
+                ) : displayList.length === 0 ? (
+                  <div style={{ padding: 20, textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: 13 }}>No assigned tasks in this window.</div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid var(--border)' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ ...thStyle, width: 100 }}>Due Date</th>
+                        <th style={thStyle}>Task</th>
+                        <th style={{ ...thStyle, width: 130 }}>Recurrence</th>
+                        {showAssignedTo && <th style={{ ...thStyle, width: 150 }}>Assigned To</th>}
+                        <th style={{ ...thStyle, width: 110 }}>Status</th>
+                        <th style={{ ...thStyle, width: 70 }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayList.map(occ => {
+                        const isDone    = occ.status === 'done' || !!occ.completed_at;
+                        const isOverdue = !isDone && occ.due_date < today;
+                        const taskDef   = occ.task_def;
+                        const freq      = taskDef?.frequency || '';
+                        const fc        = FREQ_COLORS[freq] || {};
+                        const statusChip = isDone
+                          ? { label: 'Done',     color: '#27AE60', bg: '#EAF7F0' }
+                          : isOverdue
+                            ? { label: 'Overdue',  color: '#E74C3C', bg: '#FDEDEC' }
+                            : { label: 'Upcoming', color: '#2980B9', bg: '#EBF5FB' };
+                        const isEditing   = editingOccId === occ.id;
+                        const isReminding = remindingId === occ.id;
+                        const wasReminded = remindedIds.has(occ.id);
+
+                        if (isEditing) {
+                          return (
+                            <tr key={occ.id} style={{ background: '#F0EBF8' }}>
+                              <td colSpan={numCols} style={{ ...tdStyle, borderLeft: '3px solid var(--purple-primary)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', flexShrink: 0 }}>
+                                    {new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </span>
+                                  <span style={{ fontSize: 13, fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{taskDef?.title || '—'}</span>
+                                  <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>Assign to:</span>
+                                  <select value={editAssigneeId} onChange={e => setEditAssigneeId(e.target.value)}
+                                    style={{ padding: '5px 8px', border: '1px solid var(--purple-primary)', borderRadius: 'var(--radius-sm)', fontSize: 12, background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}>
+                                    <option value="">— Unassign —</option>
+                                    {members.map(m => <option key={m.id} value={m.id}>{fmtName(m.full_name)}</option>)}
+                                  </select>
+                                  <button onClick={() => saveAssignment(occ.id)} disabled={editSaving}
+                                    style={{ padding: '5px 14px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+                                    {editSaving ? 'Saving…' : 'Save'}
+                                  </button>
+                                  <button onClick={() => setEditingOccId(null)}
+                                    style={{ padding: '5px 10px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>
+                                    Cancel
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return (
+                          <tr key={occ.id} style={{ background: 'var(--bg-card)', opacity: isDone ? 0.75 : 1 }}>
+                            <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: isOverdue ? '#E74C3C' : 'var(--text-primary)' }}>
+                                {new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              </div>
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                {new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric' })}
+                              </div>
+                            </td>
+                            <td style={{ ...tdStyle, fontSize: 13, color: 'var(--text-primary)', fontWeight: 500, maxWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {taskDef?.title || '—'}
+                            </td>
+                            <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
+                              <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: fc.bg || 'var(--bg-secondary)', color: fc.text || 'var(--text-muted)', border: `1px solid ${fc.border || 'var(--border)'}` }}>
+                                {freq ? freq.charAt(0).toUpperCase() + freq.slice(1) : '—'}
+                              </span>
+                            </td>
+                            {showAssignedTo && (
+                              <td style={{ ...tdStyle, fontSize: 13, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {fmtName(occ.assignee?.full_name) || '—'}
+                              </td>
+                            )}
+                            <td style={tdStyle}>
+                              <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 10, background: statusChip.bg, color: statusChip.color, whiteSpace: 'nowrap' }}>
+                                {statusChip.label}
+                              </span>
+                              {isDone && occ.completed_at && (
+                                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                                  {new Date(occ.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </div>
+                              )}
+                            </td>
+                            <td style={{ ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              <div style={{ display: 'flex', gap: 5, alignItems: 'center', justifyContent: 'flex-end' }}>
+                                <button onClick={() => { setEditingOccId(occ.id); setEditAssigneeId(occ.assigned_to || ''); }}
+                                  style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13 }}
+                                  title="Edit assignee">✎
+                                </button>
+                                <button onClick={() => sendReminder(occ.id)} disabled={isReminding || wasReminded}
+                                  title={`Remind ${occ.assignee?.full_name || 'assignee'}`}
+                                  style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: wasReminded ? '#EAF7F0' : 'transparent', border: `1px solid ${wasReminded ? '#A9DFBF' : 'var(--border)'}`, borderRadius: 'var(--radius-sm)', cursor: isReminding ? 'wait' : 'pointer', color: wasReminded ? '#27AE60' : 'var(--text-muted)', transition: 'all 0.2s' }}>
+                                  <Bell size={12} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </>
+            );
+          })()}
+        </div>
+
       </div>
     );
   }
@@ -2225,21 +2481,25 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   function renderViewAll() {
     if (vatLoading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>;
 
-    const isRecurring = vatCategory === 'MISC' || vatCategory === 'PM';
+    const isRecurring = vatCategory !== 'Equipment';
 
     const visibleTasks = vatTasks.filter(t =>
       t.frequency === vatFreq && t.category === vatCategory &&
       (vatSearch === '' || t.title.toLowerCase().includes(vatSearch.toLowerCase()))
     );
 
-    const visibleGroups = (() => {
-      const map = new Map();
+    // Two-level grouping: audit_area → group_name → tasks
+    const visibleByAuditArea = (() => {
+      const aaMap = new Map();
       for (const task of visibleTasks) {
-        const key = task.group_name || '';
-        if (!map.has(key)) map.set(key, []);
-        map.get(key).push(task);
+        const aa = task.audit_area || '';
+        const gn = task.group_name || '';
+        if (!aaMap.has(aa)) aaMap.set(aa, new Map());
+        const gnMap = aaMap.get(aa);
+        if (!gnMap.has(gn)) gnMap.set(gn, []);
+        gnMap.get(gn).push(task);
       }
-      return [...map.entries()];
+      return [...aaMap.entries()];
     })();
 
     // Live Cell group: checkbox sub-tasks only count when parent answered "yes"
@@ -2258,8 +2518,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       <div>
         {/* Category selector */}
         <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '3px', marginBottom: '14px', width: 'fit-content' }}>
-          {['MISC', 'PM', 'Equipment'].map(cat => (
-            <button key={cat} onClick={() => setVatCategory(cat)} style={{ padding: '7px 18px', borderRadius: 'var(--radius-sm)', border: 'none', fontSize: '13px', fontWeight: vatCategory === cat ? 600 : 400, background: vatCategory === cat ? 'var(--purple-primary)' : 'transparent', color: vatCategory === cat ? 'white' : 'var(--text-secondary)' }}>
+          {CAT_ORDER.filter(cat => vatTasks.some(t => t.category === cat)).map(cat => (
+            <button key={cat} onClick={() => { setVatCategory(cat); setVatExpandedGroups(new Set()); setVatExpandedAuditAreas(new Set()); }} style={{ padding: '7px 18px', borderRadius: 'var(--radius-sm)', border: 'none', fontSize: '13px', fontWeight: vatCategory === cat ? 600 : 400, background: vatCategory === cat ? 'var(--purple-primary)' : 'transparent', color: vatCategory === cat ? 'white' : 'var(--text-secondary)' }}>
               {cat}
             </button>
           ))}
@@ -2274,7 +2534,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                 const count = vatTasks.filter(t => t.frequency === freq && t.category === vatCategory).length;
                 if (count === 0) return null;
                 return (
-                  <button key={freq} onClick={() => setVatFreq(freq)} style={{ padding: '7px 14px', borderRadius: 'var(--radius-md)', border: `1px solid ${vatFreq === freq ? c.border : 'var(--border)'}`, background: vatFreq === freq ? c.bg : 'var(--bg-primary)', color: vatFreq === freq ? c.text : 'var(--text-secondary)', fontWeight: vatFreq === freq ? 600 : 400, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <button key={freq} onClick={() => { setVatFreq(freq); setVatExpandedGroups(new Set()); setVatExpandedAuditAreas(new Set()); }} style={{ padding: '7px 14px', borderRadius: 'var(--radius-md)', border: `1px solid ${vatFreq === freq ? c.border : 'var(--border)'}`, background: vatFreq === freq ? c.bg : 'var(--bg-primary)', color: vatFreq === freq ? c.text : 'var(--text-secondary)', fontWeight: vatFreq === freq ? 600 : 400, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Clock size={12} />
                     {freq.charAt(0).toUpperCase() + freq.slice(1)}
                     <span style={{ background: vatFreq === freq ? c.text : 'var(--border)', color: vatFreq === freq ? 'white' : 'var(--text-muted)', borderRadius: '10px', padding: '0 6px', fontSize: '10px' }}>{count}</span>
@@ -2305,151 +2565,184 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
             {visibleTasks.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>No tasks found.</div>
-            ) : visibleGroups.map(([groupName, groupTasks]) => {
-              const isLiveCellGroup = groupName === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time';
-              const lcParent = isLiveCellGroup ? groupTasks.find(t => t.response_type === 'yes_no') : null;
-              const lcParentResp = lcParent ? vatResponses[lcParent.id]?.response : null;
-              const lcSubTasks = isLiveCellGroup ? groupTasks.filter(t => t.response_type === 'checkbox') : [];
-              const lcAllChecked = lcSubTasks.length > 0 && lcSubTasks.every(t => vatResponses[t.id]?.response === 'checked');
-
-              return (
-                <div key={groupName || 'ungrouped'} style={{ marginBottom: '4px' }}>
-                  {groupName && (
-                    <div style={{ padding: '12px 2px 6px', borderBottom: '2px solid var(--purple-primary)', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--purple-primary)' }}>{groupName}</span>
-                    </div>
-                  )}
-                  {groupTasks.map(task => {
-                    // Hide Live Cell subtasks unless parent answered "yes"
-                    if (isLiveCellGroup && task.response_type === 'checkbox' && lcParentResp !== 'yes') return null;
-
-                    const resp = vatResponses[task.id];
-                    const done = resp?.response === 'yes' || resp?.response === 'checked';
-                    if (task.response_type === 'placeholder') {
-                      return <div key={task.id} style={{ padding: '8px 14px', color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>Tasks to be defined.</div>;
-                    }
-                    return (
-                      <div key={task.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px' }}>
-                          <div style={{ display: 'flex', gap: '5px', flexShrink: 0, marginTop: '2px' }}>
-                            {(task.response_type === 'yes_no' || task.response_type === 'yes_no_na') ? (
-                              <>
-                                <button onClick={() => handleVatResponse(task.id, resp?.response === 'yes' ? '' : 'yes')} title="Yes" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'yes' ? 'var(--success)' : 'var(--border)', background: resp?.response === 'yes' ? 'var(--success)' : 'transparent', color: resp?.response === 'yes' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
-                                <button onClick={() => handleVatResponse(task.id, resp?.response === 'no' ? '' : 'no')} title="No" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'no' ? 'var(--danger)' : 'var(--border)', background: resp?.response === 'no' ? 'var(--danger)' : 'transparent', color: resp?.response === 'no' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><XCircle size={13} /></button>
-                                {task.response_type === 'yes_no_na' && <button onClick={() => handleVatResponse(task.id, resp?.response === 'na' ? '' : 'na')} style={{ padding: '0 7px', height: '26px', borderRadius: '13px', border: '2px solid', borderColor: resp?.response === 'na' ? 'var(--text-muted)' : 'var(--border)', background: resp?.response === 'na' ? 'var(--text-muted)' : 'transparent', color: resp?.response === 'na' ? 'white' : 'var(--text-muted)', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}>N/A</button>}
-                              </>
-                            ) : task.response_type === 'checkbox' ? (
-                              <button onClick={() => handleVatResponse(task.id, resp?.response === 'checked' ? '' : 'checked')} style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid', borderColor: resp?.response === 'checked' ? 'var(--purple-primary)' : 'var(--border)', background: resp?.response === 'checked' ? 'var(--purple-primary)' : 'transparent', color: resp?.response === 'checked' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
-                            ) : (
-                              <label style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                                <Upload size={13} />
-                                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={() => {}} />
-                              </label>
-                            )}
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                              <p style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', lineHeight: 1.5, margin: 0, flex: 1 }}>{task.title}</p>
-                              <button onClick={() => openTaskDefEditor(task)} title="Edit task" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '1px 3px', display: 'flex', flexShrink: 0, opacity: 0.5 }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}><Pencil size={12} /></button>
-                            </div>
-                            {task.sop_trigger && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px', padding: '2px 7px', background: '#FEF0F0', color: 'var(--danger)', borderRadius: '12px', fontSize: '10px', fontWeight: 600 }}><AlertTriangle size={9} /> {task.conditional_text ? <a href={task.conditional_text} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--danger)', textDecoration: 'underline' }}>SOP</a> : 'SOP'}</span>}
-                            {!task.sop_trigger && task.conditional_text && !task.conditional_text.startsWith('http') && (
-                              <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', margin: '3px 0 0', lineHeight: 1.4 }}>{task.conditional_text}</p>
-                            )}
-                            {vatExisting[task.id] && (
-                              <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
-                                <span style={{ color: 'var(--success)' }}>✓</span> Done by {vatExisting[task.id].assignment?.profile?.full_name || '?'} on {new Date(vatExisting[task.id].responded_at).toLocaleDateString()}
-                              </div>
-                            )}
-                            {resp?.response && (
-                              <textarea value={resp?.notes || ''} onChange={e => handleVatNotes(task.id, e.target.value)} placeholder="Notes (optional)" rows={1}
-                                style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />
-                            )}
-                            {task.sop_trigger && resp?.response === 'no' && (() => {
-                              const exc = sopExceptions[task.id] || {};
-                              return exc.submitted ? (
-                                <div style={{ marginTop: 8, padding: '8px 12px', background: '#EAF7F0', border: '1px solid #A9DFBF', borderRadius: 'var(--radius-sm)', fontSize: '12px', color: '#27AE60', fontWeight: 500 }}>
-                                  ✓ Exception documented and PM notified.
-                                </div>
+            ) : (() => {
+              const renderSectionGroup = (groupName, groupTasks) => {
+                const isLiveCellGroup = groupName === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time';
+                const lcParent = isLiveCellGroup ? groupTasks.find(t => t.response_type === 'yes_no') : null;
+                const lcParentResp = lcParent ? vatResponses[lcParent.id]?.response : null;
+                const lcSubTasks = isLiveCellGroup ? groupTasks.filter(t => t.response_type === 'checkbox') : [];
+                const groupKey = groupName || '__ungrouped__';
+                const isOpen = !groupName || vatExpandedGroups.has(groupKey);
+                const toggleGroup = () => setVatExpandedGroups(prev => { const n = new Set(prev); n.has(groupKey) ? n.delete(groupKey) : n.add(groupKey); return n; });
+                const groupVisible = groupTasks.filter(t => !(isLiveCellGroup && t.response_type === 'checkbox' && lcParentResp !== 'yes'));
+                const groupDone = groupVisible.filter(t => {
+                  const r = vatResponses[t.id]?.response;
+                  if (isLiveCellGroup && t.response_type === 'yes_no' && r === 'no') return true;
+                  return !!r;
+                }).length;
+                const allGroupDone = groupVisible.length > 0 && groupDone === groupVisible.length;
+                const lcAllChecked = lcSubTasks.length > 0 && lcSubTasks.every(t => vatResponses[t.id]?.response === 'checked');
+                return (
+                  <div key={groupName || 'ungrouped'} style={{ marginBottom: groupName ? '6px' : '0', border: groupName ? '1px solid var(--border)' : 'none', borderRadius: groupName ? 'var(--radius-md)' : 0, overflow: 'hidden' }}>
+                    {groupName && (
+                    <button onClick={toggleGroup} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 16px', background: allGroupDone ? '#EAF7F0' : 'var(--bg-secondary)', border: 'none', cursor: 'pointer', borderBottom: isOpen ? '1px solid var(--border)' : 'none', textAlign: 'left', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                        <span style={{ fontSize: '13px', fontWeight: 700, color: allGroupDone ? '#27AE60' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{groupName}</span>
+                        {allGroupDone && <span style={{ fontSize: '10px', fontWeight: 600, color: '#27AE60', background: '#D5F5E3', padding: '2px 7px', borderRadius: 10, whiteSpace: 'nowrap', flexShrink: 0 }}>Complete</span>}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                        <span style={{ fontSize: '11px', color: allGroupDone ? '#27AE60' : 'var(--text-muted)' }}>{groupDone}/{groupVisible.length}</span>
+                        <ChevronDown size={14} style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'var(--text-muted)' }} />
+                      </div>
+                    </button>
+                    )}
+                    {isOpen && <div style={{ padding: groupName ? '10px 12px' : '4px 0', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {groupTasks.map(task => {
+                      if (isLiveCellGroup && task.response_type === 'checkbox' && lcParentResp !== 'yes') return null;
+                      const resp = vatResponses[task.id];
+                      const done = resp?.response === 'yes' || resp?.response === 'checked';
+                      if (task.response_type === 'placeholder') {
+                        return <div key={task.id} style={{ padding: '8px 14px', color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>Tasks to be defined.</div>;
+                      }
+                      return (
+                        <div key={task.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px' }}>
+                            <div style={{ display: 'flex', gap: '5px', flexShrink: 0, marginTop: '2px' }}>
+                              {(task.response_type === 'yes_no' || task.response_type === 'yes_no_na') ? (
+                                <>
+                                  <button onClick={() => handleVatResponse(task.id, resp?.response === 'yes' ? '' : 'yes')} title="Yes" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'yes' ? 'var(--success)' : 'var(--border)', background: resp?.response === 'yes' ? 'var(--success)' : 'transparent', color: resp?.response === 'yes' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
+                                  <button onClick={() => handleVatResponse(task.id, resp?.response === 'no' ? '' : 'no')} title="No" style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp?.response === 'no' ? 'var(--danger)' : 'var(--border)', background: resp?.response === 'no' ? 'var(--danger)' : 'transparent', color: resp?.response === 'no' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><XCircle size={13} /></button>
+                                  {task.response_type === 'yes_no_na' && <button onClick={() => handleVatResponse(task.id, resp?.response === 'na' ? '' : 'na')} style={{ padding: '0 7px', height: '26px', borderRadius: '13px', border: '2px solid', borderColor: resp?.response === 'na' ? 'var(--text-muted)' : 'var(--border)', background: resp?.response === 'na' ? 'var(--text-muted)' : 'transparent', color: resp?.response === 'na' ? 'white' : 'var(--text-muted)', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}>N/A</button>}
+                                </>
+                              ) : task.response_type === 'checkbox' ? (
+                                <button onClick={() => handleVatResponse(task.id, resp?.response === 'checked' ? '' : 'checked')} style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid', borderColor: resp?.response === 'checked' ? 'var(--purple-primary)' : 'var(--border)', background: resp?.response === 'checked' ? 'var(--purple-primary)' : 'transparent', color: resp?.response === 'checked' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
                               ) : (
-                                <div style={{ marginTop: 8, padding: '10px 12px', background: '#FFF8F0', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)' }}>
-                                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#E67E22', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>⚠ SOP Exception — Action Required</div>
-                                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: 6 }}>Document the exception, corrective action taken, and upload a photo. This will be sent to PM.</div>
-                                  <textarea
-                                    value={exc.note || ''}
-                                    onChange={e => handleSopNote(task.id, e.target.value)}
-                                    placeholder="Describe the exception and corrective action taken…"
-                                    rows={2}
-                                    style={{ width: '100%', padding: '5px 8px', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', background: 'white', marginBottom: 6 }}
-                                  />
-                                  {exc.photoPreview && (
-                                    <img src={exc.photoPreview} alt="SOP correction" style={{ width: '100%', maxHeight: 120, objectFit: 'cover', borderRadius: 4, marginBottom: 6 }} />
-                                  )}
-                                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'white', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)', fontSize: '12px', cursor: 'pointer', color: '#E67E22', fontWeight: 500 }}>
-                                      <Upload size={12} /> {exc.photo ? 'Change photo' : 'Upload photo *'}
-                                      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleSopPhotoSelect(task.id, e.target.files[0])} />
-                                    </label>
-                                    <button
-                                      onClick={() => handleSopSubmit(task)}
-                                      disabled={!exc.note?.trim() || !exc.photo || exc.submitting}
-                                      style={{ padding: '5px 14px', background: (!exc.note?.trim() || !exc.photo || exc.submitting) ? 'var(--border)' : '#E67E22', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: '12px', fontWeight: 600, cursor: (!exc.note?.trim() || !exc.photo || exc.submitting) ? 'default' : 'pointer' }}>
-                                      {exc.submitting ? 'Submitting…' : 'Submit to PM'}
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })()}
-                            {task.sub_tasks && task.sub_tasks.length > 0 && (() => {
-                              const trigger = task.sub_tasks[0]?.trigger || 'always';
-                              if (trigger === 'always') return true;
-                              const mainResp = resp?.response;
-                              if (trigger.startsWith('custom:')) return mainResp === trigger.slice(7);
-                              return mainResp === trigger;
-                            })() && (
-                              <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-                                {task.sub_tasks.map((st, si) => {
-                                  const stKey = `${task.id}_sub_${st.id}`;
-                                  const stDone = vatResponses[stKey]?.response === 'checked';
-                                  return (
-                                    <div key={si} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
-                                      <button onClick={() => handleVatResponse(stKey, stDone ? '' : 'checked')} style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${stDone ? 'var(--purple-primary)' : 'var(--border)'}`, background: stDone ? 'var(--purple-primary)' : 'transparent', color: stDone ? 'white' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}><Check size={11} /></button>
-                                      <span style={{ fontSize: 12, color: stDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: stDone ? 'line-through' : 'none' }}>{st.title}</span>
-                                    </div>
-                                  );
-                                })}
+                                <label style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                                  <Upload size={13} />
+                                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={() => {}} />
+                                </label>
+                              )}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                                <p style={{ fontSize: '13px', color: done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', lineHeight: 1.5, margin: 0, flex: 1 }}>{task.title}</p>
+                                <button onClick={() => openTaskDefEditor(task)} title="Edit task" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '1px 3px', display: 'flex', flexShrink: 0, opacity: 0.5 }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}><Pencil size={12} /></button>
                               </div>
-                            )}
+                              {task.sop_trigger && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px', padding: '2px 7px', background: '#FEF0F0', color: 'var(--danger)', borderRadius: '12px', fontSize: '10px', fontWeight: 600 }}><AlertTriangle size={9} /> {task.conditional_text ? <a href={task.conditional_text} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--danger)', textDecoration: 'underline' }}>SOP</a> : 'SOP'}</span>}
+                              {!task.sop_trigger && task.conditional_text && !task.conditional_text.startsWith('http') && (
+                                <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', margin: '3px 0 0', lineHeight: 1.4 }}>{task.conditional_text}</p>
+                              )}
+                              {vatExisting[task.id] && (
+                                <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                                  <span style={{ color: 'var(--success)' }}>✓</span> Done by {vatExisting[task.id].assignment?.profile?.full_name || '?'} on {new Date(vatExisting[task.id].responded_at).toLocaleDateString()}
+                                </div>
+                              )}
+                              {resp?.response && (
+                                <textarea value={resp?.notes || ''} onChange={e => handleVatNotes(task.id, e.target.value)} placeholder="Notes (optional)" rows={1}
+                                  style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />
+                              )}
+                              {task.sop_trigger && resp?.response === 'no' && (() => {
+                                const exc = sopExceptions[task.id] || {};
+                                return exc.submitted ? (
+                                  <div style={{ marginTop: 8, padding: '8px 12px', background: '#EAF7F0', border: '1px solid #A9DFBF', borderRadius: 'var(--radius-sm)', fontSize: '12px', color: '#27AE60', fontWeight: 500 }}>
+                                    ✓ Exception documented and PM notified.
+                                  </div>
+                                ) : (
+                                  <div style={{ marginTop: 8, padding: '10px 12px', background: '#FFF8F0', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)' }}>
+                                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#E67E22', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>⚠ SOP Exception — Action Required</div>
+                                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: 6 }}>Document the exception, corrective action taken, and upload a photo. This will be sent to PM.</div>
+                                    <textarea value={exc.note || ''} onChange={e => handleSopNote(task.id, e.target.value)} placeholder="Describe the exception and corrective action taken…" rows={2}
+                                      style={{ width: '100%', padding: '5px 8px', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', background: 'white', marginBottom: 6 }} />
+                                    {exc.photoPreview && (
+                                      <img src={exc.photoPreview} alt="SOP correction" style={{ width: '100%', maxHeight: 120, objectFit: 'cover', borderRadius: 4, marginBottom: 6 }} />
+                                    )}
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                      <label style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'white', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)', fontSize: '12px', cursor: 'pointer', color: '#E67E22', fontWeight: 500 }}>
+                                        <Upload size={12} /> {exc.photo ? 'Change photo' : 'Upload photo *'}
+                                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleSopPhotoSelect(task.id, e.target.files[0])} />
+                                      </label>
+                                      <button onClick={() => handleSopSubmit(task)} disabled={!exc.note?.trim() || !exc.photo || exc.submitting}
+                                        style={{ padding: '5px 14px', background: (!exc.note?.trim() || !exc.photo || exc.submitting) ? 'var(--border)' : '#E67E22', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: '12px', fontWeight: 600, cursor: (!exc.note?.trim() || !exc.photo || exc.submitting) ? 'default' : 'pointer' }}>
+                                        {exc.submitting ? 'Submitting…' : 'Submit to PM'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                              {task.sub_tasks && task.sub_tasks.length > 0 && (() => {
+                                const trigger = task.sub_tasks[0]?.trigger || 'always';
+                                if (trigger === 'always') return true;
+                                const mainResp = resp?.response;
+                                if (trigger.startsWith('custom:')) return mainResp === trigger.slice(7);
+                                return mainResp === trigger;
+                              })() && (
+                                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                                  {task.sub_tasks.map((st, si) => {
+                                    const stKey = `${task.id}_sub_${st.id}`;
+                                    const stDone = vatResponses[stKey]?.response === 'checked';
+                                    return (
+                                      <div key={si} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
+                                        <button onClick={() => handleVatResponse(stKey, stDone ? '' : 'checked')} style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${stDone ? 'var(--purple-primary)' : 'var(--border)'}`, background: stDone ? 'var(--purple-primary)' : 'transparent', color: stDone ? 'white' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}><Check size={11} /></button>
+                                        <span style={{ fontSize: 12, color: stDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: stDone ? 'line-through' : 'none' }}>{st.title}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                    {isLiveCellGroup && !lcParentResp && (
+                      <div style={{ padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '4px' }}>Select Yes or No above to continue.</div>
+                    )}
+                    {isLiveCellGroup && lcParentResp === 'no' && (
+                      <div style={{ padding: '10px 14px', background: '#EAF7F0', borderRadius: 'var(--radius-md)', border: '1px solid #A9DFBF', fontSize: '13px', color: '#27AE60', fontWeight: 500, marginTop: '4px' }}>✓ No new live cell material this week — protocol steps not required.</div>
+                    )}
+                    {isLiveCellGroup && lcParentResp === 'yes' && !lcAllChecked && (
+                      <div style={{ padding: '8px 14px', fontSize: '12px', color: 'var(--danger)', fontWeight: 500, marginTop: '2px' }}>All protocol steps must be confirmed to complete this task.</div>
+                    )}
+                    {isLiveCellGroup && lcParentResp === 'yes' && lcAllChecked && (
+                      <div style={{ padding: '10px 14px', background: '#EAF7F0', borderRadius: 'var(--radius-md)', border: '1px solid #A9DFBF', fontSize: '13px', color: '#27AE60', fontWeight: 500, marginTop: '4px' }}>✓ All quarantine protocol steps confirmed.</div>
+                    )}
+                    </div>}
+                  </div>
+                );
+              };
 
-                  {/* Live Cell group: contextual status after the parent task */}
-                  {isLiveCellGroup && !lcParentResp && (
-                    <div style={{ padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '4px' }}>
-                      Select Yes or No above to continue.
-                    </div>
-                  )}
-                  {isLiveCellGroup && lcParentResp === 'no' && (
-                    <div style={{ padding: '10px 14px', background: '#EAF7F0', borderRadius: 'var(--radius-md)', border: '1px solid #A9DFBF', fontSize: '13px', color: '#27AE60', fontWeight: 500, marginTop: '4px' }}>
-                      ✓ No new live cell material this week — protocol steps not required.
-                    </div>
-                  )}
-                  {isLiveCellGroup && lcParentResp === 'yes' && !lcAllChecked && (
-                    <div style={{ padding: '8px 14px', fontSize: '12px', color: 'var(--danger)', fontWeight: 500, marginTop: '2px' }}>
-                      All protocol steps must be confirmed to complete this task.
-                    </div>
-                  )}
-                  {isLiveCellGroup && lcParentResp === 'yes' && lcAllChecked && (
-                    <div style={{ padding: '10px 14px', background: '#EAF7F0', borderRadius: 'var(--radius-md)', border: '1px solid #A9DFBF', fontSize: '13px', color: '#27AE60', fontWeight: 500, marginTop: '4px' }}>
-                      ✓ All quarantine protocol steps confirmed.
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+              return visibleByAuditArea.map(([auditArea, gnMap]) => {
+                if (!auditArea) {
+                  return [...gnMap.entries()].map(([gn, gt]) => renderSectionGroup(gn, gt));
+                }
+                const aaKey = `__aa__${auditArea}`;
+                const aaOpen = vatExpandedAuditAreas.has(aaKey);
+                const toggleAA = () => setVatExpandedAuditAreas(prev => { const n = new Set(prev); n.has(aaKey) ? n.delete(aaKey) : n.add(aaKey); return n; });
+                const aaTasks = [...gnMap.values()].flat();
+                const aaTotal = aaTasks.length;
+                const aaDone = aaTasks.filter(t => { const r = vatResponses[t.id]?.response; return !!r; }).length;
+                const allAaDone = aaTotal > 0 && aaDone === aaTotal;
+                return (
+                  <div key={auditArea} style={{ marginBottom: 10 }}>
+                    <button onClick={toggleAA} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: allAaDone ? '#D5F5E3' : 'var(--purple-primary)', border: 'none', borderRadius: aaOpen ? 'var(--radius-md) var(--radius-md) 0 0' : 'var(--radius-md)', cursor: 'pointer', textAlign: 'left', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                        <span style={{ fontSize: '13px', fontWeight: 700, color: allAaDone ? '#27AE60' : 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{auditArea}</span>
+                        {allAaDone && <span style={{ fontSize: '10px', fontWeight: 600, color: '#27AE60', background: 'white', padding: '2px 7px', borderRadius: 10, whiteSpace: 'nowrap', flexShrink: 0 }}>Complete</span>}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                        <span style={{ fontSize: '11px', color: allAaDone ? '#27AE60' : 'rgba(255,255,255,0.8)' }}>{aaDone}/{aaTotal}</span>
+                        <ChevronDown size={14} style={{ transform: aaOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: allAaDone ? '#27AE60' : 'rgba(255,255,255,0.8)' }} />
+                      </div>
+                    </button>
+                    {aaOpen && (
+                      <div style={{ border: '1px solid var(--purple-primary)', borderTop: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)', padding: '8px 8px 4px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {[...gnMap.entries()].map(([gn, gt]) => renderSectionGroup(gn, gt))}
+                      </div>
+                    )}
+                  </div>
+                );
+              });
+            })()}
           </>
         )}
 
@@ -2971,8 +3264,11 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     [...occs].sort((a, b) => {
       const ta = tasks.find(t => t.id === a.task_definition_id);
       const tb = tasks.find(t => t.id === b.task_definition_id);
-      const na = ta?.group_name || ta?.title || '';
-      const nb = tb?.group_name || tb?.title || '';
+      const ga = ta?.group_name || '';
+      const gb = tb?.group_name || '';
+      if (ga !== gb) return ga.localeCompare(gb);
+      const na = ta?.title || '';
+      const nb = tb?.title || '';
       if (na !== nb) return na.localeCompare(nb);
       return a.due_date.localeCompare(b.due_date);
     }).forEach(o => {
@@ -3008,7 +3304,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             {taskGroupOrder.map((taskId, gi) => {
               const groupOccs = taskGroupMap[taskId];
               const taskDef = tasks.find(t => t.id === taskId);
-              const taskLabel = taskDef?.group_name || taskDef?.title || taskId;
+              const taskLabel = taskDef?.title || taskDef?.group_name || taskId;
               const allGroupChecked = groupOccs.every(o => checkedIds.has(o.id));
               const someGroupChecked = groupOccs.some(o => checkedIds.has(o.id));
 
@@ -3027,8 +3323,11 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                         });
                       }}
                       style={{ accentColor: 'var(--purple-primary)', cursor: 'pointer' }} />
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{taskLabel}</span>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', flex: 1 }}>{taskLabel}</span>
+                    {taskDef?.group_name && (
+                      <span style={{ fontSize: 11, color: 'var(--purple-primary)', background: 'rgba(123,63,160,0.1)', padding: '1px 7px', borderRadius: 10, flexShrink: 0 }}>{taskDef.group_name}</span>
+                    )}
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>
                       {groupOccs.length} occurrence{groupOccs.length !== 1 ? 's' : ''}
                       {taskDef?.frequency && ` · ${FREQ_LABEL[taskDef.frequency.toLowerCase()] || taskDef.frequency}`}
                     </span>
@@ -3418,14 +3717,15 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   }
 
   async function handleCreateOneOff() {
-    if (!oneOffForm.title.trim() || !oneOffForm.dueDate || oneOffForm.assigneeIds.length === 0) {
-      setOneOffError('Please enter a title, due date, and assign to at least one person.');
+    if (!oneOffForm.title.trim() || oneOffForm.assigneeIds.length === 0) {
+      setOneOffError('Please enter a title and assign to at least one person.');
       return;
     }
     setOneOffSaving(true);
     setOneOffError('');
     const rows = oneOffForm.assigneeIds.map(uid => ({
       title: oneOffForm.title.trim(),
+      description: oneOffForm.description.trim() || null,
       assigned_to: uid,
       due_date: oneOffForm.dueDate,
       show_on_public_dashboard: oneOffForm.showOnPublic,
@@ -3438,7 +3738,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       setOneOffSaving(false);
       return;
     }
-    setOneOffForm({ title: '', assigneeIds: [], dueDate: '', showOnPublic: false });
+    setOneOffForm({ title: '', description: '', assigneeIds: [], dueDate: '', showOnPublic: false });
     setOneOffSaving(false);
     loadOneOffTab();
   }
@@ -3460,41 +3760,130 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
   function renderOneOffTab() {
     const todayStr = today();
-    const pending = oneOffTasks.filter(t => t.status !== 'done');
-    const done = oneOffTasks.filter(t => t.status === 'done');
+
+    // People who have at least one task
+    const peopleWithTasks = profiles.filter(p => oneOffTasks.some(t => t.assigned_to === p.id));
+
+    // Overdue (not done, past due)
+    const overdueTasks = oneOffTasks.filter(t => t.status !== 'done' && t.due_date && t.due_date < todayStr);
+    const overdueByPerson = peopleWithTasks.map(p => ({
+      profile: p,
+      tasks: overdueTasks.filter(t => t.assigned_to === p.id),
+    })).filter(g => g.tasks.length > 0);
+
+    // Search + person filter for task list below
+    const searchQ = oneOffSearch.trim().toLowerCase();
+    const tasksForTab = oneOffTasks.filter(t => {
+      if (oneOffPersonTab !== 'all' && t.assigned_to !== oneOffPersonTab) return false;
+      if (searchQ && !t.title.toLowerCase().includes(searchQ) && !(t.description || '').toLowerCase().includes(searchQ)) return false;
+      return true;
+    });
+    const pendingForTab = tasksForTab.filter(t => t.status !== 'done');
+    const doneForTab    = tasksForTab.filter(t => t.status === 'done');
+
+    const TaskRow = ({ task }) => {
+      const isDone = task.status === 'done';
+      const isOverdue = !isDone && task.due_date && task.due_date < todayStr;
+      const isConfirmDelete = confirmDeleteOneOff === task.id;
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--bg-primary)', borderRadius: 8, border: `1px solid ${isOverdue ? '#fca5a5' : 'var(--border)'}`, opacity: isDone ? 0.55 : 1 }}>
+          <input type="checkbox" checked={isDone} onChange={() => handleOneOffToggleDone(task)}
+            style={{ width: 15, height: 15, flexShrink: 0, cursor: 'pointer', accentColor: 'var(--purple-primary)' }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</div>
+            {task.description && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.description}</div>}
+          </div>
+          {oneOffPersonTab === 'all' && task.assignee?.full_name && (
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{task.assignee.full_name}</span>
+          )}
+          {task.show_on_public_dashboard && <Globe size={12} color="var(--purple-primary)" style={{ flexShrink: 0 }} />}
+          {task.due_date ? (
+            <span style={{ fontSize: 11, color: isOverdue ? '#ef4444' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: isOverdue ? 600 : 400 }}>
+              {fmtDate(task.due_date)}
+            </span>
+          ) : (
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>
+              Assigned {task.created_at ? fmtDate(task.created_at.slice(0, 10)) : ''}
+            </span>
+          )}
+          {isOverdue && <AlertTriangle size={11} color="#ef4444" style={{ flexShrink: 0 }} />}
+          {isConfirmDelete ? (
+            <>
+              <button onClick={() => handleOneOffDelete(task.id)} style={{ fontSize: 11, padding: '3px 8px', background: 'var(--danger)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}>Confirm</button>
+              <button onClick={() => setConfirmDeleteOneOff(null)} style={{ fontSize: 11, padding: '3px 8px', background: 'none', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0 }}>Cancel</button>
+            </>
+          ) : (
+            <button onClick={() => setConfirmDeleteOneOff(task.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex', flexShrink: 0 }}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
+      );
+    };
 
     return (
       <div>
-        {/* Create form */}
+
+        {/* ── OVERDUE ALERT (above create form) ── */}
+        {overdueByPerson.length > 0 && (
+          <div style={{ marginBottom: 20, padding: '14px 18px', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <AlertTriangle size={15} color="#ef4444" />
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#ef4444' }}>
+                {overdueTasks.length} Overdue Task{overdueTasks.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {overdueByPerson.map(({ profile, tasks }) => (
+                <div key={profile.id}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                    {fmtName(profile.full_name)} — {tasks.length} task{tasks.length !== 1 ? 's' : ''}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {tasks.sort((a, b) => a.due_date.localeCompare(b.due_date)).map(t => (
+                      <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#7f1d1d' }}>
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#ef4444', flexShrink: 0, display: 'inline-block' }} />
+                        <span style={{ flex: 1 }}>{t.title}</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#ef4444', whiteSpace: 'nowrap' }}>Due {fmtDate(t.due_date)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── CREATE FORM ── */}
         <div style={{ marginBottom: 24, padding: 20, background: 'var(--bg-secondary)', borderRadius: 10, border: '1px solid var(--border)' }}>
           <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Create Ad hoc Task</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Title</label>
-              <input
-                value={oneOffForm.title}
-                onChange={e => setOneOffForm(p => ({ ...p, title: e.target.value }))}
-                placeholder="Task title"
-                style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-              />
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Task Name</label>
+                {(() => { const wc = oneOffForm.title.trim() ? oneOffForm.title.trim().split(/\s+/).length : 0; return wc > 8 ? <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>⚠ {wc}/8 words — keep it short</span> : wc > 0 ? <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{wc}/8 words</span> : null; })()}
+              </div>
+              <input value={oneOffForm.title} onChange={e => setOneOffForm(p => ({ ...p, title: e.target.value }))}
+                placeholder="Short task name (8 words max)"
+                style={{ width: '100%', padding: '8px 10px', border: `1px solid ${oneOffForm.title.trim().split(/\s+/).filter(Boolean).length > 8 ? '#f59e0b' : 'var(--border)'}`, borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Task Description <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+              <textarea value={oneOffForm.description} onChange={e => setOneOffForm(p => ({ ...p, description: e.target.value }))}
+                placeholder="Full details, context, or instructions" rows={2}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
             </div>
             <div>
               <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Due Date</label>
-              <input
-                type="date"
-                value={oneOffForm.dueDate}
-                onChange={e => setOneOffForm(p => ({ ...p, dueDate: e.target.value }))}
-                style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-              />
+              <input type="date" value={oneOffForm.dueDate} onChange={e => setOneOffForm(p => ({ ...p, dueDate: e.target.value }))}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 20 }}>
-              <input
-                type="checkbox"
-                id="one-off-public"
-                checked={oneOffForm.showOnPublic}
+              <input type="checkbox" id="one-off-public" checked={oneOffForm.showOnPublic}
                 onChange={e => setOneOffForm(p => ({ ...p, showOnPublic: e.target.checked }))}
-                style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--purple-primary)' }}
-              />
+                style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--purple-primary)' }} />
               <label htmlFor="one-off-public" style={{ fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                 <Globe size={13} color="var(--purple-primary)" /> Show on public dashboard
               </label>
@@ -3509,12 +3898,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                   <button key={p.id} onClick={() => setOneOffForm(prev => ({
                     ...prev,
                     assigneeIds: selected ? prev.assigneeIds.filter(id => id !== p.id) : [...prev.assigneeIds, p.id],
-                  }))} style={{
-                    padding: '4px 12px', borderRadius: 16, fontSize: 12, fontWeight: selected ? 600 : 400, cursor: 'pointer',
-                    border: `1.5px solid ${selected ? 'var(--purple-primary)' : 'var(--border)'}`,
-                    background: selected ? 'var(--purple-faint)' : 'transparent',
-                    color: selected ? 'var(--purple-primary)' : 'var(--text-secondary)',
-                  }}>
+                  }))} style={{ padding: '4px 12px', borderRadius: 16, fontSize: 12, fontWeight: selected ? 600 : 400, cursor: 'pointer', border: `1.5px solid ${selected ? 'var(--purple-primary)' : 'var(--border)'}`, background: selected ? 'var(--purple-faint)' : 'transparent', color: selected ? 'var(--purple-primary)' : 'var(--text-secondary)' }}>
                     {selected && <Check size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />}
                     {p.full_name}
                   </button>
@@ -3528,64 +3912,56 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           </button>
         </div>
 
-        {/* Task list */}
+        {/* ── TASK LIST (person subtabs + search) ── */}
         {oneOffLoading ? (
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading…</div>
+        ) : oneOffTasks.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 14 }}>No ad hoc tasks yet.</div>
         ) : (
-          <>
-            {pending.length === 0 && done.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 14 }}>No ad hoc tasks yet.</div>
+          <div>
+            {/* Search */}
+            <div style={{ marginBottom: 14 }}>
+              <input value={oneOffSearch} onChange={e => setOneOffSearch(e.target.value)}
+                placeholder="Search tasks across all users…"
+                style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+
+            {/* Person subtabs */}
+            <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border)', marginBottom: 16, flexWrap: 'wrap' }}>
+              {[{ id: 'all', label: 'All', count: oneOffTasks.length }, ...peopleWithTasks.map(p => ({ id: p.id, label: fmtName(p.full_name), count: oneOffTasks.filter(t => t.assigned_to === p.id).length }))].map(tab => (
+                <button key={tab.id} onClick={() => setOneOffPersonTab(tab.id)} style={{ padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: oneOffPersonTab === tab.id ? 'var(--purple-primary)' : 'var(--text-muted)', borderBottom: `2px solid ${oneOffPersonTab === tab.id ? 'var(--purple-primary)' : 'transparent'}`, marginBottom: -2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {tab.label}
+                  <span style={{ fontSize: 11, background: oneOffPersonTab === tab.id ? 'var(--purple-faint)' : 'var(--bg-secondary)', color: oneOffPersonTab === tab.id ? 'var(--purple-primary)' : 'var(--text-muted)', borderRadius: 10, padding: '1px 6px', fontWeight: 700 }}>{tab.count}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Task rows */}
+            {pendingForTab.length === 0 && doneForTab.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: 13 }}>
+                {searchQ ? 'No tasks match your search.' : 'No tasks for this person.'}
+              </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {[...pending, ...done].map(task => {
-                  const isDone = task.status === 'done';
-                  const overdue = !isDone && task.due_date && task.due_date < todayStr;
-                  const isConfirmDelete = confirmDeleteOneOff === task.id;
-                  return (
-                    <div key={task.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-                      background: 'var(--bg-primary)', borderRadius: 8, border: '1px solid var(--border)',
-                      opacity: isDone ? 0.55 : 1,
-                    }}>
-                      <input
-                        type="checkbox"
-                        checked={isDone}
-                        onChange={() => handleOneOffToggleDone(task)}
-                        style={{ width: 15, height: 15, flexShrink: 0, cursor: 'pointer', accentColor: 'var(--purple-primary)' }}
-                      />
-                      <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none' }}>
-                        {task.title}
-                      </span>
-                      {task.assignee?.full_name && (
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{task.assignee.full_name}</span>
-                      )}
-                      {task.show_on_public_dashboard && (
-                        <Globe size={12} color="var(--purple-primary)" style={{ flexShrink: 0 }} title="Visible on public dashboard" />
-                      )}
-                      {task.due_date && (
-                        <span style={{ fontSize: 11, color: overdue ? 'var(--danger)' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                          {fmtDate(task.due_date)}
-                        </span>
-                      )}
-                      {overdue && <AlertTriangle size={11} color="var(--danger)" style={{ flexShrink: 0 }} />}
-                      {isConfirmDelete ? (
-                        <>
-                          <button onClick={() => handleOneOffDelete(task.id)} style={{ fontSize: 11, padding: '3px 8px', background: 'var(--danger)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}>Confirm</button>
-                          <button onClick={() => setConfirmDeleteOneOff(null)} style={{ fontSize: 11, padding: '3px 8px', background: 'none', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0 }}>Cancel</button>
-                        </>
-                      ) : (
-                        <button onClick={() => setConfirmDeleteOneOff(task.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex', flexShrink: 0 }}
-                          onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
-                          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
-                          <Trash2 size={13} />
-                        </button>
-                      )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {pendingForTab.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 }}>
+                      Pending · {pendingForTab.length}
                     </div>
-                  );
-                })}
+                    {pendingForTab.sort((a, b) => (a.due_date || '').localeCompare(b.due_date || '')).map(t => <TaskRow key={t.id} task={t} />)}
+                  </>
+                )}
+                {doneForTab.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '12px 0 4px' }}>
+                      Completed · {doneForTab.length}
+                    </div>
+                    {doneForTab.sort((a, b) => (b.due_date || '').localeCompare(a.due_date || '')).map(t => <TaskRow key={t.id} task={t} />)}
+                  </>
+                )}
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
     );
@@ -3721,12 +4097,14 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   }).length;
 
   const tabs = [
-    { id: 'view-all',     label: 'Recurrent Tasks' },
-    { id: 'oneoff',       label: 'Ad hoc Tasks' },
-    { id: 'calendar',     label: 'Calendar' },
-    { id: 'productivity', label: 'Productivity' },
-    { id: 'assigned',     label: 'Insights', badge: unassignedCount || null },
-    { id: 'my-tasks',     label: 'My Tasks', badge: myTaskOverdueCt || null },
+    ...(canManage ? [
+      { id: 'view-all',     label: 'Recurrent Tasks' },
+      { id: 'oneoff',       label: 'Ad hoc Tasks' },
+      { id: 'calendar',     label: 'Calendar' },
+      { id: 'productivity', label: 'Productivity' },
+      { id: 'assigned',     label: 'Recurrent Task Assignments', badge: unassignedCount || null },
+    ] : []),
+    { id: 'my-tasks', label: 'My Tasks', badge: null },
   ];
 
   return (
@@ -3756,7 +4134,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       </div>
 
       {/* Tab content */}
-      {tab === 'view-all' && (
+      {canManage && tab === 'view-all' && (
         <>
           <div style={card}>
             {renderStepIndicator()}
@@ -3774,13 +4152,13 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         </>
       )}
 
-      {tab === 'calendar' && (
+      {canManage && tab === 'calendar' && (
         <div style={card}>
           {renderCalendar()}
         </div>
       )}
 
-      {tab === 'productivity' && (
+      {canManage && tab === 'productivity' && (
         <div style={card}>
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 16, fontWeight: 700 }}>Task Productivity Evaluations</div>
@@ -3792,7 +4170,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         </div>
       )}
 
-      {tab === 'assigned' && (
+      {canManage && tab === 'assigned' && (
         <div style={card}>
           {renderAssignedTab()}
         </div>
@@ -3804,7 +4182,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         </div>
       )}
 
-      {tab === 'oneoff' && (
+      {canManage && tab === 'oneoff' && (
         <div style={card}>
           {renderOneOffTab()}
         </div>

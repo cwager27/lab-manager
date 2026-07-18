@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const nodemailer = require('nodemailer');
-const { generateOccurrences } = require('../lib/occurrenceGenerator');
+const { generateOccurrences, computeGaps, parseDate } = require('../lib/occurrenceGenerator');
 const { supabaseAdmin } = require('../lib/supabaseAdmin');
 
 const mailer = nodemailer.createTransport({
@@ -99,6 +99,43 @@ router.get('/tasks2/occurrences', async (req, res) => {
     const { data, error } = await q;
     if (error) throw error;
     res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Ensure occurrences exist for specific tasks in a date range ───────────────
+// Used by the assignment wizard to backfill past or newly-created task occurrences.
+
+router.post('/tasks2/ensure-occurrences', async (req, res) => {
+  try {
+    const { taskIds, start, end } = req.body || {};
+    if (!taskIds?.length || !start || !end) return res.json({ inserted: 0 });
+
+    const windowStart = parseDate(start);
+    const windowEnd = parseDate(end);
+
+    const { data: taskDefs, error: taskErr } = await supabaseAdmin
+      .from('tasks_definitions')
+      .select('id, title, frequency, recurrence_rule, recurrence_anchor')
+      .in('id', taskIds)
+      .eq('status', 'published')
+      .not('recurrence_rule', 'is', null);
+
+    if (taskErr) throw taskErr;
+
+    let totalInserted = 0;
+    for (const task of (taskDefs || [])) {
+      const gaps = await computeGaps(supabaseAdmin, task, windowStart, windowEnd);
+      if (gaps.length) {
+        const { error: insertErr } = await supabaseAdmin
+          .from('task_occurrences')
+          .insert(gaps.map(due_date => ({ task_definition_id: task.id, due_date, status: 'unassigned' })));
+        if (insertErr) throw insertErr;
+        totalInserted += gaps.length;
+      }
+    }
+    res.json({ inserted: totalInserted });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

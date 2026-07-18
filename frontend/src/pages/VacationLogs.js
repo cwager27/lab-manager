@@ -19,6 +19,7 @@ const LEAVE_TYPES = [
   'Medical Leave',
   'Jury Duty/Voting',
   'Volunteer/Community Service',
+  'Work from Home',
 ];
 
 const STATUS_STYLES = {
@@ -28,13 +29,14 @@ const STATUS_STYLES = {
 };
 
 const LEAVE_COLORS = {
-  'Vacation':                  { bg: '#EBF5FB', text: '#2980B9' },
-  'Sick Leave':                { bg: '#FDEDEC', text: '#E74C3C' },
-  'Parental Leave':            { bg: '#FDF2F8', text: '#A93226' },
-  'Bereavement':               { bg: '#F2F3F4', text: '#626567' },
-  'Medical Leave':             { bg: '#FDEDEC', text: '#C0392B' },
-  'Jury Duty/Voting':          { bg: '#EAF7F0', text: '#27AE60' },
-  'Volunteer/Community Service': { bg: '#EAFAF1', text: '#1E8449' },
+  'Vacation':                    { bg: '#FEE2E2', text: '#B91C1C' },
+  'Sick Leave':                  { bg: '#FFEDD5', text: '#C2410C' },
+  'Parental Leave':              { bg: '#FEF9C3', text: '#92400E' },
+  'Bereavement':                 { bg: '#DCFCE7', text: '#166534' },
+  'Medical Leave':               { bg: '#CFFAFE', text: '#155E75' },
+  'Jury Duty/Voting':            { bg: '#DBEAFE', text: '#1D4ED8' },
+  'Volunteer/Community Service': { bg: '#EDE9FE', text: '#6D28D9' },
+  'Work from Home':              { bg: '#FCE7F3', text: '#BE185D' },
 };
 
 const EMPTY_FORM = {
@@ -49,12 +51,18 @@ export default function VacationLogs({ userRole, userId, profile }) {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [activeFilter, setActiveFilter] = useState('all');
   const [reviewingId, setReviewingId] = useState(null);
   const [reviewerComment, setReviewerComment] = useState('');
   const [form, setForm] = useState(EMPTY_FORM);
+  const [activeTab, setActiveTab] = useState('requests');
+  const [summaryData, setSummaryData] = useState(null);
+  const [sortCol, setSortCol] = useState('name');
+  const [sortDir, setSortDir] = useState('asc');
+  const [selectedPeople, setSelectedPeople] = useState([]);
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const isAdmin = userRole === 'admin';
+  const canSeeAll = isAdmin || userRole === 'pm';
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchRequests(); }, [userId]);
@@ -65,14 +73,42 @@ export default function VacationLogs({ userRole, userId, profile }) {
       .from('vacation_requests')
       .select('*, requester:profiles!vacation_requests_requested_by_fkey(full_name, email)')
       .order('created_at', { ascending: false });
-
-    if (!isAdmin) {
-      query = query.eq('requested_by', userId);
-    }
-
+    if (!canSeeAll) query = query.eq('requested_by', userId);
     const { data } = await query;
     setRequests(data || []);
     setLoading(false);
+  }
+
+  async function fetchSummaries() {
+    const year = new Date().getFullYear();
+    const yearStart = `${year}-01-01`;
+    const yearEnd = `${year}-12-31`;
+    const [{ data: members }, { data: reqs }] = await Promise.all([
+      supabase.from('profiles').select('full_name').not('full_name', 'is', null).order('full_name'),
+      supabase
+        .from('vacation_requests')
+        .select('start_date, end_date, leave_type, requester:profiles!vacation_requests_requested_by_fkey(full_name)')
+        .in('status', ['pending', 'approved'])
+        .lte('start_date', yearEnd)
+        .gte('end_date', yearStart),
+    ]);
+
+    const clamp = (start, end) => {
+      const s = start < yearStart ? yearStart : start;
+      const e = end > yearEnd ? yearEnd : end;
+      return Math.max(0, Math.ceil((new Date(e) - new Date(s)) / 86400000) + 1);
+    };
+
+    const summary = {};
+    for (const m of (members || [])) summary[m.full_name] = {};
+    for (const req of (reqs || [])) {
+      const name = req.requester?.full_name;
+      if (!name) continue;
+      if (!summary[name]) summary[name] = {};
+      const days = clamp(req.start_date, req.end_date);
+      summary[name][req.leave_type] = (summary[name][req.leave_type] || 0) + days;
+    }
+    setSummaryData(summary);
   }
 
   async function autoReassignMeetings(requestedBy, startDate, endDate, requesterName) {
@@ -134,6 +170,7 @@ export default function VacationLogs({ userRole, userId, profile }) {
       setShowForm(false);
       setForm(EMPTY_FORM);
       fetchRequests();
+      if (summaryData !== null) fetchSummaries();
     }
   }
 
@@ -184,19 +221,11 @@ export default function VacationLogs({ userRole, userId, profile }) {
     return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
   }
 
-  const myRequests = requests.filter(r => r.requested_by === userId);
   const pendingRequests = requests.filter(r => r.status === 'pending');
   const approvedRequests = requests.filter(r => r.status === 'approved');
   const today = new Date().toISOString().split('T')[0];
   const currentlyOut = approvedRequests.filter(r => r.start_date <= today && r.end_date >= today);
 
-  const filteredRequests = requests.filter(r => {
-    if (activeFilter === 'all') return true;
-    if (activeFilter === 'mine') return r.requested_by === userId;
-    if (activeFilter === 'pending') return r.status === 'pending';
-    if (activeFilter === 'approved') return r.status === 'approved';
-    return true;
-  });
 
   const needsApproval = !NO_APPROVAL_REQUIRED.has(form.leave_type);
 
@@ -204,7 +233,7 @@ export default function VacationLogs({ userRole, userId, profile }) {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
-          <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Time Away Requests</h1>
+          <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Time Off</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>Submit and track time away from the lab</p>
         </div>
         <button onClick={() => setShowForm(true)} style={{
@@ -229,7 +258,7 @@ export default function VacationLogs({ userRole, userId, profile }) {
 
       <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
         {[
-          { label: 'My Requests', value: myRequests.length, color: 'var(--purple-primary)', bg: 'var(--purple-faint)' },
+          { label: 'Total', value: requests.length, color: 'var(--purple-primary)', bg: 'var(--purple-faint)' },
           { label: 'Pending', value: pendingRequests.length, color: '#F39C12', bg: '#FEF9E7' },
           { label: 'Approved', value: approvedRequests.length, color: '#27AE60', bg: '#EAF7F0' },
           { label: 'Out Today', value: currentlyOut.length, color: '#2980B9', bg: '#EBF5FB' },
@@ -243,31 +272,161 @@ export default function VacationLogs({ userRole, userId, profile }) {
         ))}
       </div>
 
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-        {[
-          { id: 'all', label: 'All Requests' },
-          { id: 'mine', label: 'My Requests' },
-          { id: 'pending', label: `Pending${pendingRequests.length > 0 ? ` (${pendingRequests.length})` : ''}` },
-          { id: 'approved', label: 'Approved' },
-        ].map(f => (
-          <button key={f.id} onClick={() => setActiveFilter(f.id)} style={{
-            padding: '7px 14px', borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--border)',
-            background: activeFilter === f.id ? 'var(--purple-primary)' : 'var(--bg-primary)',
-            color: activeFilter === f.id ? 'white' : 'var(--text-secondary)',
-            fontWeight: activeFilter === f.id ? 600 : 400, fontSize: '12px',
-          }}>{f.label}</button>
-        ))}
-      </div>
+      {canSeeAll && (
+        <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', borderBottom: '1px solid var(--border)', paddingBottom: '0' }}>
+          {[
+            { id: 'requests', label: 'All Requests' },
+            { id: 'summaries', label: `Summaries — ${new Date().getFullYear()}` },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setActiveTab(tab.id);
+                if (tab.id === 'summaries' && !summaryData) fetchSummaries();
+              }}
+              style={{
+                padding: '8px 16px',
+                border: 'none',
+                background: 'none',
+                fontSize: '13px',
+                fontWeight: activeTab === tab.id ? 700 : 500,
+                color: activeTab === tab.id ? 'var(--purple-primary)' : 'var(--text-muted)',
+                borderBottom: activeTab === tab.id ? '2px solid var(--purple-primary)' : '2px solid transparent',
+                cursor: 'pointer',
+                marginBottom: '-1px',
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {loading ? (
+      {activeTab === 'summaries' && canSeeAll ? (
+        summaryData === null ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading summaries...</div>
+        ) : Object.keys(summaryData).length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
+            No approved or pending requests for {new Date().getFullYear()}.
+          </div>
+        ) : (() => {
+          const allTypes = LEAVE_TYPES;
+          const allPeople = Object.keys(summaryData).sort();
+          const getTotal = n => Object.values(summaryData[n] || {}).reduce((s, v) => s + v, 0);
+          const visible = selectedPeople.length === 0 ? allPeople : allPeople.filter(p => selectedPeople.includes(p));
+          const sorted = [...visible].sort((a, b) => {
+            const dir = sortDir === 'asc' ? 1 : -1;
+            if (sortCol === 'name') return dir * a.localeCompare(b);
+            if (sortCol === 'total') return (dir * (getTotal(a) - getTotal(b))) || a.localeCompare(b);
+            const av = (summaryData[a] || {})[sortCol] || 0;
+            const bv = (summaryData[b] || {})[sortCol] || 0;
+            return (dir * (av - bv)) || a.localeCompare(b);
+          });
+          const toggleSort = col => {
+            if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+            else { setSortCol(col); setSortDir('desc'); }
+          };
+          const arrow = col => sortCol === col
+            ? <span style={{ marginLeft: 3, fontSize: 10 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
+            : <span style={{ marginLeft: 3, fontSize: 10, opacity: 0.3 }}>↕</span>;
+          return (
+            <div>
+              {filterOpen && <div style={{ position: 'fixed', inset: 0, zIndex: 49 }} onClick={() => setFilterOpen(false)} />}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', position: 'relative' }}>
+                <button
+                  onClick={() => setFilterOpen(o => !o)}
+                  style={{ padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  Filter people
+                  {selectedPeople.length > 0 && (
+                    <span style={{ background: 'var(--purple-primary)', color: 'white', borderRadius: '10px', padding: '1px 6px', fontSize: '11px', fontWeight: 700 }}>{selectedPeople.length}</span>
+                  )}
+                </button>
+                {selectedPeople.length > 0 && (
+                  <button onClick={() => setSelectedPeople([])} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer', padding: '4px' }}>Clear</button>
+                )}
+                {filterOpen && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, marginTop: 4, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-md)', padding: '8px 0', minWidth: '200px', maxHeight: '240px', overflowY: 'auto' }}>
+                    <div style={{ display: 'flex', gap: '12px', padding: '6px 12px 8px', borderBottom: '1px solid var(--border)' }}>
+                      <button onClick={() => setSelectedPeople([])} style={{ fontSize: '11px', color: 'var(--purple-primary)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, padding: 0 }}>Show all</button>
+                      <button onClick={() => setSelectedPeople([...allPeople])} style={{ fontSize: '11px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>None</button>
+                    </div>
+                    {allPeople.map(name => {
+                      const checked = selectedPeople.length === 0 || selectedPeople.includes(name);
+                      return (
+                        <label key={name} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 12px', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }}>
+                          <input type="checkbox" checked={checked} onChange={() => {
+                            if (selectedPeople.length === 0) {
+                              setSelectedPeople(allPeople.filter(p => p !== name));
+                            } else if (checked) {
+                              const next = selectedPeople.filter(p => p !== name);
+                              setSelectedPeople(next.length === 0 ? [] : next);
+                            } else {
+                              const next = [...selectedPeople, name];
+                              setSelectedPeople(next.length === allPeople.length ? [] : next);
+                            }
+                          }} />
+                          {name}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div style={{ overflowX: 'auto', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg-secondary)' }}>
+                      <th onClick={() => toggleSort('name')} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)' }}>
+                        Person {arrow('name')}
+                      </th>
+                      {allTypes.map(type => {
+                        const c = LEAVE_COLORS[type] || { bg: '#F2F3F4', text: '#626567' };
+                        return (
+                          <th key={type} onClick={() => toggleSort(type)} style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, color: c.text, fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)', background: c.bg }}>
+                            {type} {arrow(type)}
+                          </th>
+                        );
+                      })}
+                      <th onClick={() => toggleSort('total')} style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 700, color: 'var(--text-primary)', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)' }}>
+                        Total {arrow('total')}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sorted.map((name, i) => {
+                      const row = summaryData[name] || {};
+                      const total = getTotal(name);
+                      return (
+                        <tr key={name} style={{ background: i % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-primary)', borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '10px 16px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{name}</td>
+                          {allTypes.map(type => {
+                            const days = row[type] || 0;
+                            const c = LEAVE_COLORS[type] || { bg: '#F2F3F4', text: '#626567' };
+                            return (
+                              <td key={type} style={{ padding: '10px 14px', textAlign: 'center', color: days > 0 ? c.text : 'var(--text-muted)', fontWeight: days > 0 ? 600 : 400 }}>
+                                {days > 0 ? `${days}d` : '—'}
+                              </td>
+                            );
+                          })}
+                          <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 700, color: 'var(--purple-primary)' }}>{total}d</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()
+      ) : loading ? (
         <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading...</div>
-      ) : filteredRequests.length === 0 ? (
+      ) : requests.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
           No time away requests found.
         </div>
       ) : (
-        filteredRequests.map(request => {
+        requests.map(request => {
           const statusStyle = STATUS_STYLES[request.status] || STATUS_STYLES.pending;
           const leaveColor = LEAVE_COLORS[request.leave_type] || LEAVE_COLORS['Other'];
           const days = getDayCount(request.start_date, request.end_date);

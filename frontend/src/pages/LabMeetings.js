@@ -69,7 +69,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
   const [members, setMembers] = useState([]);
   const [vacations, setVacations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [labFilter, setLabFilter] = useState('upcoming');
+  const [labFilter, setLabFilter] = useState(String(new Date().getFullYear()));
   const [adhocFilter, setAdhocFilter] = useState('upcoming');
   const [showAddForm, setShowAddForm] = useState(null);
   const [newMeeting, setNewMeeting] = useState(EMPTY_MEETING);
@@ -231,6 +231,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
   }
 
   function getFiltered(meetings, filter) {
+    if (/^\d{4}$/.test(filter)) return meetings.filter(m => m.meeting_date?.startsWith(filter));
     if (filter === 'upcoming') return meetings.filter(m => m.meeting_date >= today);
     if (filter === 'past') return meetings.filter(m => m.meeting_date < today);
     if (filter === 'cancelled') return meetings.filter(m => m.status === 'cancelled');
@@ -246,14 +247,14 @@ export default function LabMeetings({ userRole, userId, profile }) {
     const statusStyle = STATUS_STYLES[meeting.status] || STATUS_STYLES.scheduled;
     const isPast = meeting.meeting_date < today;
     const isAdhoc = table === 'adhoc';
-    const gridTemplate = isAdhoc ? '74px 1fr 36px 96px 56px 1fr 1fr 22px' : '74px 1fr 28px 80px 1fr 22px';
+    const gridTemplate = isAdhoc ? '74px 1fr 1fr 96px 56px 1fr 22px' : '74px 1fr 28px 80px 1fr 22px';
 
     return (
       <div key={meeting.id} style={{
         display: 'grid', gridTemplateColumns: gridTemplate,
         gap: isAdhoc ? '8px' : '6px', padding: '5px 8px', alignItems: 'center',
-        background: meeting.is_sof ? 'var(--purple-faint)' : 'var(--bg-card)',
-        border: `1px solid ${meeting.is_sof ? 'var(--purple-border)' : 'var(--border)'}`,
+        background: (!isAdhoc && meeting.is_sof) ? 'var(--purple-faint)' : 'var(--bg-card)',
+        border: `1px solid ${(!isAdhoc && meeting.is_sof) ? 'var(--purple-border)' : 'var(--border)'}`,
         borderRadius: 'var(--radius-sm)', marginBottom: '3px', fontSize: '12px',
         opacity: meeting.status === 'cancelled' ? 0.55 : 1,
       }}>
@@ -270,6 +271,24 @@ export default function LabMeetings({ userRole, userId, profile }) {
             title={canEdit ? 'Click to edit' : ''}>
             {new Date(meeting.meeting_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
           </span>
+        )}
+
+        {/* Description (adhoc only, before Presenter) */}
+        {isAdhoc && (
+          <div style={{ overflow: 'hidden', minWidth: 0 }}>
+            {editing('notes') ? (
+              <input autoFocus value={cellValue} onChange={e => setCellValue(e.target.value)}
+                onBlur={() => commitEdit(meeting.id, 'notes', cellValue, table)}
+                onKeyDown={e => { if (e.key === 'Enter') commitEdit(meeting.id, 'notes', cellValue, table); if (e.key === 'Escape') setEditingCell(null); }}
+                style={{ fontSize: '12px', padding: '2px 6px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+            ) : (
+              <span onClick={() => startEdit(meeting.id, 'notes', meeting.notes || '', table)}
+                title={meeting.notes || (canEdit ? 'Click to add description' : '')}
+                style={{ cursor: canEdit ? 'pointer' : 'default', display: 'block', color: meeting.notes ? 'var(--text-secondary)' : 'var(--text-muted)', fontStyle: meeting.notes ? 'normal' : 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {meeting.notes || (canEdit ? '+ description' : '—')}
+              </span>
+            )}
+          </div>
         )}
 
         {/* Presenter */}
@@ -318,15 +337,15 @@ export default function LabMeetings({ userRole, userId, profile }) {
           )}
         </div>
 
-        {/* SOF star */}
-        <button onClick={canEdit ? async () => {
+        {/* SOF star (lab only) */}
+        {!isAdhoc && <button onClick={canEdit ? async () => {
             await supabase.from(tblName()).update({ is_sof: !meeting.is_sof, updated_at: new Date().toISOString() }).eq('id', meeting.id);
             fetchData(true);
           } : undefined}
           disabled={!canEdit} title={canEdit ? (meeting.is_sof ? 'Remove SOF' : 'Mark SOF') : (meeting.is_sof ? 'SOF' : '')}
           style={{ background: 'none', border: 'none', cursor: canEdit ? 'pointer' : 'default', padding: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: !meeting.is_sof && !canEdit ? 0 : 1 }}>
           <Star size={13} color={meeting.is_sof ? '#7B3FA0' : 'var(--border)'} fill={meeting.is_sof ? '#7B3FA0' : 'none'} />
-        </button>
+        </button>}
 
         {/* Status */}
         {editing('status') ? (
@@ -389,21 +408,23 @@ export default function LabMeetings({ userRole, userId, profile }) {
           </div>
         )}
 
-        {/* Notes */}
-        <div style={{ overflow: 'hidden', minWidth: 0 }}>
-          {editing('notes') ? (
-            <input autoFocus value={cellValue} onChange={e => setCellValue(e.target.value)}
-              onBlur={() => commitEdit(meeting.id, 'notes', cellValue, table)}
-              onKeyDown={e => { if (e.key === 'Enter') commitEdit(meeting.id, 'notes', cellValue, table); if (e.key === 'Escape') setEditingCell(null); }}
-              style={{ fontSize: '12px', padding: '2px 6px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
-          ) : (
-            <span onClick={() => startEdit(meeting.id, 'notes', meeting.notes || '', table)}
-              title={meeting.notes || (canEdit ? 'Click to add note' : '')}
-              style={{ cursor: canEdit ? 'pointer' : 'default', display: 'block', color: meeting.notes ? 'var(--text-secondary)' : 'var(--text-muted)', fontStyle: meeting.notes ? 'normal' : 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {meeting.notes || (canEdit ? '+ note' : '—')}
-            </span>
-          )}
-        </div>
+        {/* Notes (lab only — adhoc shows Description before Presenter) */}
+        {!isAdhoc && (
+          <div style={{ overflow: 'hidden', minWidth: 0 }}>
+            {editing('notes') ? (
+              <input autoFocus value={cellValue} onChange={e => setCellValue(e.target.value)}
+                onBlur={() => commitEdit(meeting.id, 'notes', cellValue, table)}
+                onKeyDown={e => { if (e.key === 'Enter') commitEdit(meeting.id, 'notes', cellValue, table); if (e.key === 'Escape') setEditingCell(null); }}
+                style={{ fontSize: '12px', padding: '2px 6px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+            ) : (
+              <span onClick={() => startEdit(meeting.id, 'notes', meeting.notes || '', table)}
+                title={meeting.notes || (canEdit ? 'Click to add note' : '')}
+                style={{ cursor: canEdit ? 'pointer' : 'default', display: 'block', color: meeting.notes ? 'var(--text-secondary)' : 'var(--text-muted)', fontStyle: meeting.notes ? 'normal' : 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {meeting.notes || (canEdit ? '+ note' : '—')}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Cancel / Uncancel */}
         {canEdit ? (
@@ -427,7 +448,6 @@ export default function LabMeetings({ userRole, userId, profile }) {
   function renderPanel(table, filter, setFilter) {
     const meetings = getMeetings(table);
     const filtered = getFiltered(meetings, filter);
-    const next = meetings.find(m => m.meeting_date >= today && m.status === 'scheduled');
     const isLab = table === 'lab';
 
     return (
@@ -461,17 +481,22 @@ export default function LabMeetings({ userRole, userId, profile }) {
           )}
         </div>
 
-        {next && (
-          <div style={{ background: 'var(--purple-faint)', border: '1px solid var(--purple-border)', borderRadius: 'var(--radius-sm)', padding: '8px 12px', marginBottom: '10px', fontSize: '12px', color: 'var(--purple-primary)' }}>
-            <strong>Next:</strong> {new Date(next.meeting_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · {fmtName(next.presenter?.full_name) || next.guest_name || 'TBD'}{next.is_sof ? ' · ⭐ SOF' : ''}
-          </div>
-        )}
-
         <div style={{ display: 'flex', gap: '5px', marginBottom: '10px', flexWrap: 'wrap' }}>
-          {[
+          {isLab ? (() => {
+            const curYear = new Date().getFullYear();
+            const yearsWithData = new Set(meetings.map(m => m.meeting_date?.slice(0, 4)).filter(Boolean));
+            yearsWithData.add(String(curYear));
+            const years = [...yearsWithData]
+              .filter(y => Number(y) >= curYear - 10 && Number(y) <= curYear)
+              .sort((a, b) => Number(b) - Number(a));
+            return years.map(year => (
+              <button key={year} onClick={() => setFilter(year)} style={{ padding: '3px 9px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: filter === year ? 'var(--purple-primary)' : 'var(--bg-primary)', color: filter === year ? 'white' : 'var(--text-secondary)', fontWeight: filter === year ? 600 : 400, fontSize: '11px' }}>
+                {year === String(curYear) ? 'Current Year' : year}
+              </button>
+            ));
+          })() : [
             { id: 'upcoming', label: 'Upcoming' },
             { id: 'past', label: 'Past' },
-            ...(!isLab ? [] : [{ id: 'sof', label: 'SOF' }]),
             { id: 'cancelled', label: 'Cancelled' },
             { id: 'all', label: 'All' },
           ].map(f => (
@@ -482,11 +507,16 @@ export default function LabMeetings({ userRole, userId, profile }) {
         </div>
 
         {/* Column headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: isLab ? '74px 1fr 28px 80px 1fr 22px' : '74px 1fr 36px 96px 56px 1fr 1fr 22px', gap: isLab ? '6px' : '8px', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', marginBottom: '4px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          <span>Date</span><span>Presenter</span><span>SOF</span><span>Status</span>
+        <div style={{ display: 'grid', gridTemplateColumns: isLab ? '74px 1fr 28px 80px 1fr 22px' : '74px 1fr 1fr 96px 56px 1fr 22px', gap: isLab ? '6px' : '8px', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', marginBottom: '4px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <span>Date</span>
+          {!isLab && <span>Description</span>}
+          <span>Presenter</span>
+          {isLab && <span>SOF</span>}
+          <span>Status</span>
           {!isLab && <span>Zoom</span>}
           {!isLab && <span>Sign-in</span>}
-          <span>Notes</span><span />
+          {isLab && <span>Notes</span>}
+          <span />
         </div>
 
         {loading ? (
@@ -574,7 +604,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
             )}
 
             <div style={{ marginBottom: '14px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>Notes (optional)</label>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>{showAddForm === 'adhoc' ? 'Description (optional)' : 'Notes (optional)'}</label>
               <input value={newMeeting.notes} onChange={e => setNewMeeting(p => ({ ...p, notes: e.target.value }))}
                 style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
@@ -630,18 +660,21 @@ export default function LabMeetings({ userRole, userId, profile }) {
               </>
             )}
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: newMeeting.is_sof ? '12px' : '20px' }}>
-              <input type="checkbox" id="add-sof" checked={newMeeting.is_sof} onChange={e => setNewMeeting(p => ({ ...p, is_sof: e.target.checked }))} style={{ width: '15px', height: '15px', accentColor: 'var(--purple-primary)' }} />
-              <label htmlFor="add-sof" style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>State of the Field (SOF)</label>
-            </div>
-
-            {newMeeting.is_sof && (
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>SOF Topic</label>
-                <input value={newMeeting.sof_topic || ''} onChange={e => setNewMeeting(p => ({ ...p, sof_topic: e.target.value }))}
-                  placeholder="e.g. APOBEC3A detection methods"
-                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
-              </div>
+            {showAddForm !== 'adhoc' && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: newMeeting.is_sof ? '12px' : '20px' }}>
+                  <input type="checkbox" id="add-sof" checked={newMeeting.is_sof} onChange={e => setNewMeeting(p => ({ ...p, is_sof: e.target.checked }))} style={{ width: '15px', height: '15px', accentColor: 'var(--purple-primary)' }} />
+                  <label htmlFor="add-sof" style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>State of the Field (SOF)</label>
+                </div>
+                {newMeeting.is_sof && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>SOF Topic</label>
+                    <input value={newMeeting.sof_topic || ''} onChange={e => setNewMeeting(p => ({ ...p, sof_topic: e.target.value }))}
+                      placeholder="e.g. APOBEC3A detection methods"
+                      style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+                )}
+              </>
             )}
 
             {vacWarn && (

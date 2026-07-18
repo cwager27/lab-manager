@@ -42,10 +42,13 @@ function orderDateToMonth(dateStr) {
   const d = new Date(dateStr + 'T00:00:00Z');
   return `${MON_ABBR[d.getUTCMonth()]} '${String(d.getUTCFullYear()).slice(2)}`;
 }
+function fyLabel(fy) { return `FY'${fy.slice(2)}`; }
+const VENDOR_PALETTE = ['#4472C4','#E46C0A','#7030A0','#538135','#CC4125','#1F3864','#9DC3E6','#C00000','#00B0F0','#4BACC6','#92D050','#FAC090','#CCCC00','#FF00FF','#A9D18E','#C4A265','#FF6B6B','#4ECDC4'];
 
 
 const STATUS_STYLES = {
   complete: { bg: '#EAF7F0', text: '#27AE60', label: 'Complete' },
+  processing: { bg: '#EBF5FB', text: '#2980B9', label: 'Processing' },
   pending: { bg: '#FEF9E7', text: '#F39C12', label: 'Pending' },
   cancelled: { bg: '#FDEDEC', text: '#E74C3C', label: 'Cancelled' },
   deleted: { bg: '#F2F2F2', text: '#9E9E9E', label: 'Deleted' },
@@ -101,6 +104,19 @@ export default function Finance({ userRole }) {
   const [grantFilterExpTypeOpen, setGrantFilterExpTypeOpen] = useState(false);
   const [draftGrantsExpType, setDraftGrantsExpType] = useState([]);
   const [grantSearchExpType, setGrantSearchExpType] = useState('');
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [userFilterOpen, setUserFilterOpen] = useState(false);
+  const [draftUsers, setDraftUsers] = useState([]);
+  const [userSearch, setUserSearch] = useState('');
+  const [catalogSortCol, setCatalogSortCol] = useState('total');
+  const [catalogSortDir, setCatalogSortDir] = useState('desc');
+  const [vcSelectedVendors, setVcSelectedVendors] = useState([]);
+  const [vcVendorOpen, setVcVendorOpen] = useState(false);
+  const [vcDraftVendors, setVcDraftVendors] = useState([]);
+  const [vcVendorSearch, setVcVendorSearch] = useState('');
+  const [vcSelectedYears, setVcSelectedYears] = useState([]);
+  const [vcYearOpen, setVcYearOpen] = useState(false);
+  const [vcDraftYears, setVcDraftYears] = useState([]);
   const chartData = useMemo(() => {
     const real = orders.filter(o => o.item && o.item.trim() !== '' && o.status !== 'deleted');
 
@@ -165,6 +181,8 @@ export default function Finance({ userRole }) {
   const [editingOrder, setEditingOrder] = useState(null);
   const [editOrderForm, setEditOrderForm] = useState({});
   const [confirmDeleteOrder, setConfirmDeleteOrder] = useState(false);
+  const [ordersYearTab, setOrdersYearTab] = useState('fy26');
+  const [importError, setImportError] = useState(null);
   const [ordersSortCol, setOrdersSortCol] = useState(null);
   const [ordersSortDir, setOrdersSortDir] = useState('asc');
   const [showAddGrant, setShowAddGrant] = useState(false);
@@ -174,8 +192,9 @@ export default function Finance({ userRole }) {
   const [confirmDeleteGrant, setConfirmDeleteGrant] = useState(false);
   const [reagentsSortCol, setReagentsSortCol] = useState(null);
   const [reagentsSortDir, setReagentsSortDir] = useState('asc');
+  const [importReagentError, setImportReagentError] = useState(null);
   const [showAddReagent, setShowAddReagent] = useState(false);
-  const [reagentForm, setReagentForm] = useState({ name: '', vendor: '', catalog_number: '', category: '', quantity_in_lab: '', fy24_purchases: '', fy25_purchases: '', fy26_purchases: '' });
+  const [reagentForm, setReagentForm] = useState({ name: '', vendor: '', catalog_number: '', category: '', unit_description: '', unit_price: '', units: '', quantity_in_lab: '', fy24_purchases: '', fy25_purchases: '', fy26_purchases: '' });
   const [editingReagent, setEditingReagent] = useState(null);
   const [editReagentForm, setEditReagentForm] = useState({});
   const [confirmDeleteReagent, setConfirmDeleteReagent] = useState(false);
@@ -188,7 +207,7 @@ export default function Finance({ userRole }) {
     setLoading(true);
     const [{ data: grantData }, { data: orderData }, { data: reagentData }, { data: nanoseqData }, { data: vendorData }] = await Promise.all([
       supabase.from('grants').select('*').order('name'),
-      supabase.from('orders').select('*').order('order_date', { ascending: false }),
+      supabase.from('orders').select('*').order('created_at', { ascending: true }),
       supabase.from('reagents').select('*').order('category').order('name'),
       supabase.from('nanoseq_reagents').select('*').order('protocol').order('name'),
       supabase.from('vendors').select('*').order('name'),
@@ -255,6 +274,110 @@ export default function Finance({ userRole }) {
   }
 
   const catMonths = catData.map(r => r.month);
+
+  const userNames = useMemo(() => {
+    const names = new Set();
+    orders.forEach(o => { if (o.requestor) names.add(o.requestor); });
+    return [...names].sort();
+  }, [orders]);
+
+  const userCatData = useMemo(() => {
+    const activeU = selectedUsers.length === 0 ? userNames : selectedUsers;
+    const real = orders.filter(o =>
+      o.item && o.item.trim() !== '' && o.status !== 'deleted' &&
+      activeU.includes(o.requestor)
+    );
+    const monthMap = {};
+    real.forEach(o => { const m = orderDateToMonth(o.order_date); if (m) monthMap[m] = o.order_date; });
+    const months = Object.entries(monthMap).sort((a, b) => a[1].localeCompare(b[1])).map(([m]) => m);
+    const byMonth = {};
+    months.forEach(m => { byMonth[m] = { month: m }; });
+    real.forEach(o => {
+      const m = orderDateToMonth(o.order_date);
+      if (!m || !o.category || o.total_price == null) return;
+      byMonth[m][o.category] = (byMonth[m][o.category] || 0) + Number(o.total_price);
+    });
+    return { data: months.map(m => byMonth[m]), months };
+  }, [orders, selectedUsers, userNames]);
+
+  const allFYs = useMemo(() => {
+    const s = new Set(['fy26', 'fy25', 'fy24']);
+    orders.forEach(o => { if (o.order_date) s.add(getFiscalYear(o.order_date)); });
+    return [...s].sort().reverse();
+  }, [orders]);
+
+  const catalogRows = useMemo(() => {
+    const map = {};
+    orders.forEach(o => {
+      const cat = (o.catalog_number || '').trim();
+      if (!cat || cat === 'NA') return;
+      if (!map[cat]) map[cat] = { catalog_number: cat, item: '', vendor: '', category: '', unit_description: null, unit_price: null, units: null, fyCounts: {}, total: 0 };
+      const r = map[cat];
+      if (o.item) r.item = o.item;
+      if (o.vendor) r.vendor = o.vendor;
+      if (o.category) r.category = o.category;
+      if (o.unit_description) r.unit_description = o.unit_description;
+      if (o.unit_price != null) r.unit_price = o.unit_price;
+      if (o.units != null) r.units = o.units;
+      const fy = getFiscalYear(o.order_date);
+      if (fy) r.fyCounts[fy] = (r.fyCounts[fy] || 0) + 1;
+      r.total++;
+    });
+    const reagentCats = new Set(reagents.map(r => (r.catalog_number || '').trim()).filter(Boolean));
+    return Object.values(map).map(r => ({ ...r, is_standardized: reagentCats.has(r.catalog_number) }));
+  }, [orders, reagents]);
+
+  const sortedCatalogRows = useMemo(() => {
+    const rows = [...catalogRows];
+    if (!catalogSortCol) return rows;
+    return rows.sort((a, b) => {
+      let av, bv;
+      if (catalogSortCol.startsWith('fy')) { av = a.fyCounts[catalogSortCol] || 0; bv = b.fyCounts[catalogSortCol] || 0; }
+      else if (catalogSortCol === 'total') { av = a.total; bv = b.total; }
+      else if (catalogSortCol === 'is_standardized') { av = a.is_standardized ? 1 : 0; bv = b.is_standardized ? 1 : 0; }
+      else { av = a[catalogSortCol]; bv = b[catalogSortCol]; }
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1; if (bv == null) return -1;
+      const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv));
+      return catalogSortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [catalogRows, catalogSortCol, catalogSortDir]);
+
+  const allVendorNames = useMemo(() => {
+    const s = new Set(); orders.forEach(o => { if (o.vendor) s.add(o.vendor); }); return [...s].sort();
+  }, [orders]);
+
+  const vendorChartData = useMemo(() => {
+    const activeV = vcSelectedVendors.length === 0 ? allVendorNames : vcSelectedVendors;
+    const activeYrs = vcSelectedYears.length === 0 ? allFYs : vcSelectedYears;
+    const real = orders.filter(o =>
+      o.item && o.status !== 'deleted' && o.total_price != null && o.vendor &&
+      activeV.includes(o.vendor) && (activeYrs.length === 0 || activeYrs.includes(getFiscalYear(o.order_date)))
+    );
+    const monthMap = {};
+    real.forEach(o => { const m = orderDateToMonth(o.order_date); if (m) monthMap[m] = o.order_date; });
+    const months = Object.entries(monthMap).sort((a, b) => a[1].localeCompare(b[1])).map(([m]) => m);
+    const byMonth = {};
+    months.forEach(m => { byMonth[m] = { month: m }; });
+    real.forEach(o => {
+      const m = orderDateToMonth(o.order_date);
+      if (!m || !o.vendor || o.total_price == null) return;
+      byMonth[m][o.vendor] = (byMonth[m][o.vendor] || 0) + Number(o.total_price);
+    });
+    const vendorYearSpend = {};
+    activeV.forEach(v => { vendorYearSpend[v] = {}; });
+    real.forEach(o => {
+      if (!o.vendor || !activeV.includes(o.vendor) || o.total_price == null) return;
+      const fy = getFiscalYear(o.order_date);
+      if (fy) vendorYearSpend[o.vendor][fy] = (vendorYearSpend[o.vendor][fy] || 0) + Number(o.total_price);
+    });
+    // Sort vendors by total spend desc for consistent colour assignment
+    const sortedV = [...activeV].sort((a, b) =>
+      Object.values(vendorYearSpend[b] || {}).reduce((s, v) => s + v, 0) -
+      Object.values(vendorYearSpend[a] || {}).reduce((s, v) => s + v, 0)
+    );
+    return { data: months.map(m => byMonth[m]), months, vendorYearSpend, activeV: sortedV, activeYrs };
+  }, [orders, vcSelectedVendors, vcSelectedYears, allVendorNames, allFYs]);
 
   async function commitOrderSelectEdit(id, col, value) {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, [col]: value } : o));
@@ -376,13 +499,13 @@ export default function Finance({ userRole }) {
     setConfirmDeleteGrant(false);
   }
 
-  const EMPTY_REAGENT_FORM = { name: '', vendor: '', catalog_number: '', category: '', quantity_in_lab: '', fy24_purchases: '', fy25_purchases: '', fy26_purchases: '' };
+  const EMPTY_REAGENT_FORM = { name: '', vendor: '', catalog_number: '', category: '', unit_description: '', unit_price: '', units: '', quantity_in_lab: '', fy24_purchases: '', fy25_purchases: '', fy26_purchases: '' };
 
   async function handleAddReagent(e) {
     e.preventDefault();
     if (!reagentForm.name.trim()) return;
     const numF = v => v !== '' ? parseFloat(v) : null;
-    const payload = { name: reagentForm.name.trim(), vendor: reagentForm.vendor || null, catalog_number: reagentForm.catalog_number || null, category: reagentForm.category || null, quantity_in_lab: numF(reagentForm.quantity_in_lab), fy24_purchases: numF(reagentForm.fy24_purchases), fy25_purchases: numF(reagentForm.fy25_purchases), fy26_purchases: numF(reagentForm.fy26_purchases) };
+    const payload = { name: reagentForm.name.trim(), vendor: reagentForm.vendor || null, catalog_number: reagentForm.catalog_number || null, category: reagentForm.category || null, unit_description: reagentForm.unit_description || null, unit_price: numF(reagentForm.unit_price), units: reagentForm.units !== '' ? parseInt(reagentForm.units) || null : null, quantity_in_lab: numF(reagentForm.quantity_in_lab), fy24_purchases: numF(reagentForm.fy24_purchases), fy25_purchases: numF(reagentForm.fy25_purchases), fy26_purchases: numF(reagentForm.fy26_purchases) };
     const { data, error } = await supabase.from('reagents').insert([payload]).select().single();
     if (!error && data) { setReagents(prev => [...prev, data]); setShowAddReagent(false); setReagentForm(EMPTY_REAGENT_FORM); }
   }
@@ -390,12 +513,12 @@ export default function Finance({ userRole }) {
   function openEditReagent(r) {
     setConfirmDeleteReagent(false);
     setEditingReagent(r);
-    setEditReagentForm({ name: r.name || '', vendor: r.vendor || '', catalog_number: r.catalog_number || '', category: r.category || '', quantity_in_lab: r.quantity_in_lab != null ? String(r.quantity_in_lab) : '', fy24_purchases: r.fy24_purchases != null ? String(r.fy24_purchases) : '', fy25_purchases: r.fy25_purchases != null ? String(r.fy25_purchases) : '', fy26_purchases: r.fy26_purchases != null ? String(r.fy26_purchases) : '' });
+    setEditReagentForm({ name: r.name || '', vendor: r.vendor || '', catalog_number: r.catalog_number || '', category: r.category || '', unit_description: r.unit_description || '', unit_price: r.unit_price != null ? String(r.unit_price) : '', units: r.units != null ? String(r.units) : '', quantity_in_lab: r.quantity_in_lab != null ? String(r.quantity_in_lab) : '', fy24_purchases: r.fy24_purchases != null ? String(r.fy24_purchases) : '', fy25_purchases: r.fy25_purchases != null ? String(r.fy25_purchases) : '', fy26_purchases: r.fy26_purchases != null ? String(r.fy26_purchases) : '' });
   }
 
   async function handleSaveReagent() {
     const numF = v => v !== '' ? parseFloat(v) : null;
-    const payload = { name: editReagentForm.name.trim(), vendor: editReagentForm.vendor || null, catalog_number: editReagentForm.catalog_number || null, category: editReagentForm.category || null, quantity_in_lab: numF(editReagentForm.quantity_in_lab), fy24_purchases: numF(editReagentForm.fy24_purchases), fy25_purchases: numF(editReagentForm.fy25_purchases), fy26_purchases: numF(editReagentForm.fy26_purchases) };
+    const payload = { name: editReagentForm.name.trim(), vendor: editReagentForm.vendor || null, catalog_number: editReagentForm.catalog_number || null, category: editReagentForm.category || null, unit_description: editReagentForm.unit_description || null, unit_price: numF(editReagentForm.unit_price), units: editReagentForm.units !== '' ? parseInt(editReagentForm.units) || null : null, quantity_in_lab: numF(editReagentForm.quantity_in_lab), fy24_purchases: numF(editReagentForm.fy24_purchases), fy25_purchases: numF(editReagentForm.fy25_purchases), fy26_purchases: numF(editReagentForm.fy26_purchases) };
     await supabase.from('reagents').update(payload).eq('id', editingReagent.id);
     setReagents(prev => prev.map(r => r.id === editingReagent.id ? { ...r, ...payload } : r));
     setEditingReagent(null);
@@ -407,19 +530,21 @@ export default function Finance({ userRole }) {
     setEditingReagent(null); setConfirmDeleteReagent(false);
   }
 
+  const REAGENT_DRAFT_HEADERS = ['Category', 'Item (name)', 'Vendor', 'Cat number', 'Unit description', 'Unit price', 'Units (n)', 'Unused', "FY'26", "FY'25", "FY'24"];
+
   function handleExportReagents() {
-    const rows = sortedReagents.map(r => ({ 'Name': r.name||'', 'Vendor': r.vendor||'', 'Catalog #': r.catalog_number||'', 'Category': r.category||'', 'In Lab': r.quantity_in_lab??'', 'FY24': r.fy24_purchases??'', 'FY25': r.fy25_purchases??'', 'FY26': r.fy26_purchases??'' }));
+    const rows = sortedReagents.map(r => ({ 'Category': r.category||'', 'Item (name)': r.name||'', 'Vendor': r.vendor||'', 'Cat number': r.catalog_number||'', 'Unit description': r.unit_description||'', 'Unit price': r.unit_price??'', 'Units (n)': r.units??'', 'Unused': r.quantity_in_lab??'', "FY'26": r.fy26_purchases??'', "FY'25": r.fy25_purchases??'', "FY'24": r.fy24_purchases??'' }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Reagents');
     XLSX.writeFile(wb, `reagents_${new Date().toISOString().split('T')[0]}.xlsx`);
   }
 
-  function handleReagentTemplate() {
-    const ws = XLSX.utils.json_to_sheet([{ 'Name': '', 'Vendor': '', 'Catalog #': '', 'Category': '', 'In Lab': '', 'FY24': '', 'FY25': '', 'FY26': '' }]);
+  function handleReagentDraft() {
+    const ws = XLSX.utils.aoa_to_sheet([REAGENT_DRAFT_HEADERS, REAGENT_DRAFT_HEADERS.map(() => '')]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Reagents');
-    XLSX.writeFile(wb, 'reagents_import_template.xlsx');
+    XLSX.writeFile(wb, 'reagents_draft.xlsx');
   }
 
 
@@ -499,13 +624,52 @@ export default function Finance({ userRole }) {
   function exportCatMonthTable() {
     const rows = activeCats.map(cat => {
       const row = { Category: cat };
-      catMonths.forEach((m, mi) => { row[m] = catData[mi]?.[cat] ?? ''; });
+      userCatData.months.forEach((m, mi) => { row[m] = userCatData.data[mi]?.[cat] ?? ''; });
       return row;
     });
-    exportTableXLSX(rows, 'monthly_spending_by_category.xlsx');
+    exportTableXLSX(rows, 'monthly_spending_by_category_user.xlsx');
   }
 
-  const filteredOrders = orders.filter(o => searchQuery === '' || o.item?.toLowerCase().includes(searchQuery.toLowerCase()) || o.vendor?.toLowerCase().includes(searchQuery.toLowerCase()) || o.requisition_id?.toLowerCase().includes(searchQuery.toLowerCase()));
+  function handleExportCatalog() {
+    const wb = XLSX.utils.book_new();
+    const makeRows = rows => rows.map(r => {
+      const row = { 'Item': r.item, 'Vendor': r.vendor, 'Category': r.category, 'Cat #': r.catalog_number, 'Unit description': r.unit_description || '', 'Unit price': r.unit_price ?? '', 'Units (n)': r.units ?? '', 'Standardized Reagent': r.is_standardized ? 'Yes' : 'No' };
+      allFYs.forEach(fy => { row[fyLabel(fy)] = r.fyCounts[fy] || 0; });
+      row['Total'] = r.total;
+      return row;
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(makeRows(sortedCatalogRows)), 'All');
+    allFYs.forEach(fy => {
+      const filtered = sortedCatalogRows.filter(r => r.fyCounts[fy]);
+      if (filtered.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(makeRows(filtered)), fyLabel(fy));
+    });
+    XLSX.writeFile(wb, 'catalog_orders.xlsx');
+  }
+
+  function handleExportVendorChart() {
+    const { vendorYearSpend, activeV, activeYrs } = vendorChartData;
+    const rows = activeV.map(v => {
+      const row = { 'Vendor': v };
+      activeYrs.forEach(fy => { row[fyLabel(fy)] = vendorYearSpend[v]?.[fy] ? `$${vendorYearSpend[v][fy].toLocaleString('en-US', { maximumFractionDigits: 0 })}` : ''; });
+      row['Total'] = `$${activeYrs.reduce((s, fy) => s + (vendorYearSpend[v]?.[fy] || 0), 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+      return row;
+    });
+    exportTableXLSX(rows, 'vendor_spending.xlsx');
+  }
+
+  function getFiscalYear(dateStr) {
+    if (!dateStr) return 'fy26';
+    const d = new Date(dateStr + 'T00:00:00Z');
+    const fyYear = d.getUTCMonth() >= 6 ? d.getUTCFullYear() + 1 : d.getUTCFullYear();
+    return `fy${String(fyYear).slice(2)}`;
+  }
+
+  const filteredOrders = orders.filter(o => {
+    if (getFiscalYear(o.order_date) !== ordersYearTab) return false;
+    if (searchQuery === '') return true;
+    const q = searchQuery.toLowerCase();
+    return o.item?.toLowerCase().includes(q) || o.vendor?.toLowerCase().includes(q) || o.requisition_id?.toLowerCase().includes(q);
+  });
 
   const sortedOrders = useMemo(() => {
     if (!ordersSortCol) return filteredOrders;
@@ -544,12 +708,8 @@ export default function Finance({ userRole }) {
   }
 
   function handleDownloadTemplate() {
-    const ws = XLSX.utils.json_to_sheet([{
-      'Item': '', 'Vendor': '', 'Catalog Number': '', 'Category': '',
-      'Grant ID': '', 'Requisition ID': '', 'Unit description': '',
-      'Unit price': '', 'Units (n)': '', 'Total price': '',
-      'Date': 'YYYY-MM-DD', 'Requestor': '', 'Status': 'pending', 'Notes': '',
-    }]);
+    const HEADERS = ['Item','Vendor','Catalog Number','Category','Grant ID','Requsition ID','Unit description','Unit price','Units (n)','Total price','Date','Requestor','Status','Notes'];
+    const ws = XLSX.utils.aoa_to_sheet([HEADERS, HEADERS.map(h => h === 'Date' ? 'YYYY-MM-DD' : h === 'Status' ? 'pending' : '')]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Orders');
     XLSX.writeFile(wb, 'orders_import_template.xlsx');
@@ -591,9 +751,9 @@ export default function Finance({ userRole }) {
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
         <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content' }}>
-          {['grants', 'orders', 'reagents', 'vendors', 'charts'].map(tab => (
+          {['orders', 'charts', 'smart-summary', 'vendors', 'grants', 'reagents'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', background: activeTab === tab ? 'var(--purple-primary)' : 'transparent', color: activeTab === tab ? 'white' : 'var(--text-secondary)', border: 'none', fontWeight: activeTab === tab ? 600 : 400, fontSize: '13px', textTransform: 'capitalize' }}>
-              {tab === 'reagents' ? 'Standardized Reagents' : tab}
+              {tab === 'reagents' ? 'Standardized Reagents' : tab === 'charts' ? 'Spending Summaries' : tab === 'smart-summary' ? 'Smart Summary' : tab}
             </button>
           ))}
         </div>
@@ -612,14 +772,15 @@ export default function Finance({ userRole }) {
                 Template
               </button>
               <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
-                <Upload size={14} /> {uploadingFile ? 'Processing…' : 'Import'}
-                <input type="file" accept=".xlsx,.csv" style={{ display: 'none' }} onChange={async (e) => {
+                <Upload size={14} /> {uploadingFile ? 'Processing…' : `Import ${ordersYearTab.toUpperCase()}`}
+                <input type="file" accept=".xlsx,.csv,.tsv" style={{ display: 'none' }} onChange={async (e) => {
                   const file = e.target.files[0]; if (!file) return;
-                  setUploadingFile(true);
+                  setUploadingFile(true); setImportError(null);
                   const formData = new FormData(); formData.append('file', file);
                   const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/preview-orders`, { method: 'POST', body: formData });
                   const data = await res.json();
-                  if (data.newOrders) setPreviewData(data.newOrders);
+                  if (data.error) { setImportError(data); }
+                  else if (data.newOrders) { setPreviewData(data.newOrders); }
                   setUploadingFile(false);
                   e.target.value = '';
                 }} />
@@ -634,16 +795,17 @@ export default function Finance({ userRole }) {
           )}
           {canManage && activeTab === 'reagents' && reagentTab === 'misc' && (
             <>
-              <button onClick={handleReagentTemplate} title="Download blank import template" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>Template</button>
+              <button onClick={handleReagentDraft} title="Download blank draft to fill in" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>Draft</button>
               <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
                 <Upload size={14} /> {uploadingFile ? 'Processing…' : 'Import'}
                 <input type="file" accept=".xlsx,.csv" style={{ display: 'none' }} onChange={async (e) => {
                   const file = e.target.files[0]; if (!file) return;
-                  setUploadingFile(true);
+                  setUploadingFile(true); setImportReagentError(null);
                   const formData = new FormData(); formData.append('file', file);
                   const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/preview-reagents`, { method: 'POST', body: formData });
                   const data = await res.json();
-                  if (data.newReagents) setPreviewReagents(data.newReagents);
+                  if (data.error) { setImportReagentError(data); }
+                  else if (data.newReagents) setPreviewReagents(data.newReagents);
                   setUploadingFile(false); e.target.value = '';
                 }} />
               </label>
@@ -777,6 +939,51 @@ export default function Finance({ userRole }) {
 
           {activeTab === 'orders' && (
             <>
+              {importError && (
+                <div style={{ background: '#FDEDEC', border: '1px solid #E74C3C', borderRadius: 'var(--radius-md)', padding: '14px 16px', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <p style={{ fontSize: '13px', fontWeight: 600, color: '#E74C3C', margin: '0 0 6px' }}>{importError.error}</p>
+                      {importError.details?.map((d, i) => <p key={i} style={{ fontSize: '12px', color: '#C0392B', margin: '2px 0' }}>• {d}</p>)}
+                      <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '8px 0 0' }}>Download the Template to get a file with the correct column names and order.</p>
+                    </div>
+                    <button onClick={() => setImportError(null)} style={{ background: 'none', border: 'none', color: '#E74C3C', cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: '0 0 0 12px' }}>×</button>
+                  </div>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
+                {[{ id: 'fy26', label: 'FY26' }, { id: 'fy25', label: 'FY25' }, { id: 'fy24', label: 'FY24' }].map(({ id, label }) => (
+                  <button key={id} onClick={() => setOrdersYearTab(id)}
+                    style={{ padding: '5px 14px', borderRadius: 'var(--radius-md)', border: '1px solid', fontSize: '12px', fontWeight: 600, cursor: 'pointer', borderColor: ordersYearTab === id ? 'var(--purple-primary)' : 'var(--border)', background: ordersYearTab === id ? 'var(--purple-primary)' : 'transparent', color: ordersYearTab === id ? 'white' : 'var(--text-muted)' }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {ordersYearTab !== 'fy26' && (
+                <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
+                  <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
+                    <colgroup>
+                      <col style={{ width: '9%' }} /><col style={{ width: '6%' }} /><col style={{ width: '7%' }} /><col style={{ width: '8%' }} />
+                      <col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '6%' }} /><col style={{ width: '6%' }} />
+                      <col style={{ width: '5%' }} /><col style={{ width: '6%' }} /><col style={{ width: '6%' }} /><col style={{ width: '6%' }} />
+                      <col style={{ width: '7%' }} /><col style={{ width: '8%' }} />
+                    </colgroup>
+                    <thead>
+                      <tr style={{ background: 'var(--bg-secondary)' }}>
+                        {['Item','Vendor','Catalog Number','Category','Grant ID','Requsition ID','Unit description','Unit price','Units (n)','Total price','Date','Requestor','Status','Notes'].map(h => (
+                          <th key={h} style={{ padding: '7px 6px', textAlign: 'left', fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td colSpan={14} style={{ padding: '32px', textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>No data yet — import {ordersYearTab.toUpperCase()} orders to populate this table.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {ordersYearTab === 'fy26' && <>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
                   <Search size={14} color="var(--text-muted)" />
@@ -785,26 +992,47 @@ export default function Finance({ userRole }) {
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{sortedOrders.length} orders</span>
               </div>
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
-                <table style={{ width: '100%', minWidth: '1000px', borderCollapse: 'collapse' }}>
+                <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
+                  <colgroup>
+                    <col style={{ width: '9%' }} />
+                    <col style={{ width: '6%' }} />
+                    <col style={{ width: '7%' }} />
+                    <col style={{ width: '8%' }} />
+                    <col style={{ width: '7%' }} />
+                    <col style={{ width: '7%' }} />
+                    <col style={{ width: '6%' }} />
+                    <col style={{ width: '6%' }} />
+                    <col style={{ width: '5%' }} />
+                    <col style={{ width: '6%' }} />
+                    <col style={{ width: '6%' }} />
+                    <col style={{ width: '6%' }} />
+                    <col style={{ width: '7%' }} />
+                    <col style={{ width: '8%' }} />
+                  </colgroup>
                   <thead>
                     <tr style={{ background: 'var(--bg-secondary)' }}>
                       {[
                         { label: 'Item', key: 'item' },
                         { label: 'Vendor', key: 'vendor' },
+                        { label: 'Catalog Number', key: 'catalog_number' },
                         { label: 'Category', key: 'category' },
-                        { label: 'Grant', key: 'grant_name' },
-                        { label: 'Req ID', key: 'requisition_id' },
-                        { label: 'Price', key: 'total_price' },
+                        { label: 'Grant ID', key: 'grant_name' },
+                        { label: 'Requsition ID', key: 'requisition_id' },
+                        { label: 'Unit description', key: 'unit_description' },
+                        { label: 'Unit price', key: 'unit_price' },
+                        { label: 'Units (n)', key: 'units' },
+                        { label: 'Total price', key: 'total_price' },
                         { label: 'Date', key: 'order_date' },
                         { label: 'Requestor', key: 'requestor' },
                         { label: 'Status', key: 'status' },
+                        { label: 'Notes', key: 'notes' },
                       ].map(({ label, key }) => (
                         <th key={key}
                           onClick={() => {
                             if (ordersSortCol === key) setOrdersSortDir(d => d === 'asc' ? 'desc' : 'asc');
                             else { setOrdersSortCol(key); setOrdersSortDir('asc'); }
                           }}
-                          style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: ordersSortCol === key ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>
+                          style={{ padding: '7px 6px', textAlign: 'left', fontSize: '10px', color: ordersSortCol === key ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', userSelect: 'none' }}>
                           {label}{ordersSortCol === key ? (ordersSortDir === 'asc' ? ' ↑' : ' ↓') : ''}
                         </th>
                       ))}
@@ -814,25 +1042,34 @@ export default function Finance({ userRole }) {
                     {sortedOrders.map(order => {
                       const isDeleted = order.status === 'deleted';
                       const statusStyle = STATUS_STYLES[order.status] || STATUS_STYLES.pending;
+                      const cell = (content, opts = {}) => (
+                        <td style={{ padding: '6px 6px', fontSize: '11px', color: opts.color || 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: opts.mono ? 'monospace' : undefined, fontWeight: opts.bold ? 600 : undefined }}>
+                          {content}
+                        </td>
+                      );
                       return (
                         <tr key={order.id} onClick={() => openEditOrder(order)}
                           style={{ borderTop: '1px solid var(--border)', cursor: 'pointer', opacity: isDeleted ? 0.45 : 1 }}
                           onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
                           onMouseLeave={e => e.currentTarget.style.background = ''}>
-                          <td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-primary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{order.item}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{order.vendor}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{order.category}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--purple-primary)', whiteSpace: 'nowrap' }}>{order.grant_name}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{order.requisition_id}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{order.total_price != null ? `$${order.total_price.toLocaleString()}` : ''}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{order.order_date}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{order.requestor}</td>
-                          <td style={{ padding: '10px 12px' }} onClick={isDeleted ? undefined : e => e.stopPropagation()}>
+                          {cell(order.item, { color: 'var(--text-primary)' })}
+                          {cell(order.vendor)}
+                          {cell(order.catalog_number, { mono: true, color: 'var(--text-muted)' })}
+                          {cell(order.category)}
+                          {cell(order.grant_name, { color: 'var(--purple-primary)' })}
+                          {cell(order.requisition_id, { mono: true, color: 'var(--text-muted)' })}
+                          {cell(order.unit_description)}
+                          {cell(order.unit_price != null ? `$${Number(order.unit_price).toLocaleString()}` : '')}
+                          {cell(order.units ?? '')}
+                          {cell(order.total_price != null ? `$${Number(order.total_price).toLocaleString()}` : '', { bold: true, color: 'var(--text-primary)' })}
+                          {cell(order.order_date, { color: 'var(--text-muted)' })}
+                          {cell(order.requestor)}
+                          <td style={{ padding: '6px 6px' }} onClick={isDeleted ? undefined : e => e.stopPropagation()}>
                             {isDeleted ? (
-                              <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: STATUS_STYLES.deleted.bg, color: STATUS_STYLES.deleted.text }}>Deleted</span>
+                              <span style={{ padding: '2px 6px', borderRadius: '12px', fontSize: '10px', fontWeight: 600, background: STATUS_STYLES.deleted.bg, color: STATUS_STYLES.deleted.text }}>Deleted</span>
                             ) : (
                               <select value={order.status || 'pending'} onChange={e => commitOrderSelectEdit(order.id, 'status', e.target.value)}
-                                style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text, border: 'none', cursor: 'pointer', outline: 'none' }}>
+                                style={{ padding: '2px 4px', borderRadius: '12px', fontSize: '10px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text, border: 'none', cursor: 'pointer', outline: 'none', width: '100%' }}>
                                 <option value="pending">Pending</option>
                                 <option value="processing">Processing</option>
                                 <option value="complete">Complete</option>
@@ -840,12 +1077,14 @@ export default function Finance({ userRole }) {
                               </select>
                             )}
                           </td>
+                          {cell(order.notes, { color: 'var(--text-muted)' })}
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
               </div>
+              </>}
             </>
           )}
 
@@ -871,12 +1110,25 @@ export default function Finance({ userRole }) {
                 </div>
               </div>
 
+              {importReagentError && (
+                <div style={{ background: '#FDEDEC', border: '1px solid #E74C3C', borderRadius: 'var(--radius-md)', padding: '14px 16px', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <p style={{ fontSize: '13px', fontWeight: 600, color: '#E74C3C', margin: '0 0 6px' }}>{importReagentError.error}</p>
+                      {importReagentError.details?.map((d, i) => <p key={i} style={{ fontSize: '12px', color: '#C0392B', margin: '2px 0' }}>• {d}</p>)}
+                      <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '8px 0 0' }}>Download the Draft to get a file with the correct column names and order.</p>
+                    </div>
+                    <button onClick={() => setImportReagentError(null)} style={{ background: 'none', border: 'none', color: '#E74C3C', cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: '0 0 0 12px' }}>×</button>
+                  </div>
+                </div>
+              )}
+
               {reagentTab === 'misc' && (
-                <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflowX: 'auto' }}>
+                  <table style={{ width: '100%', minWidth: '1200px', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: 'var(--bg-secondary)' }}>
-                        {[['name','Name'],['vendor','Vendor'],['catalog_number','Cat #'],['category','Category'],['quantity_in_lab','In Lab'],['fy24_purchases','FY24'],['fy25_purchases','FY25'],['fy26_purchases','FY26']].map(([key, label]) => (
+                        {[['category','Category'],['name','Item (name)'],['vendor','Vendor'],['catalog_number','Cat number'],['unit_description','Unit description'],['unit_price','Unit price'],['units','Units (n)'],['quantity_in_lab','Unused'],['fy26_purchases',"FY'26"],['fy25_purchases',"FY'25"],['fy24_purchases',"FY'24"]].map(([key, label]) => (
                           <th key={key} onClick={() => { if (reagentsSortCol === key) { setReagentsSortDir(d => d === 'asc' ? 'desc' : 'asc'); } else { setReagentsSortCol(key); setReagentsSortDir('asc'); } }} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: reagentsSortCol === key ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>
                             {label}{reagentsSortCol === key ? (reagentsSortDir === 'asc' ? ' ↑' : ' ↓') : ''}
                           </th>
@@ -885,20 +1137,23 @@ export default function Finance({ userRole }) {
                     </thead>
                     <tbody>
                       {sortedReagents.length === 0 && (
-                        <tr><td colSpan={8} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>{reagentSearch ? `No reagents match "${reagentSearch}"` : 'No reagents yet.'}</td></tr>
+                        <tr><td colSpan={11} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>{reagentSearch ? `No reagents match "${reagentSearch}"` : 'No reagents yet.'}</td></tr>
                       )}
                       {sortedReagents.map(r => (
                         <tr key={r.id} onClick={() => canManage && openEditReagent(r)} style={{ borderTop: '1px solid var(--border)', cursor: canManage ? 'pointer' : 'default' }}
                           onMouseEnter={e => { if (canManage) e.currentTarget.style.background = 'var(--bg-secondary)'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = ''; }}>
+                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{r.category}</td>
                           <td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-primary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.vendor}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{r.catalog_number}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.category}</td>
+                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{r.vendor}</td>
+                          <td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{r.catalog_number}</td>
+                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{r.unit_description ?? '—'}</td>
+                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{r.unit_price != null ? `$${Number(r.unit_price).toLocaleString()}` : '—'}</td>
+                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'center' }}>{r.units ?? '—'}</td>
                           <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center' }}>{r.quantity_in_lab ?? '—'}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.fy24_purchases ?? '—'}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.fy25_purchases ?? '—'}</td>
                           <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.fy26_purchases ?? '—'}</td>
+                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.fy25_purchases ?? '—'}</td>
+                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.fy24_purchases ?? '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -944,8 +1199,8 @@ export default function Finance({ userRole }) {
                   <button onClick={exportTotalsTable} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
                 </div>
                 <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
-                  <div style={{ flex: '1 1 320px', minWidth: 0 }}>
-                    <ResponsiveContainer width="100%" height={240}>
+                  <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                    <ResponsiveContainer width="100%" height={220}>
                       <BarChart data={totalsChartData} margin={{ top: 16, right: 16, left: 8, bottom: 16 }} barCategoryGap="40%">
                         <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" vertical={false} />
                         <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#555' }} />
@@ -957,7 +1212,7 @@ export default function Finance({ userRole }) {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                  <div style={{ flex: '0 0 260px', minWidth: '200px' }}>
+                  <div style={{ flex: '1 1 0', minWidth: '200px' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                       <thead>
                         <tr style={{ background: '#9DA9C7' }}>
@@ -1019,8 +1274,8 @@ export default function Finance({ userRole }) {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                  <div style={{ flex: '1 1 400px', minWidth: 0 }}>
-                    <ResponsiveContainer width="100%" height={340}>
+                  <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={grantChartData} margin={{ top: 24, right: 16, left: 8, bottom: 20 }} barCategoryGap="35%">
                         <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" vertical={false} />
                         <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#555' }} />
@@ -1032,7 +1287,7 @@ export default function Finance({ userRole }) {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                  <div style={{ flex: '0 0 300px', minWidth: '240px', maxHeight: '380px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px' }}>
+                  <div style={{ flex: '1 1 0', minWidth: '240px', maxHeight: '340px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                         <tr style={{ background: '#9DA9C7' }}>
@@ -1101,8 +1356,8 @@ export default function Finance({ userRole }) {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                  <div style={{ flex: '1 1 400px', minWidth: 0 }}>
-                    <ResponsiveContainer width="100%" height={420}>
+                  <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                    <ResponsiveContainer width="100%" height={380}>
                       <BarChart data={catStatusDataFiltered} margin={{ top: 24, right: 16, left: 16, bottom: 100 }} barCategoryGap="30%">
                         <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" vertical={false} />
                         <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#555' }} angle={-45} textAnchor="end" interval={0} />
@@ -1114,7 +1369,7 @@ export default function Finance({ userRole }) {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                  <div style={{ flex: '0 0 280px', minWidth: '220px', maxHeight: '460px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px' }}>
+                  <div style={{ flex: '1 1 0', minWidth: '220px', maxHeight: '420px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                         <tr style={{ background: '#9DA9C7' }}>
@@ -1137,12 +1392,46 @@ export default function Finance({ userRole }) {
                 </div>
               </div>
 
-              {/* 4. Monthly Spending by Category */}
+              {/* 4. Monthly Spending by Category/User */}
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '12px', flexWrap: 'wrap' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Monthly Spending by Category</h3>
+                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Monthly Spending by Category/User</h3>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <button onClick={exportCatMonthTable} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
+
+                    {/* User filter */}
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        onClick={() => { setDraftUsers(selectedUsers); setUserSearch(''); setUserFilterOpen(v => !v); }}
+                        style={{ padding: '8px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        {selectedUsers.length === 0 ? 'All Users' : `${selectedUsers.length} User${selectedUsers.length > 1 ? 's' : ''} Selected`}
+                        <span style={{ fontSize: '10px' }}>▼</span>
+                      </button>
+                      {userFilterOpen && (
+                        <div style={{ position: 'absolute', zIndex: 200, top: 'calc(100% + 4px)', right: 0, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px', width: '260px', boxShadow: 'var(--shadow-lg)' }}>
+                          <input value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Search users…" style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box', marginBottom: '8px' }} />
+                          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                            <button onClick={() => setDraftUsers([...userNames])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Select All</button>
+                            <button onClick={() => setDraftUsers([])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Clear</button>
+                          </div>
+                          <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            {userNames.filter(u => u.toLowerCase().includes(userSearch.toLowerCase())).map(u => (
+                              <label key={u} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px' }}>
+                                <input type="checkbox" checked={draftUsers.includes(u)} onChange={e => setDraftUsers(prev => e.target.checked ? [...prev, u] : prev.filter(x => x !== u))} />
+                                <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{u}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                            <button onClick={() => setUserFilterOpen(false)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                            <button onClick={() => { setSelectedUsers(draftUsers); setUserFilterOpen(false); }} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>OK</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Category filter */}
                     <div style={{ position: 'relative' }}>
                       <button
                         onClick={() => { setDraftCategories(selectedCategories); setCategorySearch(''); setCategoryFilterOpen(v => !v); }}
@@ -1177,9 +1466,9 @@ export default function Finance({ userRole }) {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                  <div style={{ flex: '1 1 400px', minWidth: 0 }}>
-                    <ResponsiveContainer width="100%" height={460}>
-                      <LineChart data={catData} margin={{ top: 20, right: 24, left: 10, bottom: 20 }}>
+                  <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                    <ResponsiveContainer width="100%" height={380}>
+                      <LineChart data={userCatData.data} margin={{ top: 20, right: 16, left: 10, bottom: 20 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
                         <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#555' }} />
                         <YAxis scale="log" domain={[0.9, 250000]} ticks={[1, 10, 100, 1000, 10000, 100000]}
@@ -1195,12 +1484,12 @@ export default function Finance({ userRole }) {
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
-                  <div style={{ flex: '0 0 320px', minWidth: '240px', maxHeight: '500px', overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+                  <div style={{ flex: '1 1 0', minWidth: '240px', maxHeight: '420px', overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
                     <table style={{ borderCollapse: 'collapse', fontSize: '11px', minWidth: '280px' }}>
                       <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                         <tr style={{ background: '#9DA9C7' }}>
                           <th style={{ padding: '7px 10px', textAlign: 'left', color: 'white', fontWeight: 600, whiteSpace: 'nowrap' }}>Category</th>
-                          {catMonths.map(m => <th key={m} style={{ padding: '7px 8px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>{m}</th>)}
+                          {userCatData.months.map(m => <th key={m} style={{ padding: '7px 8px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>{m}</th>)}
                         </tr>
                       </thead>
                       <tbody>
@@ -1210,8 +1499,8 @@ export default function Finance({ userRole }) {
                               <span style={{ backgroundColor: CATEGORY_COLORS[cat] || '#888888', width: 8, height: 8, borderRadius: '50%', display: 'inline-block', marginRight: 6, verticalAlign: 'middle' }} />
                               <span style={{ color: '#1A1A2E', verticalAlign: 'middle' }}>{cat}</span>
                             </td>
-                            {catMonths.map((m, mi) => {
-                              const val = catData[mi]?.[cat];
+                            {userCatData.months.map((m, mi) => {
+                              const val = userCatData.data[mi]?.[cat];
                               return <td key={m} style={{ padding: '5px 8px', textAlign: 'right', color: '#1A1A2E', whiteSpace: 'nowrap' }}>{val != null ? `$${val.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}</td>;
                             })}
                           </tr>
@@ -1224,6 +1513,189 @@ export default function Finance({ userRole }) {
 
             </div>
           )}
+
+          {activeTab === 'smart-summary' && (() => {
+            const thStyle = (key) => ({ padding: '8px 10px', textAlign: ['unit_price','units','total','is_standardized'].includes(key) || key.startsWith('fy') ? 'center' : 'left', fontSize: '11px', color: catalogSortCol === key ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', fontWeight: 600 });
+            const tdStyle = (opts = {}) => ({ padding: '7px 10px', fontSize: '12px', color: opts.color || 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: opts.center ? 'center' : 'left', fontFamily: opts.mono ? 'monospace' : undefined, fontWeight: opts.bold ? 700 : undefined, maxWidth: opts.maxW || undefined });
+            const sortHeader = (key, label) => (
+              <th key={key} style={thStyle(key)} onClick={() => { if (catalogSortCol === key) setCatalogSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setCatalogSortCol(key); setCatalogSortDir('asc'); } }}>
+                {label}{catalogSortCol === key ? (catalogSortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+              </th>
+            );
+            const { vendorYearSpend, activeV, activeYrs } = vendorChartData;
+            const dropdownBox = { position: 'absolute', zIndex: 200, top: 'calc(100% + 4px)', right: 0, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px', width: '280px', boxShadow: 'var(--shadow-lg)' };
+            const filterBtn = () => ({ padding: '8px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' });
+            return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+
+              {/* Vendor spending chart */}
+              <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '20px 24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
+                  <h3 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Spending by Vendor</h3>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <button onClick={handleExportVendorChart} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
+
+                    <div style={{ position: 'relative' }}>
+                      <button onClick={() => { setVcDraftYears(vcSelectedYears); setVcYearOpen(v => !v); }} style={filterBtn()}>
+                        {vcSelectedYears.length === 0 ? 'All Years' : vcSelectedYears.map(fyLabel).join(', ')}
+                        <span style={{ fontSize: '10px' }}>▼</span>
+                      </button>
+                      {vcYearOpen && (
+                        <div style={{ ...dropdownBox, width: '180px' }}>
+                          {allFYs.map(fy => (
+                            <label key={fy} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 4px', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }}>
+                              <input type="checkbox" checked={vcDraftYears.includes(fy)} onChange={e => setVcDraftYears(prev => e.target.checked ? [...prev, fy] : prev.filter(x => x !== fy))} />
+                              {fyLabel(fy)}
+                            </label>
+                          ))}
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid var(--border)' }}>
+                            <button onClick={() => setVcYearOpen(false)} style={{ padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer' }}>Cancel</button>
+                            <button onClick={() => { setVcSelectedYears(vcDraftYears); setVcYearOpen(false); }} style={{ padding: '6px 12px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>OK</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ position: 'relative' }}>
+                      <button onClick={() => { setVcDraftVendors(vcSelectedVendors); setVcVendorSearch(''); setVcVendorOpen(v => !v); }} style={filterBtn()}>
+                        {vcSelectedVendors.length === 0 ? 'All Vendors' : `${vcSelectedVendors.length} Vendor${vcSelectedVendors.length > 1 ? 's' : ''} Selected`}
+                        <span style={{ fontSize: '10px' }}>▼</span>
+                      </button>
+                      {vcVendorOpen && (
+                        <div style={dropdownBox}>
+                          <input value={vcVendorSearch} onChange={e => setVcVendorSearch(e.target.value)} placeholder="Search vendors…" style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box', marginBottom: '8px' }} />
+                          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                            <button onClick={() => setVcDraftVendors([...allVendorNames])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>All</button>
+                            <button onClick={() => setVcDraftVendors([])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Clear</button>
+                          </div>
+                          <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            {allVendorNames.filter(v => v.toLowerCase().includes(vcVendorSearch.toLowerCase())).map(v => (
+                              <label key={v} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px' }}>
+                                <input type="checkbox" checked={vcDraftVendors.includes(v)} onChange={e => setVcDraftVendors(prev => e.target.checked ? [...prev, v] : prev.filter(x => x !== v))} />
+                                <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{v}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                            <button onClick={() => setVcVendorOpen(false)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                            <button onClick={() => { setVcSelectedVendors(vcDraftVendors); setVcVendorOpen(false); }} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>OK</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
+                  <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                    <ResponsiveContainer width="100%" height={380}>
+                      <LineChart data={vendorChartData.data} margin={{ top: 20, right: 16, left: 10, bottom: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
+                        <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#555' }} />
+                        <YAxis tickFormatter={v => v >= 1000 ? `$${(v/1000).toFixed(0)}K` : `$${v}`} tick={{ fontSize: 10, fill: '#555' }} width={60} />
+                        <Tooltip formatter={(v, name) => v != null ? [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name] : ['-', name]} />
+                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '16px' }} />
+                        {activeV.slice(0, 20).map((v, i) => (
+                          <Line key={v} type="linear" dataKey={v} stroke={VENDOR_PALETTE[i % VENDOR_PALETTE.length]}
+                            dot={{ r: 3, fill: VENDOR_PALETTE[i % VENDOR_PALETTE.length], strokeWidth: 0 }}
+                            strokeWidth={1.5} connectNulls={false} />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                    {activeV.length > 20 && <p style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '4px' }}>Showing top 20 vendors by spend. Use the vendor filter to select specific vendors.</p>}
+                  </div>
+
+                  <div style={{ flex: '1 1 0', minWidth: '220px', maxHeight: '420px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                        <tr style={{ background: '#9DA9C7' }}>
+                          <th style={{ padding: '7px 10px', textAlign: 'left', color: 'white', fontWeight: 600, whiteSpace: 'nowrap' }}>Vendor</th>
+                          {activeYrs.map(fy => <th key={fy} style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>{fyLabel(fy)}</th>)}
+                          <th style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activeV.map((v, i) => {
+                          const total = activeYrs.reduce((s, fy) => s + (vendorYearSpend[v]?.[fy] || 0), 0);
+                          return (
+                            <tr key={v} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white', borderTop: '1px solid var(--border)' }}>
+                              <td style={{ padding: '5px 10px', color: '#1A1A2E', whiteSpace: 'nowrap', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                <span style={{ backgroundColor: VENDOR_PALETTE[i % VENDOR_PALETTE.length], width: 8, height: 8, borderRadius: '50%', display: 'inline-block', marginRight: 6, verticalAlign: 'middle' }} />
+                                {v}
+                              </td>
+                              {activeYrs.map(fy => <td key={fy} style={{ padding: '5px 10px', textAlign: 'right', color: '#1A1A2E', whiteSpace: 'nowrap' }}>{vendorYearSpend[v]?.[fy] ? `$${vendorYearSpend[v][fy].toLocaleString('en-US', { maximumFractionDigits: 0 })}` : ''}</td>)}
+                              <td style={{ padding: '5px 10px', textAlign: 'right', fontWeight: 700, color: '#1A1A2E', whiteSpace: 'nowrap' }}>${total.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ background: '#9DA9C7', borderTop: '2px solid #7A8AB5', fontWeight: 700 }}>
+                          <td style={{ padding: '7px 10px', color: 'white' }}>Grand Total</td>
+                          {activeYrs.map(fy => {
+                            const t = activeV.reduce((s, v) => s + (vendorYearSpend[v]?.[fy] || 0), 0);
+                            return <td key={fy} style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066' }}>{t > 0 ? `$${t.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : ''}</td>;
+                          })}
+                          <td style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066' }}>
+                            ${activeV.reduce((s, v) => s + activeYrs.reduce((ss, fy) => ss + (vendorYearSpend[v]?.[fy] || 0), 0), 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* Catalog table */}
+              <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '20px 24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  <h3 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Orders by Catalog Number <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>({sortedCatalogRows.length} unique)</span>
+                  </h3>
+                  <button onClick={handleExportCatalog} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', minWidth: '1300px', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--bg-secondary)' }}>
+                        {sortHeader('item', 'Item')}
+                        {sortHeader('vendor', 'Vendor')}
+                        {sortHeader('category', 'Category')}
+                        {sortHeader('catalog_number', 'Cat #')}
+                        {sortHeader('unit_description', 'Unit description')}
+                        {sortHeader('unit_price', 'Unit price')}
+                        {sortHeader('units', 'Units (n)')}
+                        {sortHeader('is_standardized', 'Std. Reagent')}
+                        {allFYs.map(fy => sortHeader(fy, fyLabel(fy)))}
+                        {sortHeader('total', 'Total')}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedCatalogRows.length === 0 && (
+                        <tr><td colSpan={9 + allFYs.length} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No orders with catalog numbers found.</td></tr>
+                      )}
+                      {sortedCatalogRows.map((r, i) => (
+                        <tr key={r.catalog_number} style={{ borderTop: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
+                          <td style={tdStyle({ maxW: '180px' })}>{r.item}</td>
+                          <td style={tdStyle({ maxW: '120px' })}>{r.vendor || '—'}</td>
+                          <td style={tdStyle({ maxW: '140px' })}>{r.category || '—'}</td>
+                          <td style={tdStyle({ mono: true, color: 'var(--text-muted)' })}>{r.catalog_number}</td>
+                          <td style={tdStyle()}>{r.unit_description || '—'}</td>
+                          <td style={tdStyle({ center: true })}>{r.unit_price != null ? `$${Number(r.unit_price).toLocaleString()}` : '—'}</td>
+                          <td style={tdStyle({ center: true })}>{r.units ?? '—'}</td>
+                          <td style={{ ...tdStyle({ center: true }), color: r.is_standardized ? '#27AE60' : 'var(--text-muted)', fontWeight: r.is_standardized ? 600 : 400 }}>{r.is_standardized ? 'Yes' : 'No'}</td>
+                          {allFYs.map(fy => <td key={fy} style={tdStyle({ center: true, color: r.fyCounts[fy] ? 'var(--purple-primary)' : 'var(--text-muted)', bold: !!r.fyCounts[fy] })}>{r.fyCounts[fy] || '—'}</td>)}
+                          <td style={tdStyle({ center: true, bold: true, color: 'var(--text-primary)' })}>{r.total}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+            );
+          })()}
 
         </>
       )}
@@ -1522,8 +1994,22 @@ export default function Finance({ userRole }) {
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Category</label>
                 <input value={reagentForm.category} onChange={e => setReagentForm(p => ({ ...p, category: e.target.value }))} placeholder="e.g. Antibody, Buffer..." style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Unit description</label>
+                  <input value={reagentForm.unit_description} onChange={e => setReagentForm(p => ({ ...p, unit_description: e.target.value }))} placeholder="e.g. 1mg vial" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Unit price</label>
+                  <input type="number" step="0.01" value={reagentForm.unit_price} onChange={e => setReagentForm(p => ({ ...p, unit_price: e.target.value }))} placeholder="0.00" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Units (n)</label>
+                  <input type="number" value={reagentForm.units} onChange={e => setReagentForm(p => ({ ...p, units: e.target.value }))} placeholder="0" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px' }}>
-                {[['quantity_in_lab','In Lab'],['fy24_purchases','FY24'],['fy25_purchases','FY25'],['fy26_purchases','FY26']].map(([key, label]) => (
+                {[['quantity_in_lab','Unused'],['fy26_purchases',"FY'26"],['fy25_purchases',"FY'25"],['fy24_purchases',"FY'24"]].map(([key, label]) => (
                   <div key={key}>
                     <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>{label}</label>
                     <input type="number" value={reagentForm[key]} onChange={e => setReagentForm(p => ({ ...p, [key]: e.target.value }))} placeholder="0" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
@@ -1563,8 +2049,22 @@ export default function Finance({ userRole }) {
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Category</label>
                 <input value={editReagentForm.category} onChange={e => setEditReagentForm(p => ({ ...p, category: e.target.value }))} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Unit description</label>
+                  <input value={editReagentForm.unit_description || ''} onChange={e => setEditReagentForm(p => ({ ...p, unit_description: e.target.value }))} placeholder="e.g. 1mg vial" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Unit price</label>
+                  <input type="number" step="0.01" value={editReagentForm.unit_price || ''} onChange={e => setEditReagentForm(p => ({ ...p, unit_price: e.target.value }))} placeholder="0.00" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Units (n)</label>
+                  <input type="number" value={editReagentForm.units || ''} onChange={e => setEditReagentForm(p => ({ ...p, units: e.target.value }))} placeholder="0" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px' }}>
-                {[['quantity_in_lab','In Lab'],['fy24_purchases','FY24'],['fy25_purchases','FY25'],['fy26_purchases','FY26']].map(([key, label]) => (
+                {[['quantity_in_lab','Unused'],['fy26_purchases',"FY'26"],['fy25_purchases',"FY'25"],['fy24_purchases',"FY'24"]].map(([key, label]) => (
                   <div key={key}>
                     <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>{label}</label>
                     <input type="number" value={editReagentForm[key]} onChange={e => setEditReagentForm(p => ({ ...p, [key]: e.target.value }))} placeholder="0" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />

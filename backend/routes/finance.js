@@ -19,47 +19,89 @@ const transporter = nodemailer.createTransport({
 // EMAILS PAUSED — remove this line to resume
 transporter.sendMail = async () => {};
 
+const MONTH_MAP = { Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12' };
+
 function excelDateToString(excelDate) {
-  if (!excelDate || isNaN(excelDate)) return null;
+  if (!excelDate) return null;
   if (typeof excelDate === 'string' && excelDate.includes('-')) return excelDate;
-  const epoch = new Date(1899, 11, 30);
-  const date = new Date(epoch.getTime() + excelDate * 86400000);
-  return date.toISOString().split('T')[0];
+  // "Mon , YYYY" format from CSV (e.g. "Aug , 2025")
+  if (typeof excelDate === 'string') {
+    const m = excelDate.match(/^([A-Za-z]{3})\s*,\s*(\d{4})$/);
+    if (m && MONTH_MAP[m[1]]) return `${m[2]}-${MONTH_MAP[m[1]]}-01`;
+  }
+  // Excel serial number
+  if (typeof excelDate === 'number') {
+    const epoch = new Date(1899, 11, 30);
+    return new Date(epoch.getTime() + excelDate * 86400000).toISOString().split('T')[0];
+  }
+  return null;
 }
+
+const ORDERS_HEADERS = ['Item','Vendor','Catalog Number','Category','Grant ID','Requsition ID','Unit description','Unit price','Units (n)','Total price','Date','Requestor','Status','Notes'];
 
 // Preview new orders from uploaded file
 router.post('/preview-orders', upload.single('file'), async (req, res) => {
   try {
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheet = workbook.Sheets['Orders'] || workbook.Sheets[workbook.SheetNames[0]];
+
+    // Validate column names and order exactly
+    const rawHeaders = (XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null })[0] || []).map(h => String(h ?? '').trim());
+    const details = [];
+    ORDERS_HEADERS.forEach((exp, i) => {
+      const got = rawHeaders[i];
+      if (got !== exp) details.push(`Column ${i + 1}: expected "${exp}", got "${got ?? '(missing)'}"`);
+    });
+    if (rawHeaders.length > ORDERS_HEADERS.length) details.push(`File has ${rawHeaders.length - ORDERS_HEADERS.length} extra column(s) — remove them before importing`);
+    if (details.length > 0) return res.status(400).json({ error: 'File rejected — columns do not match the required format.', details });
+
     const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
 
-    // Get existing requisition IDs
+    // Build dedup set from DB.
+    // Key: req_id::catalog_number when catalog is real (stable even if item names change between exports)
+    //      req_id::item_name as fallback when catalog is NA/empty
     const { data: existing } = await supabase
-      .from('orders').select('requisition_id');
-    const existingIds = new Set((existing || []).map(e => String(e.requisition_id)));
+      .from('orders').select('item, requisition_id, catalog_number');
+    function makeKey(reqId, catNum, item) {
+      const cat = String(catNum||'').trim();
+      const req = String(reqId||'NA').trim();  // null in DB → "NA" to match CSV default
+      // Strip all non-alphanumeric so "SureOne" == "Sure One", "1000uL" == "1000 ul", etc.
+      const itm = String(item||'').toLowerCase().replace(/[^a-z0-9]/g, '');
+      return (cat && cat !== 'NA') ? `${req}::${cat}` : `${req}::${itm}`;
+    }
+    const existingSet = new Set(
+      (existing || []).map(e => makeKey(e.requisition_id, e.catalog_number, e.item))
+    );
 
     const newOrders = [];
     for (const row of rows) {
-      const reqId = row['Requsition ID'] || row['Requisition ID'];
-      if (!reqId || existingIds.has(String(reqId))) continue;
-      if (!row['Item'] && !row['item']) continue;
+      const item = String(row['Item'] || row['item'] || '').trim();
+      if (!item) continue;
+      const reqId = String(row['Requsition ID'] || row['Requisition ID'] || 'NA').trim();
+      const catNum = String(row['Catalog Number'] || row['Catalog #'] || row['catalog_number'] || '').trim();
+
+      const key = makeKey(reqId, catNum, item);
+      if (existingSet.has(key)) continue;
+      existingSet.add(key);
+
+      const rawUnitPrice = String(row['Unit Price'] || row['Unit price'] || row['unit_price'] || '').replace(/[$,]/g, '');
+      const rawTotalPrice = String(row['Total Price'] || row['Total price'] || row['total_price'] || '').replace(/[$,]/g, '');
 
       newOrders.push({
-        item: row['Item'] || row['item'],
-        vendor: row['Vendor'] || row['vendor'],
-        catalog_number: row['Catalog Number'] || row['Catalog #'] || row['catalog_number'],
-        category: row['Category '] || row['Category'] || row['category'],
-        grant_name: row['Grant ID'] || row['Grant Name'] || row['Grant'] || row['grant_name'],
-        requisition_id: String(reqId),
-        unit_description: row['Unit Description'] || row['Unit description'] || row['unit_description'],
-        unit_price: parseFloat(row['Unit Price'] || row['Unit price'] || row['unit_price']) || null,
+        item,
+        vendor: row['Vendor'] || row['vendor'] || null,
+        catalog_number: catNum || null,
+        category: String(row['Category '] ?? row['Category'] ?? row['category'] ?? '').trim() || null,
+        grant_name: String(row['Grant ID'] ?? row['Grant Name'] ?? row['Grant'] ?? row['grant_name'] ?? '').trim() || null,
+        requisition_id: reqId,
+        unit_description: String(row['Unit Description'] ?? row['Unit description'] ?? row['unit_description'] ?? '').trim() || null,
+        unit_price: parseFloat(rawUnitPrice) || null,
         units: parseInt(row['Units (n)'] || row['Units'] || row['units']) || null,
-        total_price: parseFloat(row['Total Price'] || row['Total price'] || row['total_price']) || null,
+        total_price: parseFloat(rawTotalPrice) || null,
         order_date: excelDateToString(row['Date'] || row['Order Date'] || row['date']),
-        requestor: row['Requestor'] || row['requestor'],
-        status: (row['Status'] || row['status'] || 'pending').toLowerCase(),
-        notes: row['Notes'] || row['notes'] || null
+        requestor: (row['Requestor'] || row['requestor'] || '').trim() || null,
+        status: (row['Status'] || row['status'] || 'pending').trim().toLowerCase(),
+        notes: (row['Notes'] || row['notes'] || '').trim() || null
       });
     }
 
@@ -70,16 +112,67 @@ router.post('/preview-orders', upload.single('file'), async (req, res) => {
   }
 });
 
+// Delete all orders and replace with CSV contents
+router.post('/replace-all-orders', upload.single('file'), async (req, res) => {
+  try {
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheet = workbook.Sheets['Orders'] || workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
+
+    const allOrders = [];
+    for (const row of rows) {
+      const item = String(row['Item'] || row['item'] || '').trim();
+      if (!item) continue;
+      const reqId = String(row['Requsition ID'] || row['Requisition ID'] || 'NA').trim();
+      const catNum = String(row['Catalog Number'] || row['Catalog #'] || row['catalog_number'] || '').trim();
+      const rawUnitPrice = String(row['Unit Price'] || row['Unit price'] || row['unit_price'] || '').replace(/[$,]/g, '');
+      const rawTotalPrice = String(row['Total Price'] || row['Total price'] || row['total_price'] || '').replace(/[$,]/g, '');
+      allOrders.push({
+        item,
+        vendor: row['Vendor'] || row['vendor'] || null,
+        catalog_number: catNum || null,
+        category: String(row['Category '] ?? row['Category'] ?? row['category'] ?? '').trim() || null,
+        grant_name: String(row['Grant ID'] ?? row['Grant Name'] ?? row['Grant'] ?? row['grant_name'] ?? '').trim() || null,
+        requisition_id: reqId,
+        unit_description: String(row['Unit Description'] ?? row['Unit description'] ?? row['unit_description'] ?? '').trim() || null,
+        unit_price: parseFloat(rawUnitPrice) || null,
+        units: parseInt(row['Units (n)'] || row['Units'] || row['units']) || null,
+        total_price: parseFloat(rawTotalPrice) || null,
+        order_date: excelDateToString(row['Date'] || row['Order Date'] || row['date']),
+        requestor: (row['Requestor'] || row['requestor'] || '').trim() || null,
+        status: (row['Status'] || row['status'] || 'pending').trim().toLowerCase(),
+        notes: (row['Notes'] || row['notes'] || '').trim() || null,
+      });
+    }
+
+    // Wipe existing orders
+    const { error: deleteError } = await supabase.from('orders').delete().not('id', 'is', null);
+    if (deleteError) return res.status(500).json({ error: deleteError.message });
+
+    // Insert all rows from CSV
+    let imported = 0;
+    for (const order of allOrders) {
+      const { error } = await supabase.from('orders').insert(order);
+      if (error) console.error('Replace insert error:', error.message, order.item);
+      else imported++;
+    }
+
+    res.json({ success: true, imported });
+  } catch (error) {
+    console.error('Replace-all error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Import confirmed orders
 router.post('/import-orders', async (req, res) => {
   const { orders } = req.body;
   try {
     let imported = 0;
     for (const order of orders) {
-      const { error } = await supabase
-        .from('orders')
-        .upsert(order, { onConflict: 'requisition_id', ignoreDuplicates: true });
-      if (!error) imported++;
+      const { error } = await supabase.from('orders').insert(order);
+      if (error) console.error('Order insert error:', error.message, order.item);
+      else imported++;
     }
     res.json({ success: true, imported });
   } catch (error) {
@@ -88,56 +181,53 @@ router.post('/import-orders', async (req, res) => {
   }
 });
 
+const REAGENT_HEADERS_REQUIRED = ['Category', 'Item (name)', 'Vendor', 'Cat number', 'Unit description', 'Unit price', 'Units (n)', 'Unused'];
+const REAGENT_FY_COLS = ["FY'26", "FY'25", "FY'24"];
+
 // Preview new reagents from uploaded file
 router.post('/preview-reagents', upload.single('file'), async (req, res) => {
   try {
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const sheet = workbook.Sheets['Misc.'] || workbook.Sheets[workbook.SheetNames[0]];
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
-    const { data: existing } = await supabase
-      .from('reagents').select('catalog_number');
+    // Strict column validation
+    const rawHeaders = (XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null })[0] || []).map(h => String(h ?? '').trim());
+    const details = [];
+    REAGENT_HEADERS_REQUIRED.forEach((exp, i) => {
+      const got = rawHeaders[i];
+      if (got !== exp) details.push(`Column ${i + 1}: expected "${exp}", got "${got ?? '(missing)'}"`);
+    });
+    // FY columns are order-flexible but all must be present after col 8
+    const presentFY = rawHeaders.slice(8).filter(h => h !== '');
+    const missingFY = REAGENT_FY_COLS.filter(fy => !presentFY.includes(fy));
+    if (missingFY.length > 0) details.push(`Missing FY columns: ${missingFY.map(f => `"${f}"`).join(', ')} — must appear after column 8, order-flexible`);
+    const extraCols = presentFY.filter(h => !REAGENT_FY_COLS.includes(h));
+    if (extraCols.length > 0) details.push(`Unknown columns after column 8: ${extraCols.map(c => `"${c}"`).join(', ')} — remove them before importing`);
+    if (details.length > 0) return res.status(400).json({ error: 'File rejected — columns do not match the required format.', details });
+
+    const { data: existing } = await supabase.from('reagents').select('catalog_number');
     const existingCats = new Set((existing || []).map(e => String(e.catalog_number)));
 
-    // Try header-based parsing first (row 1 = headers)
-    const headerRows = XLSX.utils.sheet_to_json(sheet, { defval: null });
-    const HEADER_COLS = { name: ['Name','Item','name'], vendor: ['Vendor','vendor'], catalog_number: ['Catalog #','Catalog Number','catalog_number','Cat #'], category: ['Category','category'], quantity_in_lab: ['In Lab','quantity_in_lab','Qty'], fy24_purchases: ['FY24','fy24_purchases'], fy25_purchases: ['FY25','fy25_purchases'], fy26_purchases: ['FY26','fy26_purchases'] };
-    function pick(row, keys) { for (const k of keys) { if (row[k] != null) return row[k]; } return null; }
-
-    const firstRow = headerRows[0] || {};
-    const hasHeaders = HEADER_COLS.name.some(k => k in firstRow);
-
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
     const newReagents = [];
-    if (hasHeaders) {
-      for (const row of headerRows) {
-        const name = pick(row, HEADER_COLS.name);
-        const cat = pick(row, HEADER_COLS.catalog_number);
-        if (!name || existingCats.has(String(cat))) continue;
-        newReagents.push({
-          name: String(name),
-          vendor: pick(row, HEADER_COLS.vendor) ? String(pick(row, HEADER_COLS.vendor)) : null,
-          catalog_number: cat ? String(cat) : null,
-          category: pick(row, HEADER_COLS.category) ? String(pick(row, HEADER_COLS.category)) : null,
-          quantity_in_lab: parseFloat(pick(row, HEADER_COLS.quantity_in_lab)) || null,
-          fy24_purchases: parseFloat(pick(row, HEADER_COLS.fy24_purchases)) || null,
-          fy25_purchases: parseFloat(pick(row, HEADER_COLS.fy25_purchases)) || null,
-          fy26_purchases: parseFloat(pick(row, HEADER_COLS.fy26_purchases)) || null,
-        });
-      }
-    } else {
-      // Legacy positional format: row 1 = names, row 2 = headers, row 3+ = data
-      const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
-      const dataRows = allRows.slice(2);
-      for (const row of dataRows) {
-        const name = row[1]; const cat = row[3];
-        if (!name || existingCats.has(String(cat))) continue;
-        newReagents.push({
-          name: String(name),
-          vendor: row[2] ? String(row[2]) : null,
-          catalog_number: cat ? String(cat) : null,
-          category: row[0] ? String(row[0]) : null,
-          quantity_in_lab: null, fy24_purchases: null, fy25_purchases: null, fy26_purchases: null,
-        });
-      }
+    for (const row of rows) {
+      const name = String(row['Item (name)'] || '').trim();
+      if (!name) continue;
+      const cat = String(row['Cat number'] || '').trim();
+      if (cat && existingCats.has(cat)) continue;
+      newReagents.push({
+        name,
+        vendor: row['Vendor'] ? String(row['Vendor']).trim() : null,
+        catalog_number: cat || null,
+        category: row['Category'] ? String(row['Category']).trim() : null,
+        unit_description: row['Unit description'] ? String(row['Unit description']).trim() : null,
+        unit_price: parseFloat(String(row['Unit price'] || '').replace(/[$,]/g, '')) || null,
+        units: parseInt(row['Units (n)']) || null,
+        quantity_in_lab: parseFloat(row['Unused']) || null,
+        fy26_purchases: parseInt(row["FY'26"]) || null,
+        fy25_purchases: parseInt(row["FY'25"]) || null,
+        fy24_purchases: parseInt(row["FY'24"]) || null,
+      });
     }
 
     console.log('New reagents found:', newReagents.length);
@@ -282,5 +372,6 @@ router.get('/check-grant-alerts', async (req, res) => {
   await checkGrantAlerts();
   res.json({ success: true });
 });
+
 
 module.exports = { router, checkGrantAlerts };

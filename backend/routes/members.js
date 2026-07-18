@@ -86,6 +86,71 @@ router.post('/members/onboarding', async (req, res) => {
   res.json({ success: true });
 });
 
+// Create a member immediately with a password — no invite email needed.
+// Creates auth user, profile, and lab_contacts row in one shot.
+router.post('/members/create', async (req, res) => {
+  const { email, password, fullName, role, permissions, contactInfo, createdById, createdByName } = req.body;
+
+  if (!email || !fullName || !role || !password) {
+    return res.status(400).json({ error: 'email, fullName, role, and password are required' });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  }
+
+  // 1. Create auth user with confirmed email and set password
+  const { data: userData, error: createError } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
+  if (createError) return res.status(400).json({ error: createError.message });
+  const userId = userData.user.id;
+
+  // 2. Insert profile row
+  const perms = permissions || ROLE_DEFAULTS[role] || ROLE_DEFAULTS.member;
+  const { error: profileError } = await supabaseAdmin.from('profiles').insert([{
+    id: userId, email, full_name: fullName, role, ...perms,
+  }]);
+  if (profileError) {
+    await supabaseAdmin.auth.admin.deleteUser(userId).catch(() => {});
+    return res.status(500).json({ error: 'Profile setup failed: ' + profileError.message });
+  }
+
+  // 3. Insert lab_contacts row with all provided contact info
+  const nameParts = fullName.trim().split(' ');
+  const { error: contactsError } = await supabaseAdmin.from('lab_contacts').insert([{
+    first_name: nameParts[0] || '',
+    last_name: nameParts.slice(1).join(' ') || '',
+    email,
+    role: role === 'external' ? 'external' : role,
+    status: 'active',
+    sort_order: 99,
+    title: contactInfo?.title || '',
+    personal_email: contactInfo?.personal_email || '',
+    phone: contactInfo?.phone || '',
+    address: contactInfo?.address || '',
+    emergency_contact_name: contactInfo?.emergency_contact_name || '',
+    emergency_contact_phone: contactInfo?.emergency_contact_phone || '',
+    emergency_contact_email: contactInfo?.emergency_contact_email || '',
+    emergency_contact_relationship: contactInfo?.emergency_contact_relationship || '',
+  }]);
+  if (contactsError) console.error('lab_contacts insert failed:', contactsError.message);
+
+  // 4. Audit log
+  const { error: auditError } = await supabaseAdmin.from('auth_audit_log').insert([{
+    event_type: 'member_invited',
+    actor_id: createdById || null,
+    actor_name: createdByName || null,
+    target_id: userId,
+    target_email: email,
+    details: { role, full_name: fullName, method: 'direct_create' },
+  }]);
+  if (auditError) console.error('audit log failed:', auditError.message);
+
+  res.json({ success: true, userId });
+});
+
 router.post('/members/invite', async (req, res) => {
   const { email, fullName, role, permissions, invitedById, invitedByName } = req.body;
 

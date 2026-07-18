@@ -1,7 +1,7 @@
 import {
   ClipboardList, Calendar, FlaskConical,
   Users, ShieldCheck, Palmtree,
-  LayoutDashboard, LogOut, DollarSign,
+  LayoutDashboard, LogOut, DollarSign, BookOpen,
 } from 'lucide-react';
 
 const ROLE_LABELS = {
@@ -15,10 +15,11 @@ export default function Navigation({ currentPage, setCurrentPage, userRole, prof
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, always: true },
     { id: 'tasks2', label: 'Tasks', icon: ClipboardList, adminOnly: true },
-    { id: 'vacation', label: 'Time Away Requests', icon: Palmtree, always: true },
+    { id: 'vacation', label: 'Time Off', icon: Palmtree, always: true },
     { id: 'meetings', label: 'Team Meetings', icon: Calendar, always: true },
     { id: 'finance', label: 'Finance', icon: DollarSign, always: true },
     { id: 'inventory', label: 'Sample Inventory', icon: FlaskConical, always: true },
+    { id: 'policies', label: 'Lab Policies & SOPs', icon: BookOpen, always: true },
     { id: 'compliance', label: 'Compliance', icon: ShieldCheck, always: true },
     { id: 'contacts', label: 'Contacts', icon: Users, contactsOnly: true },
   ].filter(item => item.always || (item.adminOnly && userRole === 'admin') || (item.managerOnly && canManage) || (item.contactsOnly && (permissions?.can_view_contacts || canManage)));
@@ -37,10 +38,11 @@ export default function Navigation({ currentPage, setCurrentPage, userRole, prof
         display: 'flex', alignItems: 'center', gap: '12px'
       }}>
         <div style={{
-          width: '36px', height: '36px', background: 'var(--purple-primary)',
-          borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center'
+          width: '36px', height: '36px',
+          borderRadius: '8px', overflow: 'hidden', flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
         }}>
-          <FlaskConical size={20} color="white" />
+          <img src="/dna-logo.jpg" alt="Lab logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         </div>
         <div>
           <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--purple-primary)', letterSpacing: '0.05em' }}>PETLJAK</div>

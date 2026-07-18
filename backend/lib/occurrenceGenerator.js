@@ -172,4 +172,4 @@ async function generateOccurrences(supabase, { windowDays = 90, dryRun = false }
   };
 }
 
-module.exports = { generateOccurrences, computeDates };
+module.exports = { generateOccurrences, computeDates, computeGaps, parseDate };
