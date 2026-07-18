@@ -1725,9 +1725,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     const adhocBuckets = { overdue: [], week: [], month: [], three: [], beyond: [], nodate: [] };
     [...myTaskOneOffs].sort((a, b) => (a.due_date || '').localeCompare(b.due_date || '')).forEach(t => adhocBuckets[bucketFor(t.due_date)].push(t));
 
-    const overdueCt = recBuckets.overdue.filter(g => !isGroupComplete(g.tasks, g.groupName, g.dueDate)).length + adhocBuckets.overdue.filter(t => t.status !== 'completed').length;
-    const upcomingCt = ['week','month','three','beyond','nodate'].reduce((s, b) => s + recBuckets[b].length + adhocBuckets[b].length, 0);
-
     // Render a one-off task card
     const renderOneOffTask = t => {
       const cls = classifyOneOff(t);
@@ -4088,13 +4085,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     </div>
   );
 
-  const myTaskOverdueCt = myTaskOccs.filter(o => {
-    const today = new Date().toISOString().split('T')[0];
-    return o.status !== 'done' && o.due_date < today;
-  }).length + myTaskOneOffs.filter(t => {
-    const today = new Date().toISOString().split('T')[0];
-    return t.status !== 'completed' && t.due_date && t.due_date < today;
-  }).length;
 
   const tabs = [
     ...(canManage ? [

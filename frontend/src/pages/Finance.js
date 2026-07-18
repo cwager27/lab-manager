@@ -175,7 +175,7 @@ export default function Finance({ userRole }) {
     return { months, catData, catStatusData, grantNames, byGrant };
   }, [orders]);
 
-  const { months: MONTHS, catData, catStatusData, grantNames: GRANT_NAMES, byGrant: ordersDataByGrant } = chartData;
+  const { months: MONTHS, catStatusData, grantNames: GRANT_NAMES, byGrant: ordersDataByGrant } = chartData;
 
   const [vendors, setVendors] = useState([]);
   const [editingOrder, setEditingOrder] = useState(null);
@@ -272,8 +272,6 @@ export default function Finance({ userRole }) {
     const data = await res.json();
     if (data.success) { setPreviewNanoseq(null); fetchData(); }
   }
-
-  const catMonths = catData.map(r => r.month);
 
   const userNames = useMemo(() => {
     const names = new Set();
