@@ -950,7 +950,7 @@ export default function Finance({ userRole }) {
                 </div>
               )}
               <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
-                {[{ id: 'fy26', label: 'FY26' }, { id: 'fy25', label: 'FY25' }, { id: 'fy24', label: 'FY24' }].map(({ id, label }) => (
+                {[{ id: 'fy26', label: 'FY26' }, { id: 'fy25', label: 'FY25' }, { id: 'fy24', label: 'FY24' }, { id: 'fy23', label: 'FY23' }].map(({ id, label }) => (
                   <button key={id} onClick={() => setOrdersYearTab(id)}
                     style={{ padding: '5px 14px', borderRadius: 'var(--radius-md)', border: '1px solid', fontSize: '12px', fontWeight: 600, cursor: 'pointer', borderColor: ordersYearTab === id ? 'var(--purple-primary)' : 'var(--border)', background: ordersYearTab === id ? 'var(--purple-primary)' : 'transparent', color: ordersYearTab === id ? 'white' : 'var(--text-muted)' }}>
                     {label}
