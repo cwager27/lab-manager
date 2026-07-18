@@ -205,15 +205,33 @@ export default function Finance({ userRole }) {
 
   async function fetchData() {
     setLoading(true);
-    const [{ data: grantData }, { data: orderData }, { data: reagentData }, { data: nanoseqData }, { data: vendorData }] = await Promise.all([
+
+    // Fetch all orders in pages (Supabase default limit is 1000)
+    async function fetchAllOrders() {
+      const PAGE = 1000;
+      let all = [], from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from('orders').select('*')
+          .order('created_at', { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error || !data?.length) break;
+        all = all.concat(data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      return all;
+    }
+
+    const [{ data: grantData }, allOrders, { data: reagentData }, { data: nanoseqData }, { data: vendorData }] = await Promise.all([
       supabase.from('grants').select('*').order('name'),
-      supabase.from('orders').select('*').order('created_at', { ascending: true }),
+      fetchAllOrders(),
       supabase.from('reagents').select('*').order('category').order('name'),
       supabase.from('nanoseq_reagents').select('*').order('protocol').order('name'),
       supabase.from('vendors').select('*').order('name'),
     ]);
     setGrants(grantData || []);
-    setOrders(orderData || []);
+    setOrders(allOrders || []);
     setReagents(reagentData || []);
     setNanoseq(nanoseqData || []);
     setVendors(vendorData || []);
