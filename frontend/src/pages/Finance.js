@@ -111,9 +111,6 @@ export default function Finance({ userRole }) {
   const [userFilterOpen, setUserFilterOpen] = useState(false);
   const [draftUsers, setDraftUsers] = useState([]);
   const [userSearch, setUserSearch] = useState('');
-  const [selectedChartYears, setSelectedChartYears] = useState([]);
-  const [chartYearOpen, setChartYearOpen] = useState(false);
-  const [draftChartYears, setDraftChartYears] = useState([]);
   const [catalogSortCol, setCatalogSortCol] = useState('total');
   const [catalogSortDir, setCatalogSortDir] = useState('desc');
   const [vcSelectedVendors, setVcSelectedVendors] = useState([]);
@@ -311,7 +308,7 @@ export default function Finance({ userRole }) {
     const real = orders.filter(o => {
       if (!o.item || o.item.trim() === '' || o.status === 'deleted') return false;
       if (selectedUsers.length > 0 && !selectedUsers.includes(o.requestor)) return false;
-      if (selectedChartYears.length > 0 && !selectedChartYears.includes(getFiscalYear(o.order_date))) return false;
+      if (selectedGlobalYears.length > 0 && !selectedGlobalYears.includes(getFiscalYear(o.order_date))) return false;
       return true;
     });
     const monthMap = {};
@@ -326,7 +323,7 @@ export default function Finance({ userRole }) {
       byMonth[m][o.category] = (byMonth[m][o.category] || 0) + v;
     });
     return { data: months.map(m => byMonth[m]), months };
-  }, [orders, selectedUsers, selectedChartYears]);
+  }, [orders, selectedUsers, selectedGlobalYears]);
 
   const allFYs = useMemo(() => {
     const s = new Set(['fy26', 'fy25', 'fy24']);
@@ -1467,37 +1464,6 @@ export default function Finance({ userRole }) {
                   <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Monthly Spending by Category/User</h3>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <button onClick={exportCatMonthTable} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
-
-                    {/* Year filter */}
-                    <div style={{ position: 'relative' }}>
-                      <button
-                        onClick={() => { setDraftChartYears(selectedChartYears); setChartYearOpen(v => !v); }}
-                        style={{ padding: '8px 14px', borderRadius: 'var(--radius-md)', border: `1px solid ${selectedChartYears.length > 0 ? 'var(--purple-primary)' : 'var(--border)'}`, background: selectedChartYears.length > 0 ? '#F5EEF8' : 'var(--bg-secondary)', color: selectedChartYears.length > 0 ? 'var(--purple-primary)' : 'var(--text-primary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                      >
-                        {selectedChartYears.length === 0 ? 'All Years' : selectedChartYears.map(fy => fy.toUpperCase()).join(', ')}
-                        <span style={{ fontSize: '10px' }}>▼</span>
-                      </button>
-                      {chartYearOpen && (
-                        <div style={{ position: 'absolute', zIndex: 200, top: 'calc(100% + 4px)', right: 0, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px', width: '200px', boxShadow: 'var(--shadow-lg)' }}>
-                          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                            <button onClick={() => setDraftChartYears([...allFYs])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>All</button>
-                            <button onClick={() => setDraftChartYears([])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Clear</button>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            {allFYs.map(fy => (
-                              <label key={fy} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 4px', cursor: 'pointer', borderRadius: '4px' }}>
-                                <input type="checkbox" checked={draftChartYears.includes(fy)} onChange={e => setDraftChartYears(prev => e.target.checked ? [...prev, fy] : prev.filter(x => x !== fy))} />
-                                <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>{fy.toUpperCase()}</span>
-                              </label>
-                            ))}
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
-                            <button onClick={() => setChartYearOpen(false)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
-                            <button onClick={() => { setSelectedChartYears(draftChartYears); setChartYearOpen(false); }} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>OK</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
 
                     {/* User filter */}
                     <div style={{ position: 'relative' }}>
