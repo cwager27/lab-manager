@@ -327,6 +327,7 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
         <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {extraData?.dietary_restrictions || '—'}
         </td>
+        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: 200 }}>—</td>
         {canViewPersonalPhone && (
           <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '200px' }}>
             {extraData?.emergency_contact_name ? (
@@ -957,7 +958,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                 <thead>
                   <tr style={{ background: 'var(--bg-secondary)' }}>
                     {[
-                      'First / Last Name', 'Work Email', 'Personal Email', 'Phone Number', 'Dietary Restrictions',
+                      'First / Last Name', 'Work Email', 'Personal Email', 'Phone Number', 'Dietary Restrictions', 'Notes',
                       ...(canViewPersonalPhone ? ['Emergency Contact'] : []),
                       ...(canViewPersonalPhone ? ['Address'] : []),
                       ...(canManage ? ['Offboarding'] : []),
@@ -994,12 +995,12 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                         <tr key={c.id} style={{ borderTop: '1px solid var(--border)', background: i % 2 === 0 ? 'var(--bg-primary)' : 'var(--bg-secondary)' }}>
                           <td style={{ padding: '10px 14px', fontSize: '13px', whiteSpace: 'nowrap' }}>
                             <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{c.last_name && c.first_name ? `${c.last_name}, ${c.first_name}` : c.full_name}</div>
-                            {c.notes && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 2 }}>{c.notes}</div>}
                           </td>
                           <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>{c.email || '—'}</td>
                           <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>{c.personal_email || '—'}</td>
                           <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>{formatPhone(c.phone) || '—'}</td>
                           <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>—</td>
+                          <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>{c.notes || '—'}</td>
                           {canViewPersonalPhone && <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>—</td>}
                           {canViewPersonalPhone && <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>{c.address || '—'}</td>}
                           {canManage && <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-muted)' }}>—</td>}
