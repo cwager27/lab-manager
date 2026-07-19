@@ -784,6 +784,13 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
     return [m.full_name, m.email, ROLE_LABELS[m.role]].some(v => v?.toLowerCase().includes(q));
   });
 
+  const filteredAlumniContacts = contacts.filter(c => {
+    if (c.status !== 'alumni') return false;
+    if (!alumniSearch) return true;
+    const q = alumniSearch.toLowerCase();
+    return [c.full_name, c.email, c.phone, c.notes].some(v => v?.toLowerCase().includes(q));
+  }).sort((a, b) => (a.last_name || '').localeCompare(b.last_name || '') || (a.first_name || '').localeCompare(b.first_name || ''));
+
   const pendingLabContacts = contacts.filter(c => {
     if (c.role === 'external') return false;
     if (memberNames.has(getRawName(c).toLowerCase().trim())) return false;
@@ -961,26 +968,53 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAlumni.length === 0 ? (
+                  {filteredAlumni.length === 0 && filteredAlumniContacts.length === 0 ? (
                     <tr><td colSpan={99} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No alumni yet. Move a lab member to alumni using the Alumni button in their row.</td></tr>
-                  ) : filteredAlumni.map((member, i) => (
-                    <LabMemberRow
-                      key={member.id}
-                      member={member}
-                      canManage={canManage}
-                      canViewPersonalPhone={canViewPersonalPhone}
-                      userId={userId}
-                      isAdmin={userRole === 'admin'}
-                      onUpdatePermissions={handleUpdatePermissions}
-                      onUpdateRole={handleUpdateRole}
-                      onUpdateLabStatus={canManage ? handleUpdateLabStatus : null}
-                      onDelete={setConfirmDeleteMember}
-                      onChangePassword={setPasswordTarget}
-                      onUpdateOffboarding={canManage ? handleUpdateOffboarding : null}
-                      isAlumni={true}
-                      rowIndex={i}
-                    />
-                  ))}
+                  ) : (
+                    <>
+                      {filteredAlumni.map((member, i) => (
+                        <LabMemberRow
+                          key={member.id}
+                          member={member}
+                          canManage={canManage}
+                          canViewPersonalPhone={canViewPersonalPhone}
+                          userId={userId}
+                          isAdmin={userRole === 'admin'}
+                          onUpdatePermissions={handleUpdatePermissions}
+                          onUpdateRole={handleUpdateRole}
+                          onUpdateLabStatus={canManage ? handleUpdateLabStatus : null}
+                          onDelete={setConfirmDeleteMember}
+                          onChangePassword={setPasswordTarget}
+                          onUpdateOffboarding={canManage ? handleUpdateOffboarding : null}
+                          isAlumni={true}
+                          rowIndex={i}
+                        />
+                      ))}
+                      {filteredAlumniContacts.map((c, i) => (
+                        <tr key={c.id} style={{ borderTop: '1px solid var(--border)', background: i % 2 === 0 ? 'var(--bg-primary)' : 'var(--bg-secondary)' }}>
+                          <td style={{ padding: '10px 14px', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{c.last_name && c.first_name ? `${c.last_name}, ${c.first_name}` : c.full_name}</div>
+                            {c.notes && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 2 }}>{c.notes}</div>}
+                          </td>
+                          <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>{c.email || '—'}</td>
+                          <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>{c.personal_email || '—'}</td>
+                          <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>{formatPhone(c.phone) || '—'}</td>
+                          <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>—</td>
+                          {canViewPersonalPhone && <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>—</td>}
+                          {canViewPersonalPhone && <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>{c.address || '—'}</td>}
+                          {canManage && <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-muted)' }}>—</td>}
+                          {canManage && (
+                            <td style={{ padding: '10px 14px' }}>
+                              <button onClick={async () => { if (window.confirm(`Remove ${c.full_name} from alumni?`)) { await supabase.from('lab_contacts').delete().eq('id', c.id); fetchData(true); } }}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }} title="Remove">
+                                <Trash2 size={13} />
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </>
+                  )}
                 </tbody>
               </table>
             </div>
