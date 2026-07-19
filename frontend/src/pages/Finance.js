@@ -321,8 +321,9 @@ export default function Finance({ userRole }) {
     months.forEach(m => { byMonth[m] = { month: m }; });
     real.forEach(o => {
       const m = orderDateToMonth(o.order_date);
-      if (!m || !o.category || o.total_price == null) return;
-      byMonth[m][o.category] = (byMonth[m][o.category] || 0) + Number(o.total_price);
+      const v = Number(o.total_price);
+      if (!m || !o.category || !v || v <= 0) return; // skip 0/null — log scale can't handle 0
+      byMonth[m][o.category] = (byMonth[m][o.category] || 0) + v;
     });
     return { data: months.map(m => byMonth[m]), months };
   }, [orders, selectedUsers, selectedChartYears]);
@@ -1570,7 +1571,7 @@ export default function Finance({ userRole }) {
                       <LineChart data={userCatData.data} margin={{ top: 20, right: 16, left: 10, bottom: 20 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
                         <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#555' }} />
-                        <YAxis scale="log" domain={[0.9, 250000]} ticks={[1, 10, 100, 1000, 10000, 100000]}
+                        <YAxis scale="log" domain={[1, 'auto']} ticks={[1, 10, 100, 1000, 10000, 100000]}
                                tickFormatter={v => v >= 1000 ? `$${(v/1000).toFixed(0)}K` : `$${v.toFixed(0)}`}
                                tick={{ fontSize: 10, fill: '#555' }} width={55} />
                         <Tooltip formatter={(v, name) => v != null ? [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name] : ['-', name]} />
