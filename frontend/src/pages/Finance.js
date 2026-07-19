@@ -96,6 +96,9 @@ export default function Finance({ userRole }) {
   const [grantFilterOpen, setGrantFilterOpen] = useState(false);
   const [draftGrants, setDraftGrants] = useState([]);
   const [grantSearch, setGrantSearch] = useState('');
+  const [selectedGlobalYears, setSelectedGlobalYears] = useState([]);
+  const [globalYearOpen, setGlobalYearOpen] = useState(false);
+  const [draftGlobalYears, setDraftGlobalYears] = useState([]);
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [categoryFilterOpen, setCategoryFilterOpen] = useState(false);
   const [draftCategories, setDraftCategories] = useState([]);
@@ -108,6 +111,9 @@ export default function Finance({ userRole }) {
   const [userFilterOpen, setUserFilterOpen] = useState(false);
   const [draftUsers, setDraftUsers] = useState([]);
   const [userSearch, setUserSearch] = useState('');
+  const [selectedChartYears, setSelectedChartYears] = useState([]);
+  const [chartYearOpen, setChartYearOpen] = useState(false);
+  const [draftChartYears, setDraftChartYears] = useState([]);
   const [catalogSortCol, setCatalogSortCol] = useState('total');
   const [catalogSortDir, setCatalogSortDir] = useState('desc');
   const [vcSelectedVendors, setVcSelectedVendors] = useState([]);
@@ -118,7 +124,11 @@ export default function Finance({ userRole }) {
   const [vcYearOpen, setVcYearOpen] = useState(false);
   const [vcDraftYears, setVcDraftYears] = useState([]);
   const chartData = useMemo(() => {
-    const real = orders.filter(o => o.item && o.item.trim() !== '' && o.status !== 'deleted');
+    const real = orders.filter(o => {
+      if (!o.item || o.item.trim() === '' || o.status === 'deleted') return false;
+      if (selectedGlobalYears.length > 0 && !selectedGlobalYears.includes(getFiscalYear(o.order_date))) return false;
+      return true;
+    });
 
     // sorted unique months
     const monthMap = {};
@@ -173,7 +183,7 @@ export default function Finance({ userRole }) {
     });
 
     return { months, catData, catStatusData, grantNames, byGrant };
-  }, [orders]);
+  }, [orders, selectedGlobalYears]);
 
   const { months: MONTHS, catStatusData, grantNames: GRANT_NAMES, byGrant: ordersDataByGrant } = chartData;
 
@@ -298,11 +308,12 @@ export default function Finance({ userRole }) {
   }, [orders]);
 
   const userCatData = useMemo(() => {
-    const activeU = selectedUsers.length === 0 ? userNames : selectedUsers;
-    const real = orders.filter(o =>
-      o.item && o.item.trim() !== '' && o.status !== 'deleted' &&
-      activeU.includes(o.requestor)
-    );
+    const real = orders.filter(o => {
+      if (!o.item || o.item.trim() === '' || o.status === 'deleted') return false;
+      if (selectedUsers.length > 0 && !selectedUsers.includes(o.requestor)) return false;
+      if (selectedChartYears.length > 0 && !selectedChartYears.includes(getFiscalYear(o.order_date))) return false;
+      return true;
+    });
     const monthMap = {};
     real.forEach(o => { const m = orderDateToMonth(o.order_date); if (m) monthMap[m] = o.order_date; });
     const months = Object.entries(monthMap).sort((a, b) => a[1].localeCompare(b[1])).map(([m]) => m);
@@ -314,7 +325,7 @@ export default function Finance({ userRole }) {
       byMonth[m][o.category] = (byMonth[m][o.category] || 0) + Number(o.total_price);
     });
     return { data: months.map(m => byMonth[m]), months };
-  }, [orders, selectedUsers, userNames]);
+  }, [orders, selectedUsers, selectedChartYears]);
 
   const allFYs = useMemo(() => {
     const s = new Set(['fy26', 'fy25', 'fy24']);
@@ -603,7 +614,11 @@ export default function Finance({ userRole }) {
 
   const filteredGrantOptionsExpType = GRANT_NAMES.filter(g => g.toLowerCase().includes(grantSearchExpType.toLowerCase()));
   const activeGrantsExpType = selectedGrantsExpType.length === 0 ? GRANT_NAMES : selectedGrantsExpType;
-  const ordersReal = orders.filter(o => o.item && o.item.trim() !== '' && o.status !== 'deleted');
+  const ordersReal = orders.filter(o => {
+    if (!o.item || o.item.trim() === '' || o.status === 'deleted') return false;
+    if (selectedGlobalYears.length > 0 && !selectedGlobalYears.includes(getFiscalYear(o.order_date))) return false;
+    return true;
+  });
   const expTypeOrders = activeGrantsExpType.length === GRANT_NAMES.length && selectedGrantsExpType.length === 0 ? ordersReal : ordersReal.filter(o => activeGrantsExpType.includes(o.grant_name));
   const byCatFiltered = {};
   CATEGORIES.forEach(cat => { byCatFiltered[cat] = { name: cat, complete: 0, processing: 0 }; });
@@ -1208,6 +1223,43 @@ export default function Finance({ userRole }) {
           {activeTab === 'charts' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
 
+              {/* Global year filter bar for charts 1–3 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Filter charts by year:</span>
+                <div style={{ position: 'relative' }}>
+                  <button
+                    onClick={() => { setDraftGlobalYears(selectedGlobalYears); setGlobalYearOpen(v => !v); }}
+                    style={{ padding: '7px 14px', borderRadius: 'var(--radius-md)', border: `1px solid ${selectedGlobalYears.length > 0 ? 'var(--purple-primary)' : 'var(--border)'}`, background: selectedGlobalYears.length > 0 ? '#F5EEF8' : 'var(--bg-primary)', color: selectedGlobalYears.length > 0 ? 'var(--purple-primary)' : 'var(--text-primary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    {selectedGlobalYears.length === 0 ? 'All Years' : selectedGlobalYears.map(fy => fy.toUpperCase()).join(', ')}
+                    <span style={{ fontSize: '10px' }}>▼</span>
+                  </button>
+                  {globalYearOpen && (
+                    <div style={{ position: 'absolute', zIndex: 200, top: 'calc(100% + 4px)', left: 0, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px', width: '200px', boxShadow: 'var(--shadow-lg)' }}>
+                      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                        <button onClick={() => setDraftGlobalYears([...allFYs])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>All</button>
+                        <button onClick={() => setDraftGlobalYears([])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Clear</button>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {allFYs.map(fy => (
+                          <label key={fy} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 4px', cursor: 'pointer', borderRadius: '4px' }}>
+                            <input type="checkbox" checked={draftGlobalYears.includes(fy)} onChange={e => setDraftGlobalYears(prev => e.target.checked ? [...prev, fy] : prev.filter(x => x !== fy))} />
+                            <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>{fy.toUpperCase()}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                        <button onClick={() => setGlobalYearOpen(false)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                        <button onClick={() => { setSelectedGlobalYears(draftGlobalYears); setGlobalYearOpen(false); }} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>OK</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {selectedGlobalYears.length > 0 && (
+                  <button onClick={() => setSelectedGlobalYears([])} style={{ fontSize: '12px', color: 'var(--purple-primary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Clear filter</button>
+                )}
+              </div>
+
               {/* 1. Complete and Processing, totals */}
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
@@ -1414,6 +1466,37 @@ export default function Finance({ userRole }) {
                   <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Monthly Spending by Category/User</h3>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <button onClick={exportCatMonthTable} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
+
+                    {/* Year filter */}
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        onClick={() => { setDraftChartYears(selectedChartYears); setChartYearOpen(v => !v); }}
+                        style={{ padding: '8px 14px', borderRadius: 'var(--radius-md)', border: `1px solid ${selectedChartYears.length > 0 ? 'var(--purple-primary)' : 'var(--border)'}`, background: selectedChartYears.length > 0 ? '#F5EEF8' : 'var(--bg-secondary)', color: selectedChartYears.length > 0 ? 'var(--purple-primary)' : 'var(--text-primary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        {selectedChartYears.length === 0 ? 'All Years' : selectedChartYears.map(fy => fy.toUpperCase()).join(', ')}
+                        <span style={{ fontSize: '10px' }}>▼</span>
+                      </button>
+                      {chartYearOpen && (
+                        <div style={{ position: 'absolute', zIndex: 200, top: 'calc(100% + 4px)', right: 0, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px', width: '200px', boxShadow: 'var(--shadow-lg)' }}>
+                          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                            <button onClick={() => setDraftChartYears([...allFYs])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>All</button>
+                            <button onClick={() => setDraftChartYears([])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Clear</button>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            {allFYs.map(fy => (
+                              <label key={fy} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 4px', cursor: 'pointer', borderRadius: '4px' }}>
+                                <input type="checkbox" checked={draftChartYears.includes(fy)} onChange={e => setDraftChartYears(prev => e.target.checked ? [...prev, fy] : prev.filter(x => x !== fy))} />
+                                <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>{fy.toUpperCase()}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                            <button onClick={() => setChartYearOpen(false)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                            <button onClick={() => { setSelectedChartYears(draftChartYears); setChartYearOpen(false); }} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>OK</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     {/* User filter */}
                     <div style={{ position: 'relative' }}>

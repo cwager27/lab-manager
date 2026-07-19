@@ -135,21 +135,17 @@ function AdminContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, o
           </div>
         </td>
         <td style={{ padding: '10px 14px', fontSize: '12px' }}>
-          {contact.email ? <a href={`mailto:${contact.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{contact.email}</a> : '—'}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            {contact.email ? <a href={`mailto:${contact.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{contact.email}</a> : <span style={{ color: 'var(--text-secondary)' }}>—</span>}
+            {contact.personal_email && <a href={`mailto:${contact.personal_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}><Mail size={10} />{contact.personal_email}</a>}
+          </div>
         </td>
-        <td style={{ padding: '10px 14px', fontSize: '12px' }}>
-          {contact.personal_email ? <a href={`mailto:${contact.personal_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{contact.personal_email}</a> : '—'}
-        </td>
-        {canViewPersonalPhone && (
-          <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
-            {contact.phone ? <a href={`tel:${contact.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.phone}</a> : '—'}
-          </td>
-        )}
         <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
-          {contact.alternative_email ? <a href={`tel:${contact.alternative_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.alternative_email}</a> : '—'}
+          {contact.phone ? <a href={`tel:${contact.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.phone}</a> : '—'}
         </td>
-        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>{contact.address || '—'}</td>
-        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: '200px' }}>{contact.notes || '—'}</td>
+        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>—</td>
+        {canViewPersonalPhone && <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>—</td>}
+        {canViewPersonalPhone && <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>{contact.address || '—'}</td>}
         {canManage && (
           <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
             <div style={{ display: 'flex', gap: '4px' }}>
@@ -204,9 +200,8 @@ function AdminContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, o
   );
 }
 
-// Each lab member row fetches its own contact data by full_name — completely isolated
-function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin, onUpdatePermissions, onUpdateRole, onUpdateLabStatus, onDelete, onChangePassword, onUpdateOffboarding, isAlumni, rowIndex }) {
-  const [extraData, setExtraData] = useState(null);
+function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin, onUpdatePermissions, onUpdateRole, onUpdateLabStatus, onDelete, onChangePassword, onUpdateOffboarding, isAlumni, rowIndex, initialExtraData }) {
+  const [extraData, setExtraData] = useState(initialExtraData || null);
   const [showContactEdit, setShowContactEdit] = useState(false);
   const [showPerms, setShowPerms] = useState(false);
   const [form, setForm] = useState({
@@ -217,8 +212,6 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const roleColors = ROLE_COLORS[member.role] || ROLE_COLORS.member;
-
-  useEffect(() => { loadExtra(); }, []); // eslint-disable-line
 
   async function loadExtra() {
     const nameParts = (member.full_name || '').split(' ');
@@ -316,18 +309,18 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
           </div>
         </td>
         <td style={{ padding: '10px 14px', fontSize: '12px' }}>
-          {member.email ? <a href={`mailto:${member.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{member.email}</a> : '—'}
-        </td>
-        <td style={{ padding: '10px 14px', fontSize: '12px' }}>
-          {extraData?.personal_email ? <a href={`mailto:${extraData.personal_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{extraData.personal_email}</a> : '—'}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            {member.email ? <a href={`mailto:${member.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{member.email}</a> : '—'}
+            {extraData?.personal_email && <a href={`mailto:${extraData.personal_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}><Mail size={10} />{extraData.personal_email}</a>}
+          </div>
         </td>
         <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
           {extraData?.phone ? <a href={`tel:${extraData.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{extraData.phone}</a> : '—'}
         </td>
-        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {extraData?.dietary_restrictions || '—'}
         </td>
-        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: 200 }}>—</td>
+        {isAlumni && <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>—</td>}
         {canViewPersonalPhone && (
           <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '200px' }}>
             {extraData?.emergency_contact_name ? (
@@ -792,6 +785,12 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
     return [c.full_name, c.email, c.phone, c.notes].some(v => v?.toLowerCase().includes(q));
   }).sort((a, b) => (a.last_name || '').localeCompare(b.last_name || '') || (a.first_name || '').localeCompare(b.first_name || ''));
 
+  // Pre-compute extraData for each member so LabMemberRow doesn't need per-row async fetches
+  const memberExtraMap = {};
+  contacts.filter(c => c.role !== 'external').forEach(c => {
+    if (c.full_name) memberExtraMap[c.full_name.toLowerCase().trim()] = c;
+  });
+
   const pendingLabContacts = contacts.filter(c => {
     if (c.role === 'external') return false;
     if (memberNames.has(getRawName(c).toLowerCase().trim())) return false;
@@ -896,7 +895,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                 <thead>
                   <tr style={{ background: 'var(--bg-secondary)' }}>
                     {[
-                      'First / Last Name', 'Work Email', 'Personal Email', 'Phone Number', 'Dietary Restrictions',
+                      'Name', 'Email', 'Phone', 'Dietary',
                       ...(canViewPersonalPhone ? ['Emergency Contact'] : []),
                       ...(canViewPersonalPhone ? ['Address'] : []),
                       ...(canManage ? [''] : [])
@@ -922,6 +921,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                       onDelete={setConfirmDeleteMember}
                       onChangePassword={setPasswordTarget}
                       rowIndex={i}
+                      initialExtraData={memberExtraMap[(member.full_name || '').toLowerCase().trim()] || null}
                     />
                   ))}
                   {pendingLabContacts.map((c, i) => (
@@ -958,7 +958,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                 <thead>
                   <tr style={{ background: 'var(--bg-secondary)' }}>
                     {[
-                      'First / Last Name', 'Work Email', 'Personal Email', 'Phone Number', 'Dietary Restrictions', 'Notes',
+                      'Name', 'Email', 'Phone', 'Dietary', 'Notes',
                       ...(canViewPersonalPhone ? ['Emergency Contact'] : []),
                       ...(canViewPersonalPhone ? ['Address'] : []),
                       ...(canManage ? ['Offboarding'] : []),
@@ -989,6 +989,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                           onUpdateOffboarding={canManage ? handleUpdateOffboarding : null}
                           isAlumni={true}
                           rowIndex={i}
+                          initialExtraData={memberExtraMap[(member.full_name || '').toLowerCase().trim()] || null}
                         />
                       ))}
                       {filteredAlumniContacts.map((c, i) => (
@@ -996,9 +997,13 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                           <td style={{ padding: '10px 14px', fontSize: '13px', whiteSpace: 'nowrap' }}>
                             <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{c.last_name && c.first_name ? `${c.last_name}, ${c.first_name}` : c.full_name}</div>
                           </td>
-                          <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>{c.email || '—'}</td>
-                          <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>{c.personal_email || '—'}</td>
-                          <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>{formatPhone(c.phone) || '—'}</td>
+                          <td style={{ padding: '10px 14px', fontSize: '13px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                              {c.email ? <a href={`mailto:${c.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{c.email}</a> : <span style={{ color: 'var(--text-secondary)' }}>—</span>}
+                              {c.personal_email && <a href={`mailto:${c.personal_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}><Mail size={10} />{c.personal_email}</a>}
+                            </div>
+                          </td>
+                          <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatPhone(c.phone) || '—'}</td>
                           <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>—</td>
                           <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>{c.notes || '—'}</td>
                           {canViewPersonalPhone && <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>—</td>}
