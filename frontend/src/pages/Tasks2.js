@@ -3764,12 +3764,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     // People who have at least one task
     const peopleWithTasks = profiles.filter(p => oneOffTasks.some(t => t.assigned_to === p.id));
 
-    // Overdue (not done, past due)
-    const overdueTasks = oneOffTasks.filter(t => t.status !== 'done' && t.due_date && t.due_date < todayStr);
-    const overdueByPerson = peopleWithTasks.map(p => ({
-      profile: p,
-      tasks: overdueTasks.filter(t => t.assigned_to === p.id),
-    })).filter(g => g.tasks.length > 0);
 
     // Search + person filter for task list below
     const searchQ = oneOffSearch.trim().toLowerCase();
@@ -3825,36 +3819,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
     return (
       <div>
-
-        {/* ── OVERDUE ALERT (above create form) ── */}
-        {overdueByPerson.length > 0 && (
-          <div style={{ marginBottom: 20, padding: '14px 18px', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <AlertTriangle size={15} color="#ef4444" />
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#ef4444' }}>
-                {overdueTasks.length} Overdue Task{overdueTasks.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {overdueByPerson.map(({ profile, tasks }) => (
-                <div key={profile.id}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                    {fmtName(profile.full_name)} — {tasks.length} task{tasks.length !== 1 ? 's' : ''}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    {tasks.sort((a, b) => a.due_date.localeCompare(b.due_date)).map(t => (
-                      <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#7f1d1d' }}>
-                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#ef4444', flexShrink: 0, display: 'inline-block' }} />
-                        <span style={{ flex: 1 }}>{t.title}</span>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#ef4444', whiteSpace: 'nowrap' }}>Due {fmtDate(t.due_date)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* ── CREATE FORM ── */}
         <div style={{ marginBottom: 24, padding: 20, background: 'var(--bg-secondary)', borderRadius: 10, border: '1px solid var(--border)' }}>
