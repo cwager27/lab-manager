@@ -360,9 +360,12 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
   // ── Load initial data ─────────────────────────────────────────────────────
   useEffect(() => {
+    // Fetch profiles directly from Supabase (reliable on all envs) in parallel with the backend call
+    supabase.from('profiles').select('id, full_name, email, role').order('full_name')
+      .then(({ data }) => { if (data?.length) setProfiles(data); });
     fetch(`${API}/api/tasks2/data`)
       .then(r => r.json())
-      .then(d => { setTasks(d.tasks || []); setProfiles(d.profiles || []); setVacations(d.vacations || []); setDataLoading(false); })
+      .then(d => { setTasks(d.tasks || []); if (d.profiles?.length) setProfiles(d.profiles); setVacations(d.vacations || []); setDataLoading(false); })
       .catch(() => setDataLoading(false));
   }, []);
 

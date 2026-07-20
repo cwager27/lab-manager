@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle } from 'lucide-react';
 
@@ -145,13 +145,17 @@ export default function Dashboard({ profile, userRole, userId }) {
   const [recurData, setRecurData] = useState([]);
   const [recurLoading, setRecurLoading] = useState(false);
 
+  const initialRecurLoadedRef = useRef(false);
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchAll(); }, [profile]);
+  // Skip the first fire (initial data is bundled into fetchAll); only reload when period changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (teamMembers.length) loadRecurProductivity(recurPeriod); }, [teamMembers, recurPeriod]);
+  useEffect(() => { if (!teamMembers.length) return; if (!initialRecurLoadedRef.current) { initialRecurLoadedRef.current = true; return; } loadRecurProductivity(recurPeriod); }, [teamMembers, recurPeriod]);
 
   async function fetchAll() {
     if (!profile?.id) return;
+    initialRecurLoadedRef.current = false;
     setLoading(true);
     const today = new Date().toISOString().split('T')[0];
     const next8Weeks = new Date(Date.now() + 56 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -198,6 +202,8 @@ export default function Dashboard({ profile, userRole, userId }) {
       showGrantAlert
         ? supabase.from('grants').select('id, name, end_date, total_amount, remaining_balance')
         : Promise.resolve({ data: [] }),
+      // recur productivity for initial load (bundled so all cards appear together)
+      (() => { const { from, to } = prodDateRange('current'); return supabase.from('task_occurrences').select('id, due_date, status, completed_at, assigned_to').not('assigned_to', 'is', null).gte('due_date', from).lte('due_date', to); })(),
     ];
 
     const [
@@ -208,6 +214,7 @@ export default function Dashboard({ profile, userRole, userId }) {
       { data: myRecurData },
       { data: memberData },
       { data: grantData },
+      { data: initRecurOccData },
     ] = await Promise.all(queries);
 
     const allVac = vacData || [];
@@ -221,6 +228,10 @@ export default function Dashboard({ profile, userRole, userId }) {
     setMyRecurOccs(myRecurData || []);
     setTeamMembers(memberData || []);
     setGrants(grantData || []);
+    const todayForProd = new Date().toISOString().split('T')[0];
+    const byPersonInit = {};
+    (initRecurOccData || []).forEach(o => { if (!byPersonInit[o.assigned_to]) byPersonInit[o.assigned_to] = []; byPersonInit[o.assigned_to].push(o); });
+    setRecurData((memberData || []).map(p => ({ profile: p, ...calcProdScore(byPersonInit[p.id] || [], todayForProd) })));
     setLoading(false);
   }
 
@@ -273,23 +284,6 @@ export default function Dashboard({ profile, userRole, userId }) {
       }
     }
     return ids;
-  })();
-
-  // For each vacation, find all others that overlap with it (3+ means this person + 2 others)
-  const tripleOverlapInfo = (() => {
-    const all = [...outToday, ...nextWeekOut];
-    const result = {};
-    all.forEach(r => {
-      const others = all.filter(o => o.id !== r.id && o.start_date <= r.end_date && r.start_date <= o.end_date);
-      if (others.length >= 2) {
-        result[r.id] = others.map(o => ({
-          name: o.requester?.full_name || 'Unknown',
-          start: o.start_date > r.start_date ? o.start_date : r.start_date,
-          end: o.end_date < r.end_date ? o.end_date : r.end_date,
-        }));
-      }
-    });
-    return result;
   })();
 
   const vacRequestOverlapIds = showGrantAlert ? (() => {
@@ -355,7 +349,7 @@ export default function Dashboard({ profile, userRole, userId }) {
       {loading ? (
         <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading...</div>
       ) : (
-        <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', animation: 'fadeIn 0.25s ease both' }}>
 
           {/* ══ PERSONAL DASHBOARD ══ */}
           <div style={{ flex: 1, minWidth: 0, order: 2, background: '#FBF8FF', border: '1px solid #E4D9F5', borderRadius: '16px', padding: '20px' }}>
@@ -512,7 +506,7 @@ export default function Dashboard({ profile, userRole, userId }) {
                   )}
                 </div>
 
-                {/* Out next 8 weeks — overlapping periods flagged in red */}
+                {/* Out next 8 weeks */}
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
                   <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
                     <Calendar size={13} color="var(--purple-primary)" />
@@ -522,48 +516,16 @@ export default function Dashboard({ profile, userRole, userId }) {
                     <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No one out in the next 8 weeks.</p>
                   ) : (
                     <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                      {nextWeekOut.map((r, i) => {
+                      {nextWeekOut.map(r => {
                         const hasOverlap = vacOverlapIds.has(r.id);
-                        const tripleInfo = tripleOverlapInfo[r.id];
-                        const warningOpen = overlapWarning === r.id;
-                        const openUpward = i >= Math.ceil(nextWeekOut.length / 2);
                         return (
-                          <div key={r.id} style={{ position: 'relative' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                              <span style={{ fontSize: '13px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {r.requester?.full_name}
-                              </span>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-                                {tripleInfo && (
-                                  <button
-                                    onClick={() => setOverlapWarning(warningOpen ? null : r.id)}
-                                    title="3+ members overlapping — click for details"
-                                    style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '1px 7px', fontSize: 10, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer' }}>
-                                    ⚠ {tripleInfo.length + 1} members
-                                  </button>
-                                )}
-                                {hasOverlap && !tripleInfo && (
-                                  <span style={{ fontSize: 9, fontWeight: 700, color: '#E74C3C', background: '#FDEDEC', padding: '1px 5px', borderRadius: 6, border: '1px solid #F1948A' }}>OVERLAP</span>
-                                )}
-                                <span style={{ fontSize: '11px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                                  {formatDate(r.start_date)}{r.start_date !== r.end_date ? `–${formatDate(r.end_date)}` : ''}
-                                </span>
-                              </div>
-                            </div>
-                            {warningOpen && tripleInfo && (
-                              <div style={{ position: 'absolute', right: 0, ...(openUpward ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }), zIndex: 50, background: 'white', border: '1px solid #F59E0B', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.12)', padding: '10px 14px', minWidth: 220 }}>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: '#92400E', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                  ⚠ Overlapping with {r.requester?.full_name}
-                                </div>
-                                {tripleInfo.map((o, i) => (
-                                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '4px 0', borderTop: i > 0 ? '1px solid #FEF3C7' : 'none' }}>
-                                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{o.name}</span>
-                                    <span style={{ fontSize: 11, color: '#92400E', whiteSpace: 'nowrap' }}>{formatDate(o.start)}–{formatDate(o.end)}</span>
-                                  </div>
-                                ))}
-                                <button onClick={() => setOverlapWarning(null)} style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Dismiss</button>
-                              </div>
-                            )}
+                          <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {r.requester?.full_name}
+                            </span>
+                            <span style={{ fontSize: '11px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                              {formatDate(r.start_date)}{r.start_date !== r.end_date ? `–${formatDate(r.end_date)}` : ''}
+                            </span>
                           </div>
                         );
                       })}
