@@ -12,12 +12,13 @@ import {
 } from 'lucide-react';
 
 const FREQ_COLORS = {
-  daily:     { bg: '#EBF5FB', text: '#2980B9', border: '#AED6F1' },
-  weekly:    { bg: '#EAF7F0', text: '#27AE60', border: '#A9DFBF' },
-  biweekly:  { bg: '#FEF9E7', text: '#F39C12', border: '#FAD7A0' },
-  monthly:   { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
-  quarterly: { bg: '#FDEBD0', text: '#D35400', border: '#F0B27A' },
-  yearly:    { bg: '#FDEDEC', text: '#E74C3C', border: '#F1948A' },
+  daily:      { bg: '#EBF5FB', text: '#2980B9', border: '#AED6F1' },
+  weekly:     { bg: '#EAF7F0', text: '#27AE60', border: '#A9DFBF' },
+  biweekly:   { bg: '#FEF9E7', text: '#F39C12', border: '#FAD7A0' },
+  monthly:    { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
+  bimonthly:  { bg: '#FFF0E6', text: '#C0392B', border: '#E59866' },
+  quarterly:  { bg: '#FDEBD0', text: '#D35400', border: '#F0B27A' },
+  yearly:     { bg: '#FDEDEC', text: '#E74C3C', border: '#F1948A' },
 };
 
 const SPORADIC_STATUS = {
@@ -29,7 +30,7 @@ const SPORADIC_STATUS = {
   denied:      { bg: '#FDEDEC', text: '#E74C3C', label: 'Denied' },
 };
 
-const ALL_FREQS = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'];
+const ALL_FREQS = ['daily', 'weekly', 'biweekly', 'monthly', 'bimonthly', 'quarterly', 'yearly'];
 
 const EMPTY_RECURRING = { title: '', category: 'MISC', frequency: 'daily', response_type: 'yes_no', sop_trigger: false, conditional_text: '', group_name: '', sort_order: 0 };
 const EMPTY_SPORADIC = { title: '', description: '', category: 'MISC', assigned_to: '', due_date: '', response_type: 'yes_no' };
@@ -44,6 +45,7 @@ function getCycleEnd(start, frequency) {
   else if (frequency === 'weekly') d.setDate(d.getDate() + 7);
   else if (frequency === 'biweekly') d.setDate(d.getDate() + 14);
   else if (frequency === 'monthly') d.setMonth(d.getMonth() + 1);
+  else if (frequency === 'bimonthly') d.setMonth(d.getMonth() + 2);
   else if (frequency === 'quarterly') d.setMonth(d.getMonth() + 3);
   else if (frequency === 'yearly') d.setFullYear(d.getFullYear() + 1);
   return d.toISOString().split('T')[0];
@@ -643,11 +645,16 @@ export default function Tasks({ userRole, userId, profile }) {
             </div>
           ) : (
             <>
-              {visibleGroups.map(([groupName, tasks]) => (
-                <div key={groupName || 'ungrouped'} style={{ marginBottom: '4px' }}>
+              {visibleGroups.map(([groupName, tasks]) => {
+                const fc = FREQ_COLORS[recurFreq] || FREQ_COLORS.monthly;
+                return (
+                <div key={groupName || 'ungrouped'} style={{ marginBottom: '12px' }}>
                   {groupName && (
-                    <div style={{ padding: '12px 2px 6px', borderBottom: '2px solid var(--purple-primary)', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--purple-primary)' }}>{groupName}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 0 8px', borderBottom: `2px solid ${fc.border}`, marginBottom: '10px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: fc.text, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{groupName}</span>
+                      <span style={{ fontSize: '10px', color: fc.text, background: fc.bg, border: `1px solid ${fc.border}`, padding: '2px 8px', borderRadius: '10px', fontWeight: 600 }}>
+                        {tasks.length} task{tasks.length !== 1 ? 's' : ''}
+                      </span>
                     </div>
                   )}
                   {tasks.map(task => {
@@ -780,7 +787,7 @@ export default function Tasks({ userRole, userId, profile }) {
                               </label>
                             </div>
                             <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                              <input value={editingTask.group_name || ''} onChange={e => setEditingTask(p => ({ ...p, group_name: e.target.value }))} placeholder="Group name" style={{ flex: 1, padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', outline: 'none' }} />
+                              <input value={editingTask.group_name || ''} onChange={e => setEditingTask(p => ({ ...p, group_name: e.target.value }))} placeholder="Section / Audit Area" style={{ flex: 1, padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', outline: 'none' }} />
                               <input type="number" value={editingTask.sort_order || 0} onChange={e => setEditingTask(p => ({ ...p, sort_order: parseInt(e.target.value) || 0 }))} placeholder="Order" style={{ width: '70px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', outline: 'none' }} />
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
@@ -828,7 +835,7 @@ export default function Tasks({ userRole, userId, profile }) {
                     );
                   })}
                 </div>
-              ))}
+              );})}
 
               <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
                 <button onClick={handleSubmitChecklist} disabled={submitting} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '11px 22px', background: submitted ? 'var(--success)' : 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '14px' }}>
@@ -1116,8 +1123,9 @@ export default function Tasks({ userRole, userId, profile }) {
             </div>
             <div style={{ display: 'flex', gap: '12px', marginBottom: '14px' }}>
               <div style={{ flex: 1 }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '5px', textTransform: 'uppercase' }}>Group Name</label>
-                <input value={newRecur.group_name} onChange={e => setNewRecur(p => ({ ...p, group_name: e.target.value }))} placeholder="e.g. Morning Lab Check" style={{ width: '100%', padding: '9px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '5px', textTransform: 'uppercase' }}>Section / Audit Area</label>
+                <input value={newRecur.group_name} onChange={e => setNewRecur(p => ({ ...p, group_name: e.target.value }))} placeholder="e.g. Safety Check, Sample Prep…" style={{ width: '100%', padding: '9px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                <p style={{ fontSize: '10px', color: 'var(--text-muted)', margin: '4px 0 0' }}>Tasks with the same section name are grouped together</p>
               </div>
               <div style={{ width: '80px' }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '5px', textTransform: 'uppercase' }}>Order</label>
