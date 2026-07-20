@@ -676,11 +676,13 @@ export default function Finance({ userRole }) {
   }
 
   function handleExportVendorChart() {
-    const { vendorYearSpend, activeV, activeYrs } = vendorChartData;
+    const { data, months, activeV } = vendorChartData;
+    const monthLookup = {};
+    data.forEach(d => { monthLookup[d.month] = d; });
     const rows = activeV.map(v => {
       const row = { 'Vendor': v };
-      activeYrs.forEach(fy => { row[fyLabel(fy)] = vendorYearSpend[v]?.[fy] ? `$${vendorYearSpend[v][fy].toLocaleString('en-US', { maximumFractionDigits: 0 })}` : ''; });
-      row['Total'] = `$${activeYrs.reduce((s, fy) => s + (vendorYearSpend[v]?.[fy] || 0), 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+      months.forEach(m => { row[m] = monthLookup[m]?.[v] ? `$${monthLookup[m][v].toLocaleString('en-US', { maximumFractionDigits: 0 })}` : ''; });
+      row['Total'] = `$${months.reduce((s, m) => s + (monthLookup[m]?.[v] || 0), 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
       return row;
     });
     exportTableXLSX(rows, 'vendor_spending.xlsx');
@@ -1588,7 +1590,9 @@ export default function Finance({ userRole }) {
                 {label}{catalogSortCol === key ? (catalogSortDir === 'asc' ? ' ↑' : ' ↓') : ''}
               </th>
             );
-            const { vendorYearSpend, activeV, activeYrs } = vendorChartData;
+            const { data: vcData, months: vcMonths, activeV } = vendorChartData;
+            const vcMonthLookup = {};
+            vcData.forEach(d => { vcMonthLookup[d.month] = d; });
             const dropdownBox = { position: 'absolute', zIndex: 200, top: 'calc(100% + 4px)', right: 0, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px', width: '280px', boxShadow: 'var(--shadow-lg)' };
             const filterBtn = () => ({ padding: '8px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' });
             return (
@@ -1671,25 +1675,25 @@ export default function Finance({ userRole }) {
                     {activeV.length > 20 && <p style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '4px' }}>Showing top 20 vendors by spend. Use the vendor filter to select specific vendors.</p>}
                   </div>
 
-                  <div style={{ flex: '1 1 0', minWidth: '220px', maxHeight: '420px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <div style={{ flex: '1 1 0', minWidth: '220px', maxHeight: '420px', overflowX: 'auto', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px' }}>
+                    <table style={{ borderCollapse: 'collapse' }}>
                       <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                         <tr style={{ background: '#9DA9C7' }}>
-                          <th style={{ padding: '7px 10px', textAlign: 'left', color: 'white', fontWeight: 600, whiteSpace: 'nowrap' }}>Vendor</th>
-                          {activeYrs.map(fy => <th key={fy} style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>{fyLabel(fy)}</th>)}
+                          <th style={{ padding: '7px 10px', textAlign: 'left', color: 'white', fontWeight: 600, whiteSpace: 'nowrap', position: 'sticky', left: 0, background: '#9DA9C7', zIndex: 2 }}>Vendor</th>
+                          {vcMonths.map(m => <th key={m} style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>{m}</th>)}
                           <th style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>Total</th>
                         </tr>
                       </thead>
                       <tbody>
                         {activeV.map((v, i) => {
-                          const total = activeYrs.reduce((s, fy) => s + (vendorYearSpend[v]?.[fy] || 0), 0);
+                          const total = vcMonths.reduce((s, m) => s + (vcMonthLookup[m]?.[v] || 0), 0);
                           return (
                             <tr key={v} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white', borderTop: '1px solid var(--border)' }}>
-                              <td style={{ padding: '5px 10px', color: '#1A1A2E', whiteSpace: 'nowrap', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              <td style={{ padding: '5px 10px', color: '#1A1A2E', whiteSpace: 'nowrap', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', position: 'sticky', left: 0, background: i % 2 === 0 ? '#F0F3FA' : 'white', zIndex: 1 }}>
                                 <span style={{ backgroundColor: VENDOR_PALETTE[i % VENDOR_PALETTE.length], width: 8, height: 8, borderRadius: '50%', display: 'inline-block', marginRight: 6, verticalAlign: 'middle' }} />
                                 {v}
                               </td>
-                              {activeYrs.map(fy => <td key={fy} style={{ padding: '5px 10px', textAlign: 'right', color: '#1A1A2E', whiteSpace: 'nowrap' }}>{vendorYearSpend[v]?.[fy] ? `$${vendorYearSpend[v][fy].toLocaleString('en-US', { maximumFractionDigits: 0 })}` : ''}</td>)}
+                              {vcMonths.map(m => <td key={m} style={{ padding: '5px 10px', textAlign: 'right', color: '#1A1A2E', whiteSpace: 'nowrap' }}>{vcMonthLookup[m]?.[v] ? `$${vcMonthLookup[m][v].toLocaleString('en-US', { maximumFractionDigits: 0 })}` : ''}</td>)}
                               <td style={{ padding: '5px 10px', textAlign: 'right', fontWeight: 700, color: '#1A1A2E', whiteSpace: 'nowrap' }}>${total.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
                             </tr>
                           );
@@ -1697,13 +1701,13 @@ export default function Finance({ userRole }) {
                       </tbody>
                       <tfoot>
                         <tr style={{ background: '#9DA9C7', borderTop: '2px solid #7A8AB5', fontWeight: 700 }}>
-                          <td style={{ padding: '7px 10px', color: 'white' }}>Grand Total</td>
-                          {activeYrs.map(fy => {
-                            const t = activeV.reduce((s, v) => s + (vendorYearSpend[v]?.[fy] || 0), 0);
-                            return <td key={fy} style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066' }}>{t > 0 ? `$${t.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : ''}</td>;
+                          <td style={{ padding: '7px 10px', color: 'white', position: 'sticky', left: 0, background: '#9DA9C7', zIndex: 1 }}>Grand Total</td>
+                          {vcMonths.map(m => {
+                            const t = activeV.reduce((s, v) => s + (vcMonthLookup[m]?.[v] || 0), 0);
+                            return <td key={m} style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066' }}>{t > 0 ? `$${t.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : ''}</td>;
                           })}
                           <td style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066' }}>
-                            ${activeV.reduce((s, v) => s + activeYrs.reduce((ss, fy) => ss + (vendorYearSpend[v]?.[fy] || 0), 0), 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                            ${activeV.reduce((s, v) => s + vcMonths.reduce((ss, m) => ss + (vcMonthLookup[m]?.[v] || 0), 0), 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}
                           </td>
                         </tr>
                       </tfoot>

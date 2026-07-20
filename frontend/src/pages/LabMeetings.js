@@ -491,7 +491,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
               .sort((a, b) => Number(b) - Number(a));
             return years.map(year => (
               <button key={year} onClick={() => setFilter(year)} style={{ padding: '3px 9px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: filter === year ? 'var(--purple-primary)' : 'var(--bg-primary)', color: filter === year ? 'white' : 'var(--text-secondary)', fontWeight: filter === year ? 600 : 400, fontSize: '11px' }}>
-                {year === String(curYear) ? 'Current Year' : year}
+                {year}
               </button>
             ));
           })() : [

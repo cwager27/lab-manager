@@ -2,8 +2,14 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   Plus, Calendar, CheckCircle, XCircle,
-  Clock, User, MessageSquare, Palmtree, Trash2
+  Clock, User, MessageSquare, Palmtree, Trash2, AlertTriangle
 } from 'lucide-react';
+
+function fmtDate(d) {
+  if (!d) return '';
+  const [y, m, day] = d.split('-');
+  return `${m}/${day}/${y}`;
+}
 
 const NO_APPROVAL_REQUIRED = new Set([
   'Sick Leave',
@@ -60,6 +66,7 @@ export default function VacationLogs({ userRole, userId, profile }) {
   const [sortDir, setSortDir] = useState('asc');
   const [selectedPeople, setSelectedPeople] = useState([]);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [overlapWarning, setOverlapWarning] = useState(null);
 
   const isAdmin = userRole === 'admin';
   const canSeeAll = isAdmin || userRole === 'pm';
@@ -225,6 +232,27 @@ export default function VacationLogs({ userRole, userId, profile }) {
   const approvedRequests = requests.filter(r => r.status === 'approved');
   const today = new Date().toISOString().split('T')[0];
   const currentlyOut = approvedRequests.filter(r => r.start_date <= today && r.end_date >= today);
+
+  // Overlap detection — only meaningful when viewing all requests (admin/PM)
+  const overlapMap = {};
+  if (canSeeAll) {
+    const nonDenied = requests.filter(r => r.status !== 'denied');
+    for (let i = 0; i < nonDenied.length; i++) {
+      for (let j = i + 1; j < nonDenied.length; j++) {
+        const rA = nonDenied[i];
+        const rB = nonDenied[j];
+        if (rA.requested_by === rB.requested_by) continue;
+        if (rA.start_date <= rB.end_date && rB.start_date <= rA.end_date) {
+          const overlapStart = rA.start_date > rB.start_date ? rA.start_date : rB.start_date;
+          const overlapEnd   = rA.end_date   < rB.end_date   ? rA.end_date   : rB.end_date;
+          if (!overlapMap[rA.id]) overlapMap[rA.id] = [];
+          if (!overlapMap[rB.id]) overlapMap[rB.id] = [];
+          overlapMap[rA.id].push({ name: rB.requester?.full_name || 'Unknown', overlapStart, overlapEnd, theirStart: rB.start_date, theirEnd: rB.end_date });
+          overlapMap[rB.id].push({ name: rA.requester?.full_name || 'Unknown', overlapStart, overlapEnd, theirStart: rA.start_date, theirEnd: rA.end_date });
+        }
+      }
+    }
+  }
 
 
   const needsApproval = !NO_APPROVAL_REQUIRED.has(form.leave_type);
@@ -431,10 +459,14 @@ export default function VacationLogs({ userRole, userId, profile }) {
           const leaveColor = LEAVE_COLORS[request.leave_type] || LEAVE_COLORS['Other'];
           const days = getDayCount(request.start_date, request.end_date);
           const isReviewing = reviewingId === request.id;
+          const overlaps = overlapMap[request.id];
+          const hasOverlap = !!(overlaps && overlaps.length > 0);
+          const warningOpen = overlapWarning === request.id;
 
           return (
-            <div key={request.id} style={{
-              background: 'var(--bg-card)', border: `1px solid ${request.status === 'pending' && isAdmin ? '#FAD7A0' : 'var(--border)'}`,
+            <div key={request.id} style={{ position: 'relative',
+              background: hasOverlap ? '#FFF5F5' : 'var(--bg-card)',
+              border: `1px solid ${hasOverlap ? '#E74C3C' : request.status === 'pending' && isAdmin ? '#FAD7A0' : 'var(--border)'}`,
               borderRadius: 'var(--radius-md)', padding: '16px',
               marginBottom: '12px', boxShadow: 'var(--shadow-sm)',
             }}>
@@ -446,6 +478,14 @@ export default function VacationLogs({ userRole, userId, profile }) {
                       <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
                         {request.requester?.full_name}
                       </span>
+                      {hasOverlap && (
+                        <button
+                          onClick={() => setOverlapWarning(warningOpen ? null : request.id)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '2px 8px', fontSize: 11, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                          <AlertTriangle size={11} color="#D97706" />
+                          {overlaps.length} overlap{overlaps.length > 1 ? 's' : ''}
+                        </button>
+                      )}
                     </div>
                     {(request.requested_by === userId || (isAdmin && request.status !== 'approved')) && (
                       <button onClick={() => handleDelete(request.id)}
@@ -513,6 +553,24 @@ export default function VacationLogs({ userRole, userId, profile }) {
                 )}
               </div>
 
+              {warningOpen && overlaps && (
+                <div style={{ position: 'absolute', left: 16, top: '100%', marginTop: 6, zIndex: 50, background: 'white', border: '1px solid #E74C3C', borderRadius: 10, boxShadow: '0 6px 20px rgba(0,0,0,0.15)', padding: '14px 18px', minWidth: 300, maxWidth: 420 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#E74C3C', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <AlertTriangle size={12} color="#E74C3C" /> Overlapping time off
+                  </div>
+                  {overlaps.map((o, idx) => (
+                    <div key={idx} style={{ padding: '8px 0', borderTop: idx > 0 ? '1px solid #FDEDEC' : 'none' }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{o.name}</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Away: {fmtDate(o.theirStart)} → {fmtDate(o.theirEnd)}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#E74C3C' }}>Overlap: {fmtDate(o.overlapStart)} → {fmtDate(o.overlapEnd)}</span>
+                      </div>
+                    </div>
+                  ))}
+                  <button onClick={() => setOverlapWarning(null)} style={{ marginTop: 10, fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Dismiss</button>
+                </div>
+              )}
+
               {isReviewing && (
                 <div style={{ marginTop: '12px', padding: '16px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
                   <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -547,6 +605,8 @@ export default function VacationLogs({ userRole, userId, profile }) {
           );
         })
       )}
+
+      {overlapWarning && <div style={{ position: 'fixed', inset: 0, zIndex: 49 }} onClick={() => setOverlapWarning(null)} />}
 
       {showForm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>

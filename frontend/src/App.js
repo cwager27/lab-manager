@@ -14,6 +14,7 @@ import SetNewPassword from './pages/SetNewPassword';
 import Onboarding from './pages/Onboarding';
 import Tasks2 from './pages/Tasks2';
 import LabPoliciesSOPs from './pages/LabPoliciesSOPs';
+import ComputationalTips from './pages/ComputationalTips';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
@@ -196,7 +197,8 @@ export default function App() {
             You don't have permission to view the contact directory.
           </div>
         )}
-        {!['dashboard', 'tasks2', 'vacation', 'meetings', 'finance', 'inventory', 'policies', 'compliance', 'contacts'].includes(currentPage) && (
+        {currentPage === 'tips' && <ComputationalTips userRole={userRole} userId={user.id} profile={profile} />}
+        {!['dashboard', 'tasks2', 'vacation', 'meetings', 'finance', 'inventory', 'policies', 'compliance', 'contacts', 'tips'].includes(currentPage) && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--text-muted)', fontSize: '15px' }}>
             This system is coming soon.
           </div>

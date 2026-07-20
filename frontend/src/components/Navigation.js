@@ -1,7 +1,7 @@
 import {
   ClipboardList, Calendar, FlaskConical,
   Users, ShieldCheck, Palmtree,
-  LayoutDashboard, LogOut, DollarSign, BookOpen,
+  LayoutDashboard, LogOut, DollarSign, BookOpen, Terminal,
 } from 'lucide-react';
 
 const ROLE_LABELS = {
@@ -22,6 +22,7 @@ export default function Navigation({ currentPage, setCurrentPage, userRole, prof
     { id: 'policies', label: 'Lab Policies & SOPs', icon: BookOpen, always: true },
     { id: 'compliance', label: 'Compliance', icon: ShieldCheck, always: true },
     { id: 'contacts', label: 'Contacts', icon: Users, contactsOnly: true },
+    { id: 'tips', label: 'Computational Tips', icon: Terminal, always: true },
   ].filter(item => item.always || (item.adminOnly && userRole === 'admin') || (item.managerOnly && canManage) || (item.contactsOnly && (permissions?.can_view_contacts || canManage)));
 
   return (
