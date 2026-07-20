@@ -812,6 +812,12 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
         { title: `Remove ${name} — Lab Platform access`, category: 'MISC', response_type: 'checkbox', status: 'approved', assigned_to: assignTo, assigned_by: userId, due_date: dueDate },
         { title: `Remove ${name} — Google Drive access`, category: 'MISC', response_type: 'checkbox', status: 'approved', assigned_to: assignTo, assigned_by: userId, due_date: dueDate },
       ]);
+      // Reassign any future lab meetings the person was scheduled to present
+      fetch(`${process.env.REACT_APP_BACKEND_URL}/api/members/alumni-reassign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memberId, memberName: name }),
+      }).catch(() => {});
     }
   }
 

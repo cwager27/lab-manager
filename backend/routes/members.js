@@ -243,4 +243,96 @@ router.post('/members/invite', async (req, res) => {
   res.json({ success: true });
 });
 
+// ── Reassign future lab meetings when a member is set to alumni ───────────────
+router.post('/members/alumni-reassign', async (req, res) => {
+  try {
+    const { memberId, memberName } = req.body;
+    if (!memberId) return res.status(400).json({ error: 'memberId required' });
+
+    const today = new Date().toISOString().split('T')[0];
+
+    const { data: affectedMeetings } = await supabaseAdmin
+      .from('lab_meetings')
+      .select('*')
+      .eq('presenter_id', memberId)
+      .eq('status', 'scheduled')
+      .gte('meeting_date', today);
+
+    if (!affectedMeetings || affectedMeetings.length === 0) {
+      return res.json({ reassigned: 0 });
+    }
+
+    const { data: approvedVacations } = await supabaseAdmin
+      .from('vacation_requests')
+      .select('requested_by, start_date, end_date')
+      .eq('status', 'approved');
+
+    const { data: activeMembers } = await supabaseAdmin
+      .from('profiles')
+      .select('*')
+      .neq('id', memberId)
+      .in('role', ['admin', 'pm', 'member']);
+
+    const now = new Date();
+    const membersWithRatio = (activeMembers || []).map(m => {
+      const joinedAt = new Date(m.joined_at || m.created_at);
+      const daysAsMember = Math.max(1, Math.ceil((now - joinedAt) / (1000 * 60 * 60 * 24)));
+      return { ...m, daysAsMember, ratio: (m.task_counter || 0) / daysAsMember };
+    });
+
+    let reassignedCount = 0;
+    for (const meeting of affectedMeetings) {
+      const available = membersWithRatio.filter(m =>
+        !(approvedVacations || []).some(v =>
+          v.requested_by === m.id &&
+          v.start_date <= meeting.meeting_date &&
+          v.end_date >= meeting.meeting_date
+        )
+      );
+
+      if (available.length === 0) {
+        const { data: admins } = await supabaseAdmin.from('profiles').select('email').eq('role', 'admin');
+        for (const admin of (admins || [])) {
+          await transporter.sendMail({
+            from: `"Petljak Lab" <${process.env.GMAIL_USER}>`,
+            to: admin.email,
+            subject: `Petljak Lab — Action Required: No Available Presenter for ${meeting.meeting_date}`,
+            html: `<div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;padding:32px;background:#f8f6fb;"><div style="background:white;border-radius:12px;padding:32px;border:1px solid #e8e4f0;"><h1 style="color:#7B3FA0;font-size:20px;margin:0 0 24px;">PETLJAK LAB</h1><h2 style="font-size:18px;color:#E74C3C;margin:0 0 8px;">Action Required</h2><p style="color:#5A5A7A;font-size:14px;margin:0 0 24px;">${memberName} has moved to alumni status but was scheduled to present on ${meeting.meeting_date}. No other lab members are available. Please manually assign a presenter.</p><a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}" style="display:inline-block;padding:12px 24px;background:#7B3FA0;color:white;text-decoration:none;border-radius:8px;font-weight:600;">Go to Platform</a></div></div>`
+          });
+        }
+        continue;
+      }
+
+      available.sort((a, b) => a.ratio - b.ratio);
+      const newPresenter = available[0];
+      newPresenter.task_counter = (newPresenter.task_counter || 0) + 1;
+      newPresenter.ratio = newPresenter.task_counter / newPresenter.daysAsMember;
+
+      const token = require('crypto').randomBytes(16).toString('hex');
+      await supabaseAdmin.from('lab_meetings').update({
+        presenter_id: newPresenter.id,
+        confirmation_status: 'pending',
+        confirmation_token: token,
+        reminder_count: 0,
+        last_reminder_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', meeting.id);
+
+      const confirmUrl = `${process.env.BACKEND_URL || 'http://localhost:3001'}/api/confirm-presenter?token=${token}`;
+      await transporter.sendMail({
+        from: `"Petljak Lab" <${process.env.GMAIL_USER}>`,
+        to: newPresenter.email,
+        subject: `Petljak Lab — You are now presenting at the ${meeting.meeting_date} meeting — Please Confirm`,
+        html: `<div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;padding:32px;background:#f8f6fb;"><div style="background:white;border-radius:12px;padding:32px;border:1px solid #e8e4f0;"><h1 style="color:#7B3FA0;font-size:20px;margin:0 0 24px;">PETLJAK LAB</h1><h2 style="font-size:18px;color:#1A1A2E;margin:0 0 8px;">You Have Been Assigned to Present</h2><p style="color:#5A5A7A;font-size:14px;margin:0 0 16px;">${memberName} has moved to alumni status, so you have been assigned to present at the <strong>${meeting.meeting_date}</strong> lab meeting.</p><p style="color:#5A5A7A;font-size:13px;margin:0 0 24px;">Thursdays 1:30–3pm · Zoom: 987 7040 0275 · Passcode: 676073</p><a href="${confirmUrl}" style="display:inline-block;padding:12px 24px;background:#27AE60;color:white;text-decoration:none;border-radius:8px;font-weight:600;margin-right:10px;">Confirm I'm Aware</a><a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}" style="display:inline-block;padding:12px 24px;background:#7B3FA0;color:white;text-decoration:none;border-radius:8px;font-weight:600;">View Schedule</a></div></div>`
+      });
+
+      reassignedCount++;
+    }
+
+    res.json({ reassigned: reassignedCount, total: affectedMeetings.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
