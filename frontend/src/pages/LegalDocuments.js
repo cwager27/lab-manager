@@ -2,8 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   Scale, Plus, Search, X, Trash2, Download, Eye, ChevronRight,
-  ChevronLeft, FolderOpen, Folder, FileText, AlertCircle, Copy,
-  Check, ChevronDown, Settings, AlertTriangle,
+  AlertCircle, Copy, Check, ChevronDown, AlertTriangle,
 } from 'lucide-react';
 
 // ── Category configuration ──────────────────────────────────────────────────
@@ -292,7 +291,6 @@ function DocForm({ category: defaultCategory, pendingFile, allCategories, custom
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const config = CATEGORY_CONFIG[form.category];
-  const catColor = config?.color || CUSTOM_COLOR;
 
   const fileTypeOptions = [
     ...(config?.defaultFileTypes || []),
@@ -344,7 +342,6 @@ function DocForm({ category: defaultCategory, pendingFile, allCategories, custom
 
     if (file) {
       setUploading(true);
-      const ext = file.name.split('.').pop();
       const path = `${form.category}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
       const { error: upErr } = await supabase.storage.from(STORAGE_BUCKET).upload(path, file);
       setUploading(false);
