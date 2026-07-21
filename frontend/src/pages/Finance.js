@@ -784,7 +784,6 @@ export default function Finance({ userRole }) {
     XLSX.utils.book_append_sheet(wb, ws, 'Orders');
     XLSX.writeFile(wb, 'orders_import_template.xlsx');
   }
-  const totalSpend = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
   const fy26Spend = orders.filter(o => o.order_date && getFiscalYear(o.order_date) === 'fy26').reduce((sum, o) => sum + (o.total_price || 0), 0);
   const alertGrants = grants.filter(g => { const pct = g.total_amount && g.remaining_balance ? (g.remaining_balance / g.total_amount) * 100 : null; const daysLeft = g.end_date ? Math.ceil((new Date(g.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null; return (pct !== null && pct < 25) || (daysLeft !== null && daysLeft <= 90); });
 
