@@ -71,6 +71,13 @@ function grantMeta(grant) {
 
 
 
+function getFiscalYear(dateStr) {
+  if (!dateStr) return 'fy26';
+  const d = new Date(dateStr + 'T00:00:00Z');
+  const fyYear = d.getUTCMonth() >= 6 ? d.getUTCFullYear() + 1 : d.getUTCFullYear();
+  return `fy${String(fyYear).slice(2)}`;
+}
+
 export default function Finance({ userRole }) {
   const [grants, setGrants] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -87,6 +94,8 @@ export default function Finance({ userRole }) {
   const [previewData, setPreviewData] = useState(null);
   const [previewReagents, setPreviewReagents] = useState(null);
   const [previewNanoseq, setPreviewNanoseq] = useState(null);
+  const [showAddNanoseq, setShowAddNanoseq] = useState(false);
+  const [nanoseqForm, setNanoseqForm] = useState({ protocol: '', name: '', company: '', code: '', link: '', cost: '', amount: '', n_reactions: '' });
   const [newOrder, setNewOrder] = useState({
     item: '', vendor: '', catalog_number: '', category: '', grant_name: '',
     requisition_id: '', unit_description: '', unit_price: '', units: '',
@@ -188,7 +197,7 @@ export default function Finance({ userRole }) {
   const [editingOrder, setEditingOrder] = useState(null);
   const [editOrderForm, setEditOrderForm] = useState({});
   const [confirmDeleteOrder, setConfirmDeleteOrder] = useState(false);
-  const [ordersYearTab, setOrdersYearTab] = useState('fy26');
+  const [ordersYearTab, setOrdersYearTab] = useState('fy27');
   const [importError, setImportError] = useState(null);
   const [ordersSortCol, setOrdersSortCol] = useState(null);
   const [ordersSortDir, setOrdersSortDir] = useState('asc');
@@ -572,6 +581,38 @@ export default function Finance({ userRole }) {
     XLSX.writeFile(wb, 'reagents_draft.xlsx');
   }
 
+  function handleExportNanoseq() {
+    const rows = nanoseq.map(r => ({ 'Protocol': r.protocol||'', 'Name': r.name||'', 'Company': r.company||'', 'Code': r.code||'', 'Link': r.link||'', 'Cost': r.cost??'', 'Amount': r.amount||'', 'N Reactions': r.n_reactions??'' }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Nanoseq');
+    XLSX.writeFile(wb, `nanoseq_${new Date().toISOString().split('T')[0]}.xlsx`);
+  }
+
+  function handleNanoseqDraft() {
+    const headers = ['Protocol', 'Name', 'Company', 'Code', 'Link', 'Cost', 'Amount', 'N Reactions'];
+    const ws = XLSX.utils.aoa_to_sheet([headers, headers.map(() => '')]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Nanoseq');
+    XLSX.writeFile(wb, 'nanoseq_draft.xlsx');
+  }
+
+  async function handleAddNanoseq(e) {
+    e.preventDefault();
+    const toInsert = {
+      protocol: nanoseqForm.protocol.trim() || null,
+      name: nanoseqForm.name.trim(),
+      company: nanoseqForm.company.trim() || null,
+      code: nanoseqForm.code.trim() || null,
+      link: nanoseqForm.link.trim() || null,
+      cost: parseFloat(nanoseqForm.cost) || null,
+      amount: nanoseqForm.amount.trim() || null,
+      n_reactions: parseFloat(nanoseqForm.n_reactions) || null,
+    };
+    const { data, error } = await supabase.from('nanoseq_reagents').insert([toInsert]).select().single();
+    if (!error && data) { setNanoseq(prev => [...prev, data]); setShowAddNanoseq(false); setNanoseqForm({ protocol: '', name: '', company: '', code: '', link: '', cost: '', amount: '', n_reactions: '' }); }
+  }
+
 
   const sortedReagents = useMemo(() => {
     const q = reagentSearch.toLowerCase();
@@ -688,19 +729,17 @@ export default function Finance({ userRole }) {
     exportTableXLSX(rows, 'vendor_spending.xlsx');
   }
 
-  function getFiscalYear(dateStr) {
-    if (!dateStr) return 'fy26';
-    const d = new Date(dateStr + 'T00:00:00Z');
-    const fyYear = d.getUTCMonth() >= 6 ? d.getUTCFullYear() + 1 : d.getUTCFullYear();
-    return `fy${String(fyYear).slice(2)}`;
-  }
-
-  const filteredOrders = orders.filter(o => {
-    if (getFiscalYear(o.order_date) !== ordersYearTab) return false;
+  const filteredOrders = useMemo(() => orders.filter(o => {
+    if (ordersYearTab === 'misc') {
+      if (o.order_date) return false;
+    } else {
+      if (!o.order_date) return false;
+      if (getFiscalYear(o.order_date) !== ordersYearTab) return false;
+    }
     if (searchQuery === '') return true;
     const q = searchQuery.toLowerCase();
     return o.item?.toLowerCase().includes(q) || o.vendor?.toLowerCase().includes(q) || o.requisition_id?.toLowerCase().includes(q);
-  });
+  }), [orders, ordersYearTab, searchQuery]);
 
   const sortedOrders = useMemo(() => {
     if (!ordersSortCol) return filteredOrders;
@@ -746,6 +785,7 @@ export default function Finance({ userRole }) {
     XLSX.writeFile(wb, 'orders_import_template.xlsx');
   }
   const totalSpend = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
+  const fy26Spend = orders.filter(o => o.order_date && getFiscalYear(o.order_date) === 'fy26').reduce((sum, o) => sum + (o.total_price || 0), 0);
   const alertGrants = grants.filter(g => { const pct = g.total_amount && g.remaining_balance ? (g.remaining_balance / g.total_amount) * 100 : null; const daysLeft = g.end_date ? Math.ceil((new Date(g.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null; return (pct !== null && pct < 25) || (daysLeft !== null && daysLeft <= 90); });
 
 
@@ -770,7 +810,7 @@ export default function Finance({ userRole }) {
         {[
           { label: 'Active Grants', value: grants.length, color: 'var(--purple-primary)', bg: 'var(--purple-faint)' },
           { label: 'Total Orders', value: orders.length, color: '#2980B9', bg: '#EBF5FB' },
-          { label: 'FY26 Spend', value: `$${Math.round(totalSpend).toLocaleString()}`, color: '#27AE60', bg: '#EAF7F0' },
+          { label: 'FY26 Spend', value: `$${Math.round(fy26Spend).toLocaleString()}`, color: '#27AE60', bg: '#EAF7F0' },
           { label: 'Grant Alerts', value: alertGrants.length, color: alertGrants.length > 0 ? '#F39C12' : '#27AE60', bg: alertGrants.length > 0 ? '#FEF9E7' : '#EAF7F0' },
         ].map(stat => (
           <div key={stat.label} style={{ flex: 1, background: stat.bg, borderRadius: 'var(--radius-md)', padding: '16px', textAlign: 'center' }}>
@@ -828,7 +868,7 @@ export default function Finance({ userRole }) {
             <>
               <button onClick={handleReagentDraft} title="Download blank draft to fill in" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>Draft</button>
               <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
-                <Upload size={14} /> {uploadingFile ? 'Processing…' : 'Import'}
+                <Upload size={14} /> {uploadingFile ? 'Processing…' : 'Import Misc'}
                 <input type="file" accept=".xlsx,.csv" style={{ display: 'none' }} onChange={async (e) => {
                   const file = e.target.files[0]; if (!file) return;
                   setUploadingFile(true); setImportReagentError(null);
@@ -843,19 +883,29 @@ export default function Finance({ userRole }) {
               <button onClick={() => { setReagentForm(EMPTY_REAGENT_FORM); setShowAddReagent(true); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Reagent</button>
             </>
           )}
+          {activeTab === 'reagents' && reagentTab === 'nanoseq' && (
+            <button onClick={handleExportNanoseq} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
+              <Download size={14} /> Export
+            </button>
+          )}
           {canManage && activeTab === 'reagents' && reagentTab === 'nanoseq' && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
-              <Upload size={14} /> {uploadingFile ? 'Processing…' : 'Import Nanoseq'}
-              <input type="file" accept=".xlsx,.csv" style={{ display: 'none' }} onChange={async (e) => {
-                const file = e.target.files[0]; if (!file) return;
-                setUploadingFile(true);
-                const formData = new FormData(); formData.append('file', file);
-                const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/preview-nanoseq`, { method: 'POST', body: formData });
-                const data = await res.json();
-                if (data.newNanoseq) setPreviewNanoseq(data.newNanoseq);
-                setUploadingFile(false); e.target.value = '';
-              }} />
-            </label>
+            <>
+              <button onClick={handleNanoseqDraft} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>Draft</button>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
+                <Upload size={14} /> {uploadingFile ? 'Processing…' : 'Import Nanoseq'}
+                <input type="file" accept=".xlsx,.csv" style={{ display: 'none' }} onChange={async (e) => {
+                  const file = e.target.files[0]; if (!file) return;
+                  setUploadingFile(true);
+                  const formData = new FormData(); formData.append('file', file);
+                  const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/preview-nanoseq`, { method: 'POST', body: formData });
+                  const data = await res.json();
+                  if (data.error) { setImportError(data); }
+                  else if (data.newNanoseq) setPreviewNanoseq(data.newNanoseq);
+                  setUploadingFile(false); e.target.value = '';
+                }} />
+              </label>
+              <button onClick={() => setShowAddNanoseq(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Reagent</button>
+            </>
           )}
         </div>
       </div>
@@ -983,7 +1033,7 @@ export default function Finance({ userRole }) {
                 </div>
               )}
               <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
-                {[{ id: 'fy26', label: 'FY26' }, { id: 'fy25', label: 'FY25' }, { id: 'fy24', label: 'FY24' }, { id: 'fy23', label: 'FY23' }].map(({ id, label }) => (
+                {[{ id: 'fy27', label: 'FY27' }, { id: 'fy26', label: 'FY26' }, { id: 'fy25', label: 'FY25' }, { id: 'fy24', label: 'FY24' }, { id: 'fy23', label: 'FY23' }, { id: 'misc', label: 'Misc FY' }].map(({ id, label }) => (
                   <button key={id} onClick={() => setOrdersYearTab(id)}
                     style={{ padding: '5px 14px', borderRadius: 'var(--radius-md)', border: '1px solid', fontSize: '12px', fontWeight: 600, cursor: 'pointer', borderColor: ordersYearTab === id ? 'var(--purple-primary)' : 'var(--border)', background: ordersYearTab === id ? 'var(--purple-primary)' : 'transparent', color: ordersYearTab === id ? 'white' : 'var(--text-muted)' }}>
                     {label}
@@ -991,30 +1041,7 @@ export default function Finance({ userRole }) {
                 ))}
               </div>
 
-              {ordersYearTab !== 'fy26' && (
-                <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
-                  <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
-                    <colgroup>
-                      <col style={{ width: '9%' }} /><col style={{ width: '6%' }} /><col style={{ width: '7%' }} /><col style={{ width: '8%' }} />
-                      <col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '6%' }} /><col style={{ width: '6%' }} />
-                      <col style={{ width: '5%' }} /><col style={{ width: '6%' }} /><col style={{ width: '6%' }} /><col style={{ width: '6%' }} />
-                      <col style={{ width: '7%' }} /><col style={{ width: '8%' }} />
-                    </colgroup>
-                    <thead>
-                      <tr style={{ background: 'var(--bg-secondary)' }}>
-                        {['Item','Vendor','Catalog Number','Category','Grant ID','Requsition ID','Unit description','Unit price','Units (n)','Total price','Date','Requestor','Status','Notes'].map(h => (
-                          <th key={h} style={{ padding: '7px 6px', textAlign: 'left', fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr><td colSpan={14} style={{ padding: '32px', textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>No data yet — import {ordersYearTab.toUpperCase()} orders to populate this table.</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {ordersYearTab === 'fy26' && <>
+              <>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
                   <Search size={14} color="var(--text-muted)" />
@@ -1115,7 +1142,7 @@ export default function Finance({ userRole }) {
                   </tbody>
                 </table>
               </div>
-              </>}
+              </>
             </>
           )}
 
@@ -2088,6 +2115,58 @@ export default function Finance({ userRole }) {
               </div>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
                 <button type="button" onClick={() => setShowAddReagent(false)} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                <button type="submit" style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Add Reagent</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showAddNanoseq && canManage && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '480px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>Add Nanoseq Reagent</h2>
+            <form onSubmit={handleAddNanoseq} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Protocol</label>
+                  <input value={nanoseqForm.protocol} onChange={e => setNanoseqForm(p => ({ ...p, protocol: e.target.value }))} placeholder="e.g. DNA Library Prep" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Name *</label>
+                  <input required value={nanoseqForm.name} onChange={e => setNanoseqForm(p => ({ ...p, name: e.target.value }))} placeholder="Reagent name" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Company</label>
+                  <input value={nanoseqForm.company} onChange={e => setNanoseqForm(p => ({ ...p, company: e.target.value }))} placeholder="e.g. NEB" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Code</label>
+                  <input value={nanoseqForm.code} onChange={e => setNanoseqForm(p => ({ ...p, code: e.target.value }))} placeholder="e.g. E7645L" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Link</label>
+                <input value={nanoseqForm.link} onChange={e => setNanoseqForm(p => ({ ...p, link: e.target.value }))} placeholder="https://..." style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Cost</label>
+                  <input type="number" step="0.01" value={nanoseqForm.cost} onChange={e => setNanoseqForm(p => ({ ...p, cost: e.target.value }))} placeholder="0.00" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>Amount</label>
+                  <input value={nanoseqForm.amount} onChange={e => setNanoseqForm(p => ({ ...p, amount: e.target.value }))} placeholder="e.g. 24 rxns" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase' }}>N Reactions</label>
+                  <input type="number" value={nanoseqForm.n_reactions} onChange={e => setNanoseqForm(p => ({ ...p, n_reactions: e.target.value }))} placeholder="0" style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                <button type="button" onClick={() => setShowAddNanoseq(false)} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
                 <button type="submit" style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Add Reagent</button>
               </div>
             </form>

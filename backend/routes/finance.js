@@ -39,29 +39,26 @@ function excelDateToString(excelDate) {
 
 const ORDERS_HEADERS = ['Item','Vendor','Catalog Number','Category','Grant ID','Requsition ID','Unit description','Unit price','Units (n)','Total price','Date','Requestor','Status','Notes'];
 
+function missingColumns(fileHeaders, required) {
+  const present = new Set(fileHeaders.map(h => String(h ?? '').trim()));
+  return required.filter(h => !present.has(h));
+}
+
 // Preview new orders from uploaded file
 router.post('/preview-orders', upload.single('file'), async (req, res) => {
   try {
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheet = workbook.Sheets['Orders'] || workbook.Sheets[workbook.SheetNames[0]];
 
-    // Validate column names and order exactly
     const rawHeaders = (XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null })[0] || []).map(h => String(h ?? '').trim());
-    const details = [];
-    ORDERS_HEADERS.forEach((exp, i) => {
-      const got = rawHeaders[i];
-      if (got !== exp) details.push(`Column ${i + 1}: expected "${exp}", got "${got ?? '(missing)'}"`);
-    });
-    if (rawHeaders.length > ORDERS_HEADERS.length) details.push(`File has ${rawHeaders.length - ORDERS_HEADERS.length} extra column(s) — remove them before importing`);
-    if (details.length > 0) return res.status(400).json({ error: 'File rejected — columns do not match the required format.', details });
+    const missing = missingColumns(rawHeaders, ORDERS_HEADERS);
+    if (missing.length > 0) return res.status(400).json({ error: `File rejected — ${missing.length} required column(s) missing. Column order does not matter.`, details: missing.map(h => `Missing: "${h}"`) });
 
     const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
 
-    // Build dedup set from DB.
+    // Build dedup set from DB — paginate to get all rows past Supabase 1000-row limit.
     // Key: req_id::catalog_number when catalog is real (stable even if item names change between exports)
     //      req_id::item_name as fallback when catalog is NA/empty
-    const { data: existing } = await supabase
-      .from('orders').select('item, requisition_id, catalog_number');
     function makeKey(reqId, catNum, item) {
       const cat = String(catNum||'').trim();
       const req = String(reqId||'NA').trim();  // null in DB → "NA" to match CSV default
@@ -69,9 +66,18 @@ router.post('/preview-orders', upload.single('file'), async (req, res) => {
       const itm = String(item||'').toLowerCase().replace(/[^a-z0-9]/g, '');
       return (cat && cat !== 'NA') ? `${req}::${cat}` : `${req}::${itm}`;
     }
-    const existingSet = new Set(
-      (existing || []).map(e => makeKey(e.requisition_id, e.catalog_number, e.item))
-    );
+    const existingSet = new Set();
+    const PAGE = 1000;
+    let from = 0;
+    while (true) {
+      const { data: page } = await supabase
+        .from('orders').select('item, requisition_id, catalog_number')
+        .range(from, from + PAGE - 1);
+      if (!page?.length) break;
+      page.forEach(e => existingSet.add(makeKey(e.requisition_id, e.catalog_number, e.item)));
+      if (page.length < PAGE) break;
+      from += PAGE;
+    }
 
     const newOrders = [];
     for (const row of rows) {
@@ -190,20 +196,10 @@ router.post('/preview-reagents', upload.single('file'), async (req, res) => {
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
-    // Strict column validation
     const rawHeaders = (XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null })[0] || []).map(h => String(h ?? '').trim());
-    const details = [];
-    REAGENT_HEADERS_REQUIRED.forEach((exp, i) => {
-      const got = rawHeaders[i];
-      if (got !== exp) details.push(`Column ${i + 1}: expected "${exp}", got "${got ?? '(missing)'}"`);
-    });
-    // FY columns are order-flexible but all must be present after col 8
-    const presentFY = rawHeaders.slice(8).filter(h => h !== '');
-    const missingFY = REAGENT_FY_COLS.filter(fy => !presentFY.includes(fy));
-    if (missingFY.length > 0) details.push(`Missing FY columns: ${missingFY.map(f => `"${f}"`).join(', ')} — must appear after column 8, order-flexible`);
-    const extraCols = presentFY.filter(h => !REAGENT_FY_COLS.includes(h));
-    if (extraCols.length > 0) details.push(`Unknown columns after column 8: ${extraCols.map(c => `"${c}"`).join(', ')} — remove them before importing`);
-    if (details.length > 0) return res.status(400).json({ error: 'File rejected — columns do not match the required format.', details });
+    const allRequired = [...REAGENT_HEADERS_REQUIRED, ...REAGENT_FY_COLS];
+    const missing = missingColumns(rawHeaders, allRequired);
+    if (missing.length > 0) return res.status(400).json({ error: `File rejected — ${missing.length} required column(s) missing. Column order does not matter.`, details: missing.map(h => `Missing: "${h}"`) });
 
     const { data: existing } = await supabase.from('reagents').select('catalog_number');
     const existingCats = new Set((existing || []).map(e => String(e.catalog_number)));
@@ -262,33 +258,35 @@ router.post('/import-reagents', async (req, res) => {
 });
 
 // Preview Nanoseq reagents
+const NANOSEQ_HEADERS = ['Protocol', 'Name', 'Company', 'Code', 'Link', 'Cost', 'Amount', 'N Reactions'];
+
 router.post('/preview-nanoseq', upload.single('file'), async (req, res) => {
   try {
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const sheet = workbook.Sheets['Nanoseq'] || workbook.Sheets[workbook.SheetNames[1]];
+    const sheet = workbook.Sheets['Nanoseq'] || workbook.Sheets[workbook.SheetNames[0]];
     const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
-    const headers = allRows[0];
-    const dataRows = allRows.slice(1);
-
-    console.log('Nanoseq headers:', headers);
+    const rawHeaders = (allRows[0] || []).map(h => String(h ?? '').trim());
+    const missing = missingColumns(rawHeaders, NANOSEQ_HEADERS);
+    if (missing.length > 0) return res.status(400).json({ error: `File rejected — ${missing.length} required column(s) missing. Make sure you are using the Nanoseq Draft template, not the Misc template.`, details: missing.map(h => `Missing: "${h}"`) });
 
     const { data: existing } = await supabase.from('nanoseq_reagents').select('code');
     const existingCodes = new Set((existing || []).map(e => String(e.code)));
 
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
     const newReagents = [];
-    for (const row of dataRows) {
-      const name = row[1];
-      const code = row[3];
-      if (!name || existingCodes.has(String(code))) continue;
+    for (const row of rows) {
+      const name = String(row['Name'] || '').trim();
+      const code = String(row['Code'] || '').trim();
+      if (!name || existingCodes.has(code)) continue;
       newReagents.push({
-        protocol: row[0] ? String(row[0]) : null,
-        name: String(name),
-        company: row[2] ? String(row[2]) : null,
-        code: code ? String(code) : null,
-        link: row[4] ? String(row[4]) : null,
-        cost: parseFloat(row[5]) || null,
-        amount: row[6] ? String(row[6]) : null,
-        n_reactions: parseFloat(row[7]) || null,
+        protocol: String(row['Protocol'] || '').trim() || null,
+        name,
+        company: String(row['Company'] || '').trim() || null,
+        code: code || null,
+        link: String(row['Link'] || '').trim() || null,
+        cost: parseFloat(row['Cost']) || null,
+        amount: String(row['Amount'] || '').trim() || null,
+        n_reactions: parseFloat(row['N Reactions']) || null,
       });
     }
 

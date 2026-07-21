@@ -125,7 +125,7 @@ function AdminContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, o
 
   return (
     <>
-      <tr style={{ borderTop: '1px solid var(--border)', background: expanded ? 'rgba(123,63,160,0.04)' : rowIndex % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
+      <tr style={{ borderTop: '1px solid var(--border)', background: expanded ? 'rgba(123,63,160,0.07)' : rowIndex % 2 === 0 ? 'transparent' : 'var(--purple-faint)' }}>
         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{ width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0, background: roleColors.bg, border: `2px solid ${roleColors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -225,7 +225,7 @@ function AlumniContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, 
 
   return (
     <>
-      <tr style={{ borderTop: '1px solid var(--border)', background: rowIndex % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
+      <tr style={{ borderTop: '1px solid var(--border)', background: rowIndex % 2 === 0 ? 'transparent' : 'var(--purple-faint)' }}>
         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
           <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
             {contact.last_name && contact.first_name ? `${contact.last_name}, ${contact.first_name}` : contact.full_name || '—'}
@@ -428,7 +428,7 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
 
   return (
     <>
-      <tr style={{ borderTop: '1px solid var(--border)', background: rowIndex % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
+      <tr style={{ borderTop: '1px solid var(--border)', background: rowIndex % 2 === 0 ? 'transparent' : 'var(--purple-faint)' }}>
         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{ width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0, background: roleColors.bg, border: `2px solid ${roleColors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

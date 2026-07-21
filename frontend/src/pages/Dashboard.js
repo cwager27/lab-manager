@@ -73,11 +73,10 @@ function TaskStatusCard({ icon, title, tasks, getTitle, dateKey, upcomingLabel =
 }
 
 function RecurScoreRow({ row }) {
-  const { profile, onTime, late, missed, pending } = row;
+  const { profile, onTime, late, missed } = row;
   const firstName = (profile.full_name || '').split(' ')[0];
-  const total = onTime + late + missed + pending;
   const matured = onTime + late + missed;
-  if (total === 0) {
+  if (matured === 0) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', width: 72, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{firstName}</div>
@@ -86,12 +85,11 @@ function RecurScoreRow({ row }) {
       </div>
     );
   }
-  const pctOnTime = Math.round(onTime / total * 100);
-  const pctLate = Math.round(late / total * 100);
-  const pctMissed = Math.round(missed / total * 100);
-  const pctPending = 100 - pctOnTime - pctLate - pctMissed;
-  const onTimePct = matured > 0 ? Math.round(onTime / matured * 100) : null;
-  const labelColor = onTimePct === null ? 'var(--text-muted)' : onTimePct >= 70 ? '#27AE60' : onTimePct >= 40 ? '#F39C12' : '#E74C3C';
+  const pctOnTime = Math.round(onTime / matured * 100);
+  const pctLate = Math.round(late / matured * 100);
+  const pctMissed = 100 - pctOnTime - pctLate;
+  const onTimePct = Math.round(onTime / matured * 100);
+  const labelColor = onTimePct >= 70 ? '#27AE60' : onTimePct >= 40 ? '#F39C12' : '#E74C3C';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
       <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', width: 72, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{firstName}</div>
@@ -99,10 +97,9 @@ function RecurScoreRow({ row }) {
         {pctOnTime > 0 && <div style={{ width: `${pctOnTime}%`, background: '#27AE60', height: '100%', transition: 'width 0.4s ease' }} />}
         {pctLate > 0 && <div style={{ width: `${pctLate}%`, background: '#F39C12', height: '100%', transition: 'width 0.4s ease' }} />}
         {pctMissed > 0 && <div style={{ width: `${pctMissed}%`, background: '#E74C3C', height: '100%', transition: 'width 0.4s ease' }} />}
-        {pctPending > 0 && <div style={{ width: `${pctPending}%`, background: '#D0D0D8', height: '100%', transition: 'width 0.4s ease' }} />}
       </div>
       <div style={{ fontSize: 11, fontWeight: 700, color: labelColor, width: 46, textAlign: 'right', flexShrink: 0 }}>
-        {onTimePct !== null ? `${onTimePct}%` : '—'}
+        {onTimePct}%
       </div>
     </div>
   );
@@ -622,7 +619,7 @@ export default function Dashboard({ profile, userRole, userId }) {
                     <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Loading…</p>
                   ) : (
                     <div style={{ padding: '4px 14px 8px' }}>
-                      {recurData.sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).map(row => (
+                      {recurData.filter(row => !row.profile?.full_name?.toLowerCase().startsWith('mia')).sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).map(row => (
                         <RecurScoreRow key={row.profile.id} row={row} />
                       ))}
                     </div>
