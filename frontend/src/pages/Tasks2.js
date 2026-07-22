@@ -2009,35 +2009,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       );
     };
 
-    const renderCompactAdhoc = t => {
-      const isDone = t.status === 'completed';
-      const isOvd = !isDone && t.due_date && t.due_date < today;
-      return (
-        <div key={t.id} style={{ padding: '10px 12px', background: 'var(--bg-card)', border: `1px solid ${isDone ? '#A9DFBF' : 'var(--border)'}`, borderRadius: 8, marginBottom: 5, opacity: isDone ? 0.7 : 1 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-            <div style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${isDone ? '#22c55e' : 'var(--border)'}`, background: isDone ? '#22c55e' : 'transparent', flexShrink: 0, marginTop: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {isDone && <span style={{ color: 'white', fontSize: 10, lineHeight: 1 }}>✓</span>}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: isDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.4 }}>{t.title}</span>
-                {t.due_date && (
-                  <span style={{ fontSize: 11, color: isOvd ? '#ef4444' : 'var(--text-muted)', fontWeight: 400, whiteSpace: 'nowrap' }}>
-                    · Due {fmtDate(t.due_date)}
-                  </span>
-                )}
-              </div>
-              {t.description && (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3, lineHeight: 1.4 }}>{t.description}</div>
-              )}
-              {t.assigner?.full_name && (
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>by {t.assigner.full_name}</div>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    };
 
     // ── Summary sub-tab ────────────────────────────────────────────────────
     const BUCKET_CONFIG = [
