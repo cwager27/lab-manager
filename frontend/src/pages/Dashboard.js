@@ -43,7 +43,7 @@ function TaskStatusCard({ icon, title, tasks, getTitle, dateKey, upcomingLabel =
         </div>
         {items.map(t => (
           <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderTop: '1px solid var(--border)' }}>
-            <span style={{ fontSize: 12, color: headBg === '#ef4444' ? '#ef4444' : 'var(--purple-primary)', flex: 1, lineHeight: 1.3 }}>{getTitle(t)}</span>
+            <span style={{ fontSize: 12, color: headBg === '#ef4444' ? '#ef4444' : 'var(--text-primary)', flex: 1, lineHeight: 1.3 }}>{getTitle(t)}</span>
             {t[dateKey] && (
               <span style={{ fontSize: 10, color: headBg === '#ef4444' ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(t[dateKey])}</span>
             )}
@@ -389,7 +389,7 @@ export default function Dashboard({ profile, userRole, userId }) {
 
             {/* Recurring task status */}
             <TaskStatusCard
-              icon={<ClipboardList size={13} color="var(--purple-primary)" />}
+              icon={<ClipboardList size={13} color="var(--text-primary)" />}
               title="Recurrent task status"
               tasks={myRecurOccs}
               getTitle={t => t.task_def?.title || 'Task'}
@@ -506,7 +506,7 @@ export default function Dashboard({ profile, userRole, userId }) {
                 {/* Out next 8 weeks */}
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
                   <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
-                    <Calendar size={13} color="var(--purple-primary)" />
+                    <Calendar size={13} color="var(--text-primary)" />
                     <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Out next 8 weeks</span>
                   </div>
                   {nextWeekOut.length === 0 ? (
@@ -533,7 +533,7 @@ export default function Dashboard({ profile, userRole, userId }) {
                 {/* Upcoming lab meetings */}
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
                   <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
-                    <Calendar size={13} color="var(--purple-primary)" />
+                    <Calendar size={13} color="var(--text-primary)" />
                     <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Upcoming lab meetings</span>
                   </div>
                   {labMeetings.length === 0 ? (
@@ -552,7 +552,7 @@ export default function Dashboard({ profile, userRole, userId }) {
                             </div>
                           </div>
                           {m.is_sof && (
-                            <span style={{ padding: '1px 6px', borderRadius: '8px', fontSize: '9px', fontWeight: 700, background: 'var(--purple-faint)', color: 'var(--purple-primary)', flexShrink: 0 }}>SOF</span>
+                            <span style={{ padding: '1px 6px', borderRadius: '8px', fontSize: '9px', fontWeight: 700, background: 'var(--purple-faint)', color: 'var(--text-primary)', flexShrink: 0 }}>SOF</span>
                           )}
                         </div>
                       ))}
@@ -563,7 +563,7 @@ export default function Dashboard({ profile, userRole, userId }) {
                 {/* Upcoming ad hoc meetings */}
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
                   <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
-                    <Calendar size={13} color="var(--purple-primary)" />
+                    <Calendar size={13} color="var(--text-primary)" />
                     <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Upcoming ad hoc meetings</span>
                   </div>
                   {adhocMeetings.length === 0 ? (
@@ -582,7 +582,7 @@ export default function Dashboard({ profile, userRole, userId }) {
                             </div>
                           </div>
                           {m.is_sof && (
-                            <span style={{ padding: '1px 6px', borderRadius: '8px', fontSize: '9px', fontWeight: 700, background: 'var(--purple-faint)', color: 'var(--purple-primary)', flexShrink: 0 }}>SOF</span>
+                            <span style={{ padding: '1px 6px', borderRadius: '8px', fontSize: '9px', fontWeight: 700, background: 'var(--purple-faint)', color: 'var(--text-primary)', flexShrink: 0 }}>SOF</span>
                           )}
                         </div>
                       ))}
@@ -599,7 +599,7 @@ export default function Dashboard({ profile, userRole, userId }) {
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
                   <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                      <ClipboardList size={13} color="var(--purple-primary)" />
+                      <ClipboardList size={13} color="var(--text-primary)" />
                       <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Recurrent lab task productivity</span>
                     </div>
                     <PeriodPicker value={recurPeriod} onChange={setRecurPeriod} />
@@ -640,7 +640,7 @@ export default function Dashboard({ profile, userRole, userId }) {
                       {sortedAdhocTasks.filter(t => t.status !== 'done' && t.status !== 'submitted').map((task, i) => {
                         const cls = classifyAdhocTask(task);
                         const noDate = cls === 2;
-                        const statusColor = cls === 0 ? '#E74C3C' : noDate ? 'var(--purple-primary)' : '#F39C12';
+                        const statusColor = cls === 0 ? '#E74C3C' : noDate ? 'var(--text-primary)' : '#F39C12';
                         const statusBg   = cls === 0 ? '#FDEDEC' : noDate ? 'var(--purple-faint)' : '#FEF9E7';
                         const statusLabel = cls === 0 ? 'Overdue' : noDate ? 'Assigned' : 'Upcoming';
                         const dateStr = noDate
