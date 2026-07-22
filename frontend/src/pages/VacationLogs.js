@@ -79,7 +79,7 @@ export default function VacationLogs({ userRole, userId, profile }) {
     let query = supabase
       .from('vacation_requests')
       .select('*, requester:profiles!vacation_requests_requested_by_fkey(full_name, email)')
-      .order('created_at', { ascending: false });
+      .order('start_date', { ascending: true });
     if (!canSeeAll) query = query.eq('requested_by', userId);
     const { data } = await query;
     setRequests(data || []);
