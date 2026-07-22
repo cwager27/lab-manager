@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import {
-  Plus, Calendar, CheckCircle, XCircle,
-  Clock, User, MessageSquare, Palmtree, Trash2, AlertTriangle
+  Plus, CheckCircle, XCircle,
+  MessageSquare, Palmtree, Trash2, AlertTriangle
 } from 'lucide-react';
 
 function fmtDate(d) {
@@ -64,6 +64,8 @@ export default function VacationLogs({ userRole, userId, profile }) {
   const [summaryData, setSummaryData] = useState(null);
   const [sortCol, setSortCol] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
+  const [reqSortCol, setReqSortCol] = useState('start_date');
+  const [reqSortDir, setReqSortDir] = useState('asc');
   const [selectedPeople, setSelectedPeople] = useState([]);
   const [filterOpen, setFilterOpen] = useState(false);
   const [overlapWarning, setOverlapWarning] = useState(null);
@@ -256,6 +258,25 @@ export default function VacationLogs({ userRole, userId, profile }) {
 
 
   const needsApproval = !NO_APPROVAL_REQUIRED.has(form.leave_type);
+
+  const toggleReqSort = col => {
+    if (reqSortCol === col) setReqSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setReqSortCol(col); setReqSortDir('asc'); }
+  };
+  const reqArrow = col => reqSortCol === col
+    ? <span style={{ marginLeft: 3, fontSize: 10 }}>{reqSortDir === 'asc' ? '↑' : '↓'}</span>
+    : <span style={{ marginLeft: 3, fontSize: 10, opacity: 0.3 }}>↕</span>;
+  const sortedRequests = [...requests].sort((a, b) => {
+    const dir = reqSortDir === 'asc' ? 1 : -1;
+    if (reqSortCol === 'person') return dir * (a.requester?.full_name || '').localeCompare(b.requester?.full_name || '');
+    if (reqSortCol === 'start_date') return dir * (a.start_date || '').localeCompare(b.start_date || '');
+    if (reqSortCol === 'days') return dir * (getDayCount(a.start_date, a.end_date) - getDayCount(b.start_date, b.end_date));
+    if (reqSortCol === 'leave_type') return dir * (a.leave_type || '').localeCompare(b.leave_type || '');
+    if (reqSortCol === 'status') return dir * (a.status || '').localeCompare(b.status || '');
+    return 0;
+  });
+  const reqThStyle = { padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' };
+  const reqTdStyle = { padding: '11px 14px', fontSize: '13px', color: 'var(--text-primary)', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' };
 
   return (
     <div>
@@ -454,156 +475,148 @@ export default function VacationLogs({ userRole, userId, profile }) {
           No time away requests found.
         </div>
       ) : (
-        requests.map(request => {
-          const statusStyle = STATUS_STYLES[request.status] || STATUS_STYLES.pending;
-          const leaveColor = LEAVE_COLORS[request.leave_type] || LEAVE_COLORS['Other'];
-          const days = getDayCount(request.start_date, request.end_date);
-          const isReviewing = reviewingId === request.id;
-          const overlaps = overlapMap[request.id];
-          const hasOverlap = !!(overlaps && overlaps.length > 0);
-          const warningOpen = overlapWarning === request.id;
-
-          return (
-            <div key={request.id} style={{ position: 'relative',
-              background: hasOverlap ? '#FFF5F5' : 'var(--bg-card)',
-              border: `1px solid ${hasOverlap ? '#E74C3C' : request.status === 'pending' && isAdmin ? '#FAD7A0' : 'var(--border)'}`,
-              borderRadius: 'var(--radius-md)', padding: '16px',
-              marginBottom: '12px', boxShadow: 'var(--shadow-sm)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
-                      <User size={14} color="var(--text-muted)" />
-                      <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                        {request.requester?.full_name}
-                      </span>
-                      {hasOverlap && (
-                        <button
-                          onClick={() => setOverlapWarning(warningOpen ? null : request.id)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '2px 8px', fontSize: 11, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                          <AlertTriangle size={11} color="#D97706" />
-                          {overlaps.length} overlap{overlaps.length > 1 ? 's' : ''}
-                        </button>
+        <div style={{ overflowX: 'auto', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ background: 'var(--bg-secondary)' }}>
+                {canSeeAll && <th onClick={() => toggleReqSort('person')} style={reqThStyle}>Person {reqArrow('person')}</th>}
+                <th onClick={() => toggleReqSort('start_date')} style={reqThStyle}>Start Date {reqArrow('start_date')}</th>
+                <th style={{ ...reqThStyle, cursor: 'default' }}>End Date</th>
+                <th onClick={() => toggleReqSort('days')} style={reqThStyle}>Days {reqArrow('days')}</th>
+                <th onClick={() => toggleReqSort('leave_type')} style={reqThStyle}>Leave Type {reqArrow('leave_type')}</th>
+                <th onClick={() => toggleReqSort('status')} style={reqThStyle}>Status {reqArrow('status')}</th>
+                <th style={{ ...reqThStyle, cursor: 'default' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedRequests.map((request, i) => {
+                const statusStyle = STATUS_STYLES[request.status] || STATUS_STYLES.pending;
+                const leaveColor = LEAVE_COLORS[request.leave_type] || { bg: '#F2F3F4', text: '#626567' };
+                const days = getDayCount(request.start_date, request.end_date);
+                const isReviewing = reviewingId === request.id;
+                const overlaps = overlapMap[request.id];
+                const hasOverlap = !!(overlaps && overlaps.length > 0);
+                const warningOpen = overlapWarning === request.id;
+                const rowBg = hasOverlap ? '#FFF5F5' : i % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-primary)';
+                const colSpan = canSeeAll ? 7 : 6;
+                return (
+                  <React.Fragment key={request.id}>
+                    <tr style={{ background: rowBg }}>
+                      {canSeeAll && (
+                        <td style={reqTdStyle}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            {request.requester?.full_name || '—'}
+                            {hasOverlap && (
+                              <button onClick={() => setOverlapWarning(warningOpen ? null : request.id)}
+                                style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '2px 7px', fontSize: 10, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                <AlertTriangle size={10} color="#D97706" /> {overlaps.length}
+                              </button>
+                            )}
+                          </div>
+                        </td>
                       )}
-                    </div>
-                    {(request.requested_by === userId || (isAdmin && request.status !== 'approved')) && (
-                      <button onClick={() => handleDelete(request.id)}
-                        title="Remove this request"
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', borderRadius: 'var(--radius-sm)', flexShrink: 0 }}
-                        onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
-                        onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
-                        <Trash2 size={14} />
-                      </button>
+                      <td style={{ ...reqTdStyle, whiteSpace: 'nowrap' }}>{fmtDate(request.start_date)}</td>
+                      <td style={{ ...reqTdStyle, whiteSpace: 'nowrap' }}>{fmtDate(request.end_date)}</td>
+                      <td style={{ ...reqTdStyle, textAlign: 'center', fontWeight: 600 }}>{days}</td>
+                      <td style={reqTdStyle}>
+                        <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: leaveColor.bg, color: leaveColor.text, whiteSpace: 'nowrap' }}>
+                          {request.leave_type}
+                        </span>
+                      </td>
+                      <td style={reqTdStyle}>
+                        <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: statusStyle.bg, color: statusStyle.text, border: `1px solid ${statusStyle.border}`, whiteSpace: 'nowrap' }}>
+                          {statusStyle.label}
+                        </span>
+                      </td>
+                      <td style={{ ...reqTdStyle, whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          {(request.requested_by === userId || (isAdmin && request.status !== 'approved')) && (
+                            <button onClick={() => handleDelete(request.id)} title="Delete"
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}
+                              onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
+                              onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                          {isAdmin && request.status === 'pending' && !isReviewing && (
+                            <>
+                              <button onClick={() => setReviewingId(request.id)}
+                                style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 500, cursor: 'pointer' }}>
+                                <MessageSquare size={11} /> Review
+                              </button>
+                              <button onClick={() => handleReview(request.id, 'approved')}
+                                style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: 'none', background: '#EAF7F0', color: '#27AE60', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                                <CheckCircle size={11} /> Approve
+                              </button>
+                              <button onClick={() => handleReview(request.id, 'denied')}
+                                style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: 'none', background: '#FDEDEC', color: '#E74C3C', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                                <XCircle size={11} /> Deny
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {(request.comments || request.reviewer_comment) && (
+                      <tr style={{ background: rowBg }}>
+                        <td colSpan={colSpan} style={{ padding: '0 14px 10px', borderBottom: '1px solid var(--border)' }}>
+                          {request.comments && (
+                            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 4px', fontStyle: 'italic' }}>"{request.comments}"</p>
+                          )}
+                          {request.reviewer_comment && (
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, padding: '6px 10px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', borderLeft: `3px solid ${statusStyle.text}` }}>
+                              <MessageSquare size={11} color="var(--text-muted)" style={{ marginTop: 2, flexShrink: 0 }} />
+                              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{request.reviewer_comment}</span>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
                     )}
-                    <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: leaveColor.bg, color: leaveColor.text }}>
-                      {request.leave_type}
-                    </span>
-                    <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text, border: `1px solid ${statusStyle.border}` }}>
-                      {statusStyle.label}
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: request.comments ? '8px' : '0' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                      <Calendar size={13} />
-                      {request.start_date} → {request.end_date}
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: 'var(--purple-primary)', fontWeight: 500 }}>
-                      <Clock size={13} />
-                      {days} day{days !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-
-                  {request.comments && (
-                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '8px 0 0', fontStyle: 'italic' }}>
-                      "{request.comments}"
-                    </p>
-                  )}
-
-                  {request.reviewer_comment && (
-                    <div style={{ marginTop: '10px', padding: '10px 12px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', borderLeft: `3px solid ${statusStyle.text}` }}>
-                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0 }}>
-                        <MessageSquare size={11} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-                        {request.reviewer_comment}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {isAdmin && request.status === 'pending' && !isReviewing && (
-                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                    <button onClick={() => setReviewingId(request.id)} style={{
-                      display: 'flex', alignItems: 'center', gap: '4px', padding: '7px 12px',
-                      borderRadius: 'var(--radius-md)', border: '1px solid var(--border)',
-                      background: 'var(--bg-primary)', color: 'var(--text-secondary)',
-                      fontSize: '12px', fontWeight: 500,
-                    }}><MessageSquare size={13} /> Review</button>
-                    <button onClick={() => handleReview(request.id, 'approved')} style={{
-                      display: 'flex', alignItems: 'center', gap: '4px', padding: '7px 12px',
-                      borderRadius: 'var(--radius-md)', border: 'none',
-                      background: '#EAF7F0', color: '#27AE60', fontSize: '12px', fontWeight: 600,
-                    }}><CheckCircle size={13} /> Approve</button>
-                    <button onClick={() => handleReview(request.id, 'denied')} style={{
-                      display: 'flex', alignItems: 'center', gap: '4px', padding: '7px 12px',
-                      borderRadius: 'var(--radius-md)', border: 'none',
-                      background: '#FDEDEC', color: '#E74C3C', fontSize: '12px', fontWeight: 600,
-                    }}><XCircle size={13} /> Deny</button>
-                  </div>
-                )}
-              </div>
-
-              {warningOpen && overlaps && (
-                <div style={{ position: 'absolute', left: 16, top: '100%', marginTop: 6, zIndex: 50, background: 'white', border: '1px solid #E74C3C', borderRadius: 10, boxShadow: '0 6px 20px rgba(0,0,0,0.15)', padding: '14px 18px', minWidth: 300, maxWidth: 420 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#E74C3C', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <AlertTriangle size={12} color="#E74C3C" /> Overlapping time off
-                  </div>
-                  {overlaps.map((o, idx) => (
-                    <div key={idx} style={{ padding: '8px 0', borderTop: idx > 0 ? '1px solid #FDEDEC' : 'none' }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{o.name}</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Away: {fmtDate(o.theirStart)} → {fmtDate(o.theirEnd)}</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#E74C3C' }}>Overlap: {fmtDate(o.overlapStart)} → {fmtDate(o.overlapEnd)}</span>
-                      </div>
-                    </div>
-                  ))}
-                  <button onClick={() => setOverlapWarning(null)} style={{ marginTop: 10, fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Dismiss</button>
-                </div>
-              )}
-
-              {isReviewing && (
-                <div style={{ marginTop: '12px', padding: '16px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Add Comment (optional)
-                  </label>
-                  <textarea
-                    value={reviewerComment}
-                    onChange={e => setReviewerComment(e.target.value)}
-                    placeholder="Add a note to the lab member..."
-                    rows={2}
-                    style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: '12px' }}
-                  />
-                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                    <button onClick={() => { setReviewingId(null); setReviewerComment(''); }} style={{
-                      padding: '7px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)',
-                      background: 'transparent', color: 'var(--text-secondary)', fontSize: '12px',
-                    }}>Cancel</button>
-                    <button onClick={() => handleReview(request.id, 'approved')} style={{
-                      display: 'flex', alignItems: 'center', gap: '4px', padding: '7px 14px',
-                      borderRadius: 'var(--radius-md)', border: 'none',
-                      background: '#EAF7F0', color: '#27AE60', fontSize: '12px', fontWeight: 600,
-                    }}><CheckCircle size={13} /> Approve</button>
-                    <button onClick={() => handleReview(request.id, 'denied')} style={{
-                      display: 'flex', alignItems: 'center', gap: '4px', padding: '7px 14px',
-                      borderRadius: 'var(--radius-md)', border: 'none',
-                      background: '#FDEDEC', color: '#E74C3C', fontSize: '12px', fontWeight: 600,
-                    }}><XCircle size={13} /> Deny</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })
+                    {warningOpen && overlaps && (
+                      <tr style={{ background: '#FFF5F5' }}>
+                        <td colSpan={colSpan} style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 11, fontWeight: 700, color: '#E74C3C', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            <AlertTriangle size={12} color="#E74C3C" /> Overlapping time off
+                          </div>
+                          {overlaps.map((o, idx) => (
+                            <div key={idx} style={{ display: 'flex', gap: 16, padding: '6px 0', borderTop: idx > 0 ? '1px solid #FDEDEC' : 'none', fontSize: 12 }}>
+                              <span style={{ fontWeight: 600, color: 'var(--text-primary)', minWidth: 120 }}>{o.name}</span>
+                              <span style={{ color: 'var(--text-secondary)' }}>Away: {fmtDate(o.theirStart)} → {fmtDate(o.theirEnd)}</span>
+                              <span style={{ fontWeight: 700, color: '#E74C3C' }}>Overlap: {fmtDate(o.overlapStart)} → {fmtDate(o.overlapEnd)}</span>
+                            </div>
+                          ))}
+                          <button onClick={() => setOverlapWarning(null)} style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Dismiss</button>
+                        </td>
+                      </tr>
+                    )}
+                    {isReviewing && (
+                      <tr style={{ background: 'var(--bg-secondary)' }}>
+                        <td colSpan={colSpan} style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
+                          <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Add Comment (optional)</label>
+                          <textarea value={reviewerComment} onChange={e => setReviewerComment(e.target.value)}
+                            placeholder="Add a note to the lab member..." rows={2}
+                            style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 12, resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: 8 }} />
+                          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                            <button onClick={() => { setReviewingId(null); setReviewerComment(''); }}
+                              style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+                            <button onClick={() => handleReview(request.id, 'approved')}
+                              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: '#EAF7F0', color: '#27AE60', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                              <CheckCircle size={13} /> Approve
+                            </button>
+                            <button onClick={() => handleReview(request.id, 'denied')}
+                              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: '#FDEDEC', color: '#E74C3C', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                              <XCircle size={13} /> Deny
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {overlapWarning && <div style={{ position: 'fixed', inset: 0, zIndex: 49 }} onClick={() => setOverlapWarning(null)} />}
