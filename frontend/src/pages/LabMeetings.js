@@ -77,6 +77,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
   const [editingCell, setEditingCell] = useState(null);
   const [cellValue, setCellValue] = useState('');
   const [guestNameEdit, setGuestNameEdit] = useState('');
+  const [guestTitleEdit, setGuestTitleEdit] = useState('');
   const [vacWarn, setVacWarn] = useState(null);
   const [editingZoomInfo, setEditingZoomInfo] = useState(null);
 
@@ -122,6 +123,10 @@ export default function LabMeetings({ userRole, userId, profile }) {
     setEditingCell({ id, field, table });
     setCellValue(value ?? '');
     if (extra !== undefined) setGuestNameEdit(extra);
+    if (field === 'presenter_id') {
+      const mtg = getMeetings(table).find(m => m.id === id);
+      setGuestTitleEdit(mtg?.guest_title || '');
+    }
   }
 
   async function commitEdit(id, field, value, table) {
@@ -134,7 +139,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
       if (value === 'guest') {
         update.presenter_id = null;
         update.guest_name = guestNameEdit || null;
-        update.guest_title = null;
+        update.guest_title = guestTitleEdit || null;
       } else {
         update.presenter_id = value || null;
         update.guest_name = null;
@@ -247,7 +252,10 @@ export default function LabMeetings({ userRole, userId, profile }) {
     const statusStyle = STATUS_STYLES[meeting.status] || STATUS_STYLES.scheduled;
     const isPast = meeting.meeting_date < today;
     const isAdhoc = table === 'adhoc';
-    const gridTemplate = isAdhoc ? '74px 1fr 1fr 96px 56px 1fr 22px' : '74px 1fr 28px 80px 1fr 22px';
+    const gridTemplate = isAdhoc ? '70px 1fr 130px 80px 1fr 48px 140px 22px' : '74px 1fr 28px 80px 1fr 22px';
+    const awayMembers = isAdhoc
+      ? members.filter(m => vacations.some(v => v.requested_by === m.id && v.start_date <= meeting.meeting_date && v.end_date >= meeting.meeting_date))
+      : [];
 
     return (
       <div key={meeting.id} style={{
@@ -314,11 +322,18 @@ export default function LabMeetings({ userRole, userId, profile }) {
                 <option value="guest">Guest speaker</option>
               </select>
               {cellValue === 'guest' && (
-                <input autoFocus placeholder="Guest name…" value={guestNameEdit}
-                  onChange={e => setGuestNameEdit(e.target.value)}
-                  onBlur={() => commitEdit(meeting.id, 'presenter_id', 'guest', table)}
-                  onKeyDown={e => { if (e.key === 'Enter') commitEdit(meeting.id, 'presenter_id', 'guest', table); if (e.key === 'Escape') setEditingCell(null); }}
-                  style={{ fontSize: '12px', padding: '2px 6px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', marginTop: '4px', boxSizing: 'border-box' }} />
+                <>
+                  <input autoFocus placeholder="Guest name…" value={guestNameEdit}
+                    onChange={e => setGuestNameEdit(e.target.value)}
+                    onBlur={() => commitEdit(meeting.id, 'presenter_id', 'guest', table)}
+                    onKeyDown={e => { if (e.key === 'Enter') commitEdit(meeting.id, 'presenter_id', 'guest', table); if (e.key === 'Escape') setEditingCell(null); }}
+                    style={{ fontSize: '12px', padding: '2px 6px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', marginTop: '4px', boxSizing: 'border-box' }} />
+                  <input placeholder="Title (optional)" value={guestTitleEdit}
+                    onChange={e => setGuestTitleEdit(e.target.value)}
+                    onBlur={() => commitEdit(meeting.id, 'presenter_id', 'guest', table)}
+                    onKeyDown={e => { if (e.key === 'Enter') commitEdit(meeting.id, 'presenter_id', 'guest', table); if (e.key === 'Escape') setEditingCell(null); }}
+                    style={{ fontSize: '11px', padding: '2px 6px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', marginTop: '3px', boxSizing: 'border-box' }} />
+                </>
               )}
             </div>
           ) : (
@@ -328,6 +343,9 @@ export default function LabMeetings({ userRole, userId, profile }) {
               {presenterName
                 ? <>
                     {presenterName}{onVac && <AlertTriangle size={11} style={{ marginLeft: '3px', verticalAlign: 'middle' }} />}
+                    {meeting.guest_title && (
+                      <span style={{ display: 'block', fontSize: '10px', fontWeight: 400, color: 'var(--text-muted)', marginTop: '1px' }}>{meeting.guest_title}</span>
+                    )}
                     {meeting.presenter_id && meeting.confirmation_status !== 'confirmed' && (
                       <span style={{ display: 'block', fontSize: '10px', fontWeight: 400, color: '#E67E22', marginTop: '1px' }}>Invite pending acceptance</span>
                     )}
@@ -362,6 +380,21 @@ export default function LabMeetings({ userRole, userId, profile }) {
             title={canEdit ? 'Click to edit' : ''} style={{ cursor: canEdit ? 'pointer' : 'default', display: 'inline-block', padding: '2px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text }}>
             {statusStyle.label}
           </span>
+        )}
+
+        {/* Away (adhoc only) */}
+        {isAdhoc && (
+          <div style={{ overflow: 'hidden', minWidth: 0 }}>
+            {awayMembers.length > 0 ? (
+              <span
+                title={awayMembers.map(m => m.full_name).join(', ')}
+                style={{ fontSize: '10px', color: '#E67E22', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {awayMembers.map(m => fmtName(m.full_name)).join(', ')}
+              </span>
+            ) : (
+              <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>—</span>
+            )}
+          </div>
         )}
 
         {/* Zoom Link (adhoc only) */}
@@ -507,14 +540,15 @@ export default function LabMeetings({ userRole, userId, profile }) {
         </div>
 
         {/* Column headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: isLab ? '74px 1fr 28px 80px 1fr 22px' : '74px 1fr 1fr 96px 56px 1fr 22px', gap: isLab ? '6px' : '8px', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', marginBottom: '4px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isLab ? '74px 1fr 28px 80px 1fr 22px' : '70px 1fr 130px 80px 1fr 48px 140px 22px', gap: isLab ? '6px' : '8px', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', marginBottom: '4px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           <span>Date</span>
           {!isLab && <span>Description</span>}
           <span>Presenter</span>
           {isLab && <span>SOF</span>}
           <span>Status</span>
-          {!isLab && <span>Zoom</span>}
-          {!isLab && <span>Sign-in</span>}
+          {!isLab && <span>Away</span>}
+          {!isLab && <span>Zoom Link</span>}
+          {!isLab && <span>Zoom Info</span>}
           {isLab && <span>Notes</span>}
           <span />
         </div>
