@@ -14,6 +14,7 @@ const transporter = nodemailer.createTransport({
     pass: process.env.GMAIL_APP_PASSWORD
   }
 });
+transporter.sendMail = async () => {}; // paused
 
 async function getAllLabEmails() {
   const { data } = await supabase.from('profiles').select('email, full_name');

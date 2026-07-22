@@ -19,6 +19,7 @@ const transporter = nodemailer.createTransport({
     pass: process.env.GMAIL_APP_PASSWORD
   }
 });
+transporter.sendMail = async () => {}; // paused
 
 const assignmentRoutes = require('./routes/assignments');
 const checklistRoutes = require('./routes/checklists');
