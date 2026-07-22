@@ -606,7 +606,7 @@ export default function Dashboard({ profile, userRole, userId }) {
                   </div>
                   <div style={{ padding: '5px 14px', display: 'flex', gap: 10, borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', gap: 10 }}>
-                      {[['#27AE60', 'On time'], ['#F39C12', 'Late'], ['#E74C3C', 'Missed'], ['#D0D0D8', 'Pending']].map(([color, label]) => (
+                      {[['#27AE60', 'On time'], ['#F39C12', 'Late'], ['#E74C3C', 'Missed']].map(([color, label]) => (
                         <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                           <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
                           <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{label}</span>

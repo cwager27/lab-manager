@@ -647,6 +647,9 @@ export default function Tasks({ userRole, userId, profile }) {
             <>
               {visibleGroups.map(([groupName, tasks]) => {
                 const fc = FREQ_COLORS[recurFreq] || FREQ_COLORS.monthly;
+                const gateTask = tasks.find(t => t.conditional_text === 'on_yes');
+                const gateIdx = gateTask ? tasks.indexOf(gateTask) : -1;
+                const gateResp = gateTask ? responses[gateTask.id]?.response : null;
                 return (
                 <div key={groupName || 'ungrouped'} style={{ marginBottom: '12px' }}>
                   {groupName && (
@@ -657,7 +660,8 @@ export default function Tasks({ userRole, userId, profile }) {
                       </span>
                     </div>
                   )}
-                  {tasks.map(task => {
+                  {tasks.map((task, taskIdx) => {
+                    if (gateTask && taskIdx > gateIdx && gateResp !== 'yes') return null;
                     const resp = responses[task.id];
                     const isNo = resp?.response === 'no';
                     const done = resp?.response === 'yes' || resp?.response === 'checked';

@@ -347,6 +347,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const [taskDefForm, setTaskDefForm] = useState({});
   const [taskDefSaving, setTaskDefSaving] = useState(false);
   const [confirmDeleteDef, setConfirmDeleteDef] = useState(null);
+  const [relatedTaskEdits, setRelatedTaskEdits] = useState({});
 
   // ── One-off Tasks state ───────────────────────────────────────────────────
   const [oneOffTasks, setOneOffTasks] = useState([]);
@@ -544,6 +545,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     });
     setEditingTaskDef(task || { _new: true, ...defaults });
     setConfirmDeleteDef(null);
+    setRelatedTaskEdits({});
   }
 
   async function handleSaveTaskDef() {
@@ -580,8 +582,13 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     } else {
       await supabase.from('tasks_definitions').insert([payload]);
     }
+    const relatedUpdates = Object.entries(relatedTaskEdits).filter(([, t]) => t.trim());
+    for (const [id, title] of relatedUpdates) {
+      await supabase.from('tasks_definitions').update({ title: title.trim() }).eq('id', id);
+    }
     setTaskDefSaving(false);
     setEditingTaskDef(null);
+    setRelatedTaskEdits({});
     setVatLoaded(false);
     loadVatData();
   }
@@ -615,7 +622,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             {/* Title */}
             <div>
               <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Title *</label>
-              <input value={f.title} onChange={e => tdf({ title: e.target.value })} onBlur={e => tdf({ title: e.target.value.trim().replace(/\b\w/g, c => c.toUpperCase()) })} placeholder="Task title…" style={inputStyle} />
+              <textarea value={f.title} onChange={e => tdf({ title: e.target.value })} onBlur={e => tdf({ title: e.target.value.trim().replace(/\b\w/g, c => c.toUpperCase()) })} placeholder="Task title…" rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
             </div>
             {/* Category + Frequency */}
             {(() => {
@@ -748,6 +755,32 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                 <Plus size={12} /> Add sub-task
               </button>
             </div>
+            {/* Other Tasks in This Group */}
+            {(() => {
+              if (!editingTaskDef?.id) return null;
+              const groupKey = f.group_name?.trim() || f.audit_area?.trim();
+              if (!groupKey) return null;
+              const field = f.group_name?.trim() ? 'group_name' : 'audit_area';
+              const related = vatTasks.filter(t => t.id !== editingTaskDef.id && t[field] === groupKey).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+              if (!related.length) return null;
+              return (
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Other Tasks in This Group</label>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 8px' }}>Edit the wording of related tasks in the same group.</p>
+                  {related.map(t => (
+                    <div key={t.id} style={{ marginBottom: 8 }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Step {t.sort_order ?? '—'}</span>
+                      <textarea
+                        value={relatedTaskEdits[t.id] !== undefined ? relatedTaskEdits[t.id] : (t.title || '')}
+                        onChange={e => setRelatedTaskEdits(p => ({ ...p, [t.id]: e.target.value }))}
+                        rows={2}
+                        style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
             {/* SOP */}
             <div>
               <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>SOP</label>
@@ -1158,7 +1191,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       qTo = new Date(Date.now() + 60 * 86400000).toISOString().split('T')[0];
     }
 
-    const [{ data }, { data: profData }] = await Promise.all([
+    const [{ data }, { data: profData }, { data: sporadicData }] = await Promise.all([
       supabase
         .from('task_occurrences')
         .select('id, due_date, status, completed_at, assigned_to, task_definition_id, task_def:tasks_definitions(category)')
@@ -1168,6 +1201,10 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       profiles.length === 0
         ? supabase.from('profiles').select('id, full_name, email, role')
         : Promise.resolve({ data: null }),
+      supabase
+        .from('sporadic_tasks')
+        .select('id, due_date, status, submitted_at, assigned_to')
+        .not('assigned_to', 'is', null),
     ]);
 
     const allProfiles = (profData && profData.length > 0) ? profData : profiles;
@@ -1178,7 +1215,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       const late    = arr.filter(o => o.status === 'done' && o.completed_at && o.completed_at.slice(0,10) > o.due_date).length;
       const missed  = arr.filter(o => o.status !== 'done' && o.due_date < todayStr).length;
       const matured = onTime + late + missed;
-      const score   = matured > 0 ? Math.round((onTime + late * 0.5) / matured * 100) : null;
+      const score   = matured > 0 ? Math.round(onTime / matured * 100) : null;
       return { onTime, late, missed, matured, score };
     }
 
@@ -1188,20 +1225,29 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       byPerson[occ.assigned_to].push(occ);
     });
 
+    const sporadicByPerson = {};
+    (sporadicData || []).forEach(s => {
+      if (!sporadicByPerson[s.assigned_to]) sporadicByPerson[s.assigned_to] = [];
+      sporadicByPerson[s.assigned_to].push({
+        status: s.status === 'submitted' ? 'done' : s.status,
+        completed_at: s.submitted_at,
+        due_date: s.due_date,
+      });
+    });
+
     const rows = allProfiles
       .map(p => {
-        const occs    = byPerson[p.id] || [];
-        const recurring = occs.filter(o => o.task_def?.category);
-        const oneOff    = occs.filter(o => !o.task_def?.category);
-        const occIds    = new Set(occs.map(o => o.id));
-        const pmCount   = Object.entries(pmReminders)
+        const occs     = byPerson[p.id] || [];
+        const sporadic = sporadicByPerson[p.id] || [];
+        const occIds   = new Set(occs.map(o => o.id));
+        const pmCount  = Object.entries(pmReminders)
           .filter(([id]) => occIds.has(id))
           .reduce((s, [, c]) => s + c, 0);
         return {
           profile: p,
-          recurring: calcScore(recurring),
-          oneOff: calcScore(oneOff),
-          combined: calcScore(occs),
+          recurring: calcScore(occs),
+          oneOff: calcScore(sporadic),
+          combined: calcScore([...occs, ...sporadic]),
           pmReminders: pmCount,
         };
       })
@@ -1389,7 +1435,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                     <td style={{ ...tdLeftStyle, fontWeight: 600, borderRight: '1px solid var(--border)' }}>
                       <span style={{ color: 'var(--purple-primary)', textDecoration: 'underline dotted' }}>{fmtName(profile.full_name)}</span>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
-                        {combined.onTime + combined.late + combined.missed + combined.pending} total · click to expand
+                        {combined.matured} total · click to expand
                       </div>
                     </td>
                     <td style={{ ...tdStyle, borderRight: '1px solid var(--border)' }}>
@@ -1748,6 +1794,11 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         }
       };
       const updateNotes = v => setMyTaskNotes(p => ({ ...p, [key]: v }));
+      const saveNotes = async v => {
+        const trimmed = v.trim();
+        await supabase.from('sporadic_tasks').update({ notes: trimmed || null }).eq('id', t.id);
+        setMyTaskOneOffs(prev => prev.map(x => x.id === t.id ? { ...x, notes: trimmed || null } : x));
+      };
       return (
         <div key={t.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px' }}>
@@ -1764,10 +1815,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                   {cls === 'late' && <span style={{ color: '#f59e0b', marginLeft: 4 }}>(late)</span>}
                 </div>
               )}
-              {(resp || isDone) && (
-                <textarea value={notes} onChange={e => updateNotes(e.target.value)} placeholder="Notes (optional)" rows={1}
-                  style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />
-              )}
+              <textarea value={notes} onChange={e => updateNotes(e.target.value)} onBlur={e => saveNotes(e.target.value)} placeholder="Add a note…" rows={1}
+                style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />
               {t.file_url && <div style={{ marginTop: 6 }}><a href={t.file_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: 'var(--purple-primary)', fontWeight: 600 }}>📎 Attachment →</a></div>}
             </div>
           </div>
@@ -1779,9 +1828,11 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     const renderFullGroup = ({ groupName, tasks: groupTasks, dueDate }, bucketId = 'week') => {
       const groupDone = isGroupComplete(groupTasks, groupName, dueDate);
 
+                      const gateTask = groupTasks.find(t => t.conditional_text === 'on_yes');
+                      const gateIdx = gateTask ? groupTasks.indexOf(gateTask) : -1;
+                      const gateResp = gateTask ? vatResponses[vKey(gateTask.id, dueDate)]?.response : null;
                       const isLiveCellGroup = groupName === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time';
-                      const lcParent = isLiveCellGroup ? groupTasks.find(t => t.response_type === 'yes_no') : null;
-                      const lcParentResp = lcParent ? vatResponses[vKey(lcParent.id, dueDate)]?.response : null;
+                      const lcParentResp = isLiveCellGroup ? gateResp : null;
                       const lcSubTasks = isLiveCellGroup ? groupTasks.filter(t => t.response_type === 'checkbox') : [];
                       const lcAllChecked = lcSubTasks.length > 0 && lcSubTasks.every(t => vatResponses[vKey(t.id, dueDate)]?.response === 'checked');
 
@@ -1796,8 +1847,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                               {groupDone && <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--success)', background: '#EAF7F0', padding: '2px 8px', borderRadius: 10, border: '1px solid #A9DFBF' }}>✓ Completed</span>}
                             </div>
                           )}
-                          {groupTasks.map(task => {
-                            if (isLiveCellGroup && task.response_type === 'checkbox' && lcParentResp !== 'yes') return null;
+                          {groupTasks.map((task, taskIdx) => {
+                            if (gateTask && taskIdx > gateIdx && gateResp !== 'yes') return null;
                             const resp = vatResponses[vKey(task.id, dueDate)];
                             const done = resp?.response === 'yes' || resp?.response === 'checked';
                             if (task.response_type === 'placeholder') {
@@ -1828,7 +1879,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                                       <button onClick={() => openTaskDefEditor(task)} title="Edit task" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '1px 3px', display: 'flex', flexShrink: 0, opacity: 0.5 }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}><Pencil size={12} /></button>
                                     </div>
                                     {task.sop_trigger && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px', padding: '2px 7px', background: '#FEF0F0', color: 'var(--danger)', borderRadius: '12px', fontSize: '10px', fontWeight: 600 }}><AlertTriangle size={9} /> {task.conditional_text ? <a href={task.conditional_text} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--danger)', textDecoration: 'underline' }}>SOP</a> : 'SOP'}</span>}
-                                    {!task.sop_trigger && task.conditional_text && !task.conditional_text.startsWith('http') && (
+                                    {!task.sop_trigger && task.conditional_text && !task.conditional_text.startsWith('http') && task.conditional_text !== 'on_yes' && (
                                       <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', margin: '3px 0 0', lineHeight: 1.4 }}>{task.conditional_text}</p>
                                     )}
                                     {vatExisting[task.id] && (
@@ -1990,12 +2041,12 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
     // ── Summary sub-tab ────────────────────────────────────────────────────
     const BUCKET_CONFIG = [
-      { id: 'overdue', label: 'Overdue',       headColor: '#ef4444',              headBg: '#fef2f2',             isActive: true  },
-      { id: 'week',    label: 'This Week',      headColor: 'var(--purple-primary)', headBg: '#f5eefb',             isActive: true  },
-      { id: 'month',   label: 'This Month',     headColor: 'var(--text-primary)',   headBg: 'var(--bg-secondary)', isActive: false },
-      { id: 'three',   label: 'Next 3 Months',  headColor: 'var(--text-secondary)', headBg: 'var(--bg-secondary)', isActive: false },
-      { id: 'beyond',  label: 'Beyond',          headColor: 'var(--text-muted)',     headBg: 'var(--bg-secondary)', isActive: false },
-      { id: 'nodate',  label: 'No Due Date',     headColor: 'var(--text-muted)',     headBg: 'var(--bg-secondary)', isActive: false },
+      { id: 'overdue', label: 'Overdue',       headColor: '#ef4444',              headBg: '#fef2f2',             isActive: true },
+      { id: 'week',    label: 'This Week',      headColor: 'var(--purple-primary)', headBg: '#f5eefb',             isActive: true },
+      { id: 'month',   label: 'This Month',     headColor: 'var(--text-primary)',   headBg: 'var(--bg-secondary)', isActive: true },
+      { id: 'three',   label: 'Next 3 Months',  headColor: 'var(--text-secondary)', headBg: 'var(--bg-secondary)', isActive: true },
+      { id: 'beyond',  label: 'Beyond',          headColor: 'var(--text-muted)',     headBg: 'var(--bg-secondary)', isActive: true },
+      { id: 'nodate',  label: 'No Due Date',     headColor: 'var(--text-muted)',     headBg: 'var(--bg-secondary)', isActive: true },
     ];
 
     const renderSummary = () => (
@@ -2026,7 +2077,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                 <div>
                   {adhocItems.length === 0
                     ? <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '6px 4px' }}>None</div>
-                    : adhocItems.map(t => isActive ? renderOneOffTask(t) : renderCompactAdhoc(t))}
+                    : adhocItems.map(t => renderOneOffTask(t))}
                 </div>
               </div>
             </div>
@@ -2099,7 +2150,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Overall Score</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
                   Based on your assigned tasks: on-time = full credit · late = 50% · missed = 0%<br />
-                  <span style={{ fontStyle: 'italic' }}>Score = (on-time + late × 0.5) ÷ matured tasks × 100 &nbsp;·&nbsp; Future tasks not yet due are excluded until their due date passes</span>
+                  <span style={{ fontStyle: 'italic' }}>Score = on-time ÷ matured tasks × 100 &nbsp;·&nbsp; Late and missed both count as 0. Future tasks not yet due are excluded.</span>
                 </div>
                 <div style={{ fontSize: 52, fontWeight: 900, color: scoreColor(myRow.combined.score), lineHeight: 1 }}>
                   {myRow.combined.score !== null ? myRow.combined.score : '—'}
@@ -2567,14 +2618,16 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
               <div style={{ textAlign: 'center', padding: '40px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>No tasks found.</div>
             ) : (() => {
               const renderSectionGroup = (groupName, groupTasks) => {
+                const gateTask = groupTasks.find(t => t.conditional_text === 'on_yes');
+                const gateIdx = gateTask ? groupTasks.indexOf(gateTask) : -1;
+                const gateResp = gateTask ? vatResponses[gateTask.id]?.response : null;
                 const isLiveCellGroup = groupName === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time';
-                const lcParent = isLiveCellGroup ? groupTasks.find(t => t.response_type === 'yes_no') : null;
-                const lcParentResp = lcParent ? vatResponses[lcParent.id]?.response : null;
+                const lcParentResp = isLiveCellGroup ? gateResp : null;
                 const lcSubTasks = isLiveCellGroup ? groupTasks.filter(t => t.response_type === 'checkbox') : [];
                 const groupKey = groupName || '__ungrouped__';
                 const isOpen = !groupName || vatExpandedGroups.has(groupKey);
                 const toggleGroup = () => setVatExpandedGroups(prev => { const n = new Set(prev); n.has(groupKey) ? n.delete(groupKey) : n.add(groupKey); return n; });
-                const groupVisible = groupTasks.filter(t => !(isLiveCellGroup && t.response_type === 'checkbox' && lcParentResp !== 'yes'));
+                const groupVisible = groupTasks.filter((t, i) => !(gateTask && i > gateIdx && gateResp !== 'yes'));
                 const groupDone = groupVisible.filter(t => {
                   const r = vatResponses[t.id]?.response;
                   if (isLiveCellGroup && t.response_type === 'yes_no' && r === 'no') return true;
@@ -2597,8 +2650,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                     </button>
                     )}
                     {isOpen && <div style={{ padding: groupName ? '10px 12px' : '4px 0', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {groupTasks.map(task => {
-                      if (isLiveCellGroup && task.response_type === 'checkbox' && lcParentResp !== 'yes') return null;
+                    {groupTasks.map((task, taskIdx) => {
+                      if (gateTask && taskIdx > gateIdx && gateResp !== 'yes') return null;
                       const resp = vatResponses[task.id];
                       const done = resp?.response === 'yes' || resp?.response === 'checked';
                       if (task.response_type === 'placeholder') {
@@ -2629,7 +2682,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                                 <button onClick={() => openTaskDefEditor(task)} title="Edit task" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '1px 3px', display: 'flex', flexShrink: 0, opacity: 0.5 }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}><Pencil size={12} /></button>
                               </div>
                               {task.sop_trigger && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px', padding: '2px 7px', background: '#FEF0F0', color: 'var(--danger)', borderRadius: '12px', fontSize: '10px', fontWeight: 600 }}><AlertTriangle size={9} /> {task.conditional_text ? <a href={task.conditional_text} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--danger)', textDecoration: 'underline' }}>SOP</a> : 'SOP'}</span>}
-                              {!task.sop_trigger && task.conditional_text && !task.conditional_text.startsWith('http') && (
+                              {!task.sop_trigger && task.conditional_text && !task.conditional_text.startsWith('http') && task.conditional_text !== 'on_yes' && (
                                 <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', margin: '3px 0 0', lineHeight: 1.4 }}>{task.conditional_text}</p>
                               )}
                               {vatExisting[task.id] && (
