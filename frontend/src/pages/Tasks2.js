@@ -233,8 +233,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
   // ── Wizard state ──────────────────────────────────────────────────────────
   const [step, setStep] = useState(1);
-  const [expandedCats, setExpandedCats] = useState(new Set());
-  const [expandedCadences, setExpandedCadences] = useState(new Set()); // "CAT-freq"
+  const [step1Cat, setStep1Cat] = useState('');
+  const [step1Freq, setStep1Freq] = useState('');
   const [selectedTaskIds, setSelectedTaskIds] = useState(new Set());
   const [expandedGroups, setExpandedGroups] = useState(new Set());
   const [assigneeIds, setAssigneeIds] = useState([]);
@@ -920,14 +920,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     return tasksInLeaf(cat, freq).filter(t => selectedTaskIds.has(t.id));
   }
 
-  function catCheckboxState(cat) {
-    const all = tasks.filter(t => t.category === cat);
-    const sel = all.filter(t => selectedTaskIds.has(t.id));
-    if (sel.length === 0) return 'unchecked';
-    if (sel.length === all.length) return 'checked';
-    return 'indeterminate';
-  }
-
   function getGroupsForLeaf(cat, freq) {
     const groupMap = new Map();
     tasksInLeaf(cat, freq).forEach(t => {
@@ -938,29 +930,21 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     return [...groupMap.values()];
   }
 
-  function handleCatRowClick(cat) {
-    setExpandedCats(prev => { const n = new Set(prev); n.has(cat) ? n.delete(cat) : n.add(cat); return n; });
-  }
-
-  function handleCadenceRowClick(cat, freq) {
-    const key = `${cat}-${freq}`;
-    setExpandedCadences(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  function getAuditAreasForLeaf(cat, freq) {
+    const areaMap = new Map();
+    tasksInLeaf(cat, freq).forEach(t => {
+      const area = t.audit_area || t.group_name || t.title;
+      if (!areaMap.has(area)) areaMap.set(area, { name: area, groupMap: new Map() });
+      const groupKey = t.group_name || t.title;
+      const aEntry = areaMap.get(area);
+      if (!aEntry.groupMap.has(groupKey)) aEntry.groupMap.set(groupKey, { name: groupKey, tasks: [] });
+      aEntry.groupMap.get(groupKey).tasks.push(t);
+    });
+    return [...areaMap.values()].map(a => ({ name: a.name, groups: [...a.groupMap.values()] }));
   }
 
   function handleGroupRowClick(group) {
     setExpandedGroups(prev => { const n = new Set(prev); n.has(group.name) ? n.delete(group.name) : n.add(group.name); return n; });
-  }
-
-  function selectAllCat(cat) {
-    const allIds = tasks.filter(t => t.category === cat).map(t => t.id);
-    const allSelected = allIds.every(id => selectedTaskIds.has(id));
-    setSelectedTaskIds(prev => { const n = new Set(prev); allSelected ? allIds.forEach(id => n.delete(id)) : allIds.forEach(id => n.add(id)); return n; });
-  }
-
-  function selectAllLeaf(cat, freq) {
-    const ids = tasksInLeaf(cat, freq).map(t => t.id);
-    const allSelected = ids.every(id => selectedTaskIds.has(id));
-    setSelectedTaskIds(prev => { const n = new Set(prev); allSelected ? ids.forEach(id => n.delete(id)) : ids.forEach(id => n.add(id)); return n; });
   }
 
   function selectAllGroup(group) {
@@ -1090,7 +1074,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   }
 
   function resetWizard() {
-    setStep(1); setExpandedCats(new Set()); setExpandedCadences(new Set());
+    setStep(1); setStep1Cat(''); setStep1Freq('');
     setSelectedTaskIds(new Set()); setExpandedGroups(new Set());
     setAssigneeIds([]); setRotateEvery(1);
     setDateRanges({}); setFreqSubStep(0); setApplyAllAsked(false);
@@ -2892,148 +2876,142 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
   function renderStep1() {
     const tree = buildTree();
-    const selBtn = { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--purple-primary)', fontSize: 12, padding: '2px 6px', fontWeight: 600, flexShrink: 0, whiteSpace: 'nowrap' };
+    const categories = tree.map(n => n.cat);
+    const activeCat = (step1Cat && categories.includes(step1Cat)) ? step1Cat : categories[0] || '';
+    const catNode = tree.find(n => n.cat === activeCat);
+    const freqs = catNode?.freqs || [];
+    const activeFreq = (step1Freq && freqs.includes(step1Freq)) ? step1Freq : freqs[0] || '';
+    const areas = getAuditAreasForLeaf(activeCat, activeFreq);
 
     return (
       <div>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Select task scope</div>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Select task scope</div>
 
-        <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-          {tree.map((node, ci) => {
-            const { cat, freqs: catFreqs } = node;
-            const isExpanded = expandedCats.has(cat);
-            const cs = catCheckboxState(cat);
-            const catTotal = tasks.filter(t => t.category === cat).length;
-            const catSel = tasks.filter(t => t.category === cat && selectedTaskIds.has(t.id)).length;
-
+        {/* Category tabs */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg-secondary)' }}>
+          {categories.map(cat => {
+            const sel = tasks.filter(t => t.category === cat && selectedTaskIds.has(t.id)).length;
+            const isActive = cat === activeCat;
             return (
-              <div key={cat} style={{ borderBottom: ci < tree.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                {/* Category row — click selects all + expands/collapses */}
-                <div onClick={() => handleCatRowClick(cat)}
-                  style={{ display: 'flex', alignItems: 'center', padding: '13px 16px', gap: 10, cursor: 'pointer', background: cs !== 'unchecked' ? 'rgba(123,63,160,0.03)' : 'var(--bg-primary)', userSelect: 'none' }}>
-                  <input type="checkbox" checked={cs === 'checked'}
-                    ref={el => { if (el) el.indeterminate = cs === 'indeterminate'; }}
-                    onChange={() => {}}
-                    style={{ width: 16, height: 16, accentColor: 'var(--purple-primary)', cursor: 'pointer', flexShrink: 0, pointerEvents: 'none' }} />
-                  <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>
-                    {cat}
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 8 }}>
-                      · {catTotal} task{catTotal !== 1 ? 's' : ''}
-                    </span>
-                    {catSel > 0 && (
-                      <span style={{ fontSize: 12, color: 'var(--purple-primary)', fontWeight: 700, marginLeft: 6 }}>
-                        · {catSel} selected
-                      </span>
-                    )}
-                  </span>
-                  <button onClick={e => { e.stopPropagation(); selectAllCat(cat); }} style={selBtn}>
-                    Select all
-                  </button>
-                </div>
-
-                {/* Cadence rows */}
-                {isExpanded && (
-                  <div style={{ background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)' }}>
-                    {catFreqs.filter(freq => tasksInLeaf(cat, freq).length > 0).map((freq, fi) => {
-                      const leafTasks = tasksInLeaf(cat, freq);
-                      const selCount = selectedInLeaf(cat, freq).length;
-                      const allSel = selCount === leafTasks.length;
-                      const someSel = selCount > 0;
-                      const cadKey = `${cat}-${freq}`;
-                      const isCadExpanded = expandedCadences.has(cadKey);
-                      const groups = getGroupsForLeaf(cat, freq);
-
-                      return (
-                        <div key={freq} style={{ borderTop: fi > 0 ? '1px solid var(--border)' : 'none' }}>
-                          {/* Cadence row */}
-                          <div onClick={() => handleCadenceRowClick(cat, freq)}
-                            style={{ display: 'flex', alignItems: 'center', padding: '9px 16px 9px 34px', gap: 10, cursor: 'pointer', background: someSel ? 'rgba(123,63,160,0.02)' : 'transparent', userSelect: 'none' }}>
-                            <input type="checkbox" checked={allSel}
-                              ref={el => { if (el) el.indeterminate = someSel && !allSel; }}
-                              onChange={() => {}}
-                              style={{ width: 14, height: 14, accentColor: 'var(--purple-primary)', cursor: 'pointer', flexShrink: 0, pointerEvents: 'none' }} />
-                            <span style={{ flex: 1, fontSize: 13 }}>
-                              {FREQ_LABEL[freq]}
-                              <span style={{ color: 'var(--text-muted)', marginLeft: 6, fontSize: 12 }}>
-                                · {leafTasks.length} task{leafTasks.length !== 1 ? 's' : ''}
-                              </span>
-                              {selCount > 0 && (
-                                <span style={{ color: 'var(--purple-primary)', marginLeft: 6, fontSize: 12, fontWeight: 700 }}>
-                                  · {selCount} selected
-                                </span>
-                              )}
-                            </span>
-                            <button onClick={e => { e.stopPropagation(); selectAllLeaf(cat, freq); }} style={selBtn}>
-                              Select all
-                            </button>
-                          </div>
-
-                          {/* Group rows */}
-                          {isCadExpanded && (
-                            <div style={{ background: 'var(--bg-primary)', borderTop: '1px solid var(--border)' }}>
-                              {groups.map((g, gi) => {
-                                const gIds = g.tasks.map(t => t.id);
-                                const gAllSel = gIds.every(id => selectedTaskIds.has(id));
-                                const gSomeSel = gIds.some(id => selectedTaskIds.has(id));
-                                const isGExpanded = expandedGroups.has(g.name);
-
-                                return (
-                                  <div key={g.name} style={{ borderTop: gi > 0 ? '1px solid var(--border)' : 'none' }}>
-                                    {/* Group row */}
-                                    <div onClick={() => handleGroupRowClick(g)}
-                                      style={{ display: 'flex', alignItems: 'center', padding: '8px 16px 8px 52px', gap: 10, cursor: 'pointer', background: gSomeSel ? 'rgba(123,63,160,0.02)' : 'transparent', userSelect: 'none' }}>
-                                      <input type="checkbox" checked={gAllSel}
-                                        ref={el => { if (el) el.indeterminate = gSomeSel && !gAllSel; }}
-                                        onChange={() => {}}
-                                        style={{ width: 13, height: 13, accentColor: 'var(--purple-primary)', cursor: 'pointer', flexShrink: 0, pointerEvents: 'none' }} />
-                                      <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>
-                                        {g.name}
-                                        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 8 }}>
-                                          {g.tasks.length} task{g.tasks.length !== 1 ? 's' : ''}
-                                        </span>
-                                        {gSomeSel && !gAllSel && (
-                                          <span style={{ fontSize: 11, color: 'var(--purple-primary)', fontWeight: 700, marginLeft: 6 }}>
-                                            {gIds.filter(id => selectedTaskIds.has(id)).length}/{g.tasks.length}
-                                          </span>
-                                        )}
-                                      </span>
-                                      <button onClick={e => { e.stopPropagation(); selectAllGroup(g); }} style={selBtn}>
-                                        Select all
-                                      </button>
-                                    </div>
-
-                                    {/* Individual task rows */}
-                                    {isGExpanded && (
-                                      <div style={{ background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)' }}>
-                                        {g.tasks.map(t => (
-                                          <div key={t.id} onClick={() => toggleTask(t.id)}
-                                            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 16px 7px 70px', cursor: 'pointer', borderBottom: '1px solid var(--border)', userSelect: 'none' }}>
-                                            <input type="checkbox" checked={selectedTaskIds.has(t.id)}
-                                              onChange={() => {}}
-                                              style={{ width: 13, height: 13, accentColor: 'var(--purple-primary)', cursor: 'pointer', flexShrink: 0, pointerEvents: 'none' }} />
-                                            <span style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.4 }}>{t.title}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+              <button key={cat} onClick={() => { setStep1Cat(cat); setStep1Freq(''); setExpandedGroups(new Set()); }}
+                style={{ padding: '6px 16px', borderRadius: 20, border: 'none', cursor: 'pointer', userSelect: 'none',
+                         background: isActive ? 'rgba(123,63,160,0.12)' : 'var(--bg-primary)',
+                         color: isActive ? 'var(--purple-primary)' : 'var(--text-primary)',
+                         fontWeight: isActive ? 700 : 500, fontSize: 13,
+                         border: isActive ? '1px solid rgba(123,63,160,0.3)' : '1px solid var(--border)' }}>
+                {cat}
+                {sel > 0 && (
+                  <span style={{ marginLeft: 6, background: 'var(--purple-primary)', color: 'white', borderRadius: 10, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{sel}</span>
                 )}
-              </div>
+              </button>
             );
           })}
         </div>
 
+        {/* Frequency pills */}
+        {freqs.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+            {freqs.map(freq => {
+              const count = tasksInLeaf(activeCat, freq).length;
+              const selCount = selectedInLeaf(activeCat, freq).length;
+              const isActive = freq === activeFreq;
+              return (
+                <button key={freq} onClick={() => { setStep1Freq(freq); setExpandedGroups(new Set()); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 20, cursor: 'pointer', userSelect: 'none',
+                           border: `1px solid ${isActive ? 'var(--purple-primary)' : 'var(--border)'}`,
+                           background: isActive ? 'rgba(123,63,160,0.08)' : 'var(--bg-primary)',
+                           color: isActive ? 'var(--purple-primary)' : 'var(--text-secondary)',
+                           fontWeight: isActive ? 700 : 400, fontSize: 12 }}>
+                  <Clock size={11} />
+                  {FREQ_LABEL[freq]}
+                  <span style={{ background: isActive ? 'var(--purple-primary)' : 'var(--bg-secondary)', color: isActive ? 'white' : 'var(--text-muted)', borderRadius: 10, padding: '1px 6px', fontSize: 11, fontWeight: 700 }}>
+                    {selCount > 0 ? `${selCount}/${count}` : count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Audit area bars → group sub-rows → individual tasks */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {areas.map(area => {
+            const areaAllIds = area.groups.flatMap(g => g.tasks.map(t => t.id));
+            const areaSelCount = areaAllIds.filter(id => selectedTaskIds.has(id)).length;
+            const areaAllSel = areaSelCount === areaAllIds.length;
+            const areaKey = `area::${area.name}`;
+            const isAreaExpanded = expandedGroups.has(areaKey);
+            const selectAllArea = () => {
+              setSelectedTaskIds(prev => { const n = new Set(prev); areaAllSel ? areaAllIds.forEach(id => n.delete(id)) : areaAllIds.forEach(id => n.add(id)); return n; });
+            };
+            return (
+              <div key={area.name} style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(123,63,160,0.3)' }}>
+                {/* Audit area header */}
+                <div onClick={() => setExpandedGroups(prev => { const n = new Set(prev); n.has(areaKey) ? n.delete(areaKey) : n.add(areaKey); return n; })}
+                  style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', gap: 10, cursor: 'pointer', background: 'var(--purple-primary)', color: 'white', userSelect: 'none' }}>
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 700 }}>{area.name}</span>
+                  <span style={{ fontSize: 12, opacity: 0.85 }}>{areaSelCount}/{areaAllIds.length}</span>
+                  <button onClick={e => { e.stopPropagation(); selectAllArea(); }}
+                    style={{ background: 'rgba(255,255,255,0.18)', border: 'none', cursor: 'pointer', color: 'white', fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 6, whiteSpace: 'nowrap' }}>
+                    {areaAllSel ? 'Deselect all' : 'Select all'}
+                  </button>
+                  <ChevronDown size={14} style={{ flexShrink: 0, transform: isAreaExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+                </div>
+
+                {/* Group sub-rows */}
+                {isAreaExpanded && area.groups.map(g => {
+                  const gIds = g.tasks.map(t => t.id);
+                  const gSelCount = gIds.filter(id => selectedTaskIds.has(id)).length;
+                  const gAllSel = gSelCount === gIds.length;
+                  const grpKey = `grp::${area.name}::${g.name}`;
+                  const isGrpExpanded = expandedGroups.has(grpKey);
+                  const isSingleGroup = area.groups.length === 1 && g.name === area.name;
+                  return (
+                    <div key={g.name} style={{ borderTop: '1px solid var(--border)' }}>
+                      {/* Show group header only if there are multiple groups or group name differs from area */}
+                      {!isSingleGroup && (
+                        <div onClick={() => setExpandedGroups(prev => { const n = new Set(prev); n.has(grpKey) ? n.delete(grpKey) : n.add(grpKey); return n; })}
+                          style={{ display: 'flex', alignItems: 'center', padding: '8px 16px 8px 28px', gap: 10, cursor: 'pointer', background: gSelCount > 0 ? 'rgba(123,63,160,0.04)' : 'var(--bg-secondary)', userSelect: 'none' }}>
+                          <ChevronDown size={12} style={{ flexShrink: 0, color: 'var(--text-muted)', transform: isGrpExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+                          <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
+                            {g.name}
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 6 }}>{gIds.length} task{gIds.length !== 1 ? 's' : ''}{gSelCount > 0 ? ` · ${gSelCount} selected` : ''}</span>
+                          </span>
+                          <button onClick={e => { e.stopPropagation(); selectAllGroup(g); }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--purple-primary)', fontSize: 11, fontWeight: 600, padding: '2px 6px', whiteSpace: 'nowrap' }}>
+                            {gAllSel ? 'Deselect all' : 'Select all'}
+                          </button>
+                        </div>
+                      )}
+                      {/* Individual tasks — show when group expanded OR when it's a single group (auto-expand) */}
+                      {(isSingleGroup || isGrpExpanded) && g.tasks.map(t => (
+                        <div key={t.id} onClick={() => toggleTask(t.id)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10,
+                                   padding: isSingleGroup ? '8px 16px 8px 28px' : '7px 16px 7px 48px',
+                                   borderTop: '1px solid var(--border)',
+                                   background: selectedTaskIds.has(t.id) ? 'rgba(123,63,160,0.04)' : 'var(--bg-primary)',
+                                   cursor: 'pointer', userSelect: 'none' }}>
+                          <input type="checkbox" checked={selectedTaskIds.has(t.id)} onChange={() => {}}
+                            style={{ width: 13, height: 13, accentColor: 'var(--purple-primary)', flexShrink: 0, pointerEvents: 'none' }} />
+                          <span style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.4 }}>{t.title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+          {areas.length === 0 && (
+            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, border: '1px dashed var(--border)', borderRadius: 8 }}>
+              No tasks found for this selection
+            </div>
+          )}
+        </div>
+
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 20 }}>
           <span style={{ fontSize: 13, color: selectedTaskIds.size ? 'var(--purple-primary)' : 'var(--text-muted)', fontWeight: selectedTaskIds.size ? 600 : 400 }}>
-            {selectedTaskIds.size > 0 ? `${selectedTaskIds.size} task${selectedTaskIds.size !== 1 ? 's' : ''} selected` : 'No tasks selected — click a row to begin'}
+            {selectedTaskIds.size > 0 ? `${selectedTaskIds.size} task${selectedTaskIds.size !== 1 ? 's' : ''} selected` : 'No tasks selected — use Select all or click individual tasks'}
           </span>
           <button onClick={() => setStep(2)} disabled={!selectedTaskIds.size}
             style={{ ...btn('primary'), opacity: selectedTaskIds.size ? 1 : 0.4 }}>

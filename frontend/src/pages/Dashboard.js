@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle } from 'lucide-react';
+import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle, DollarSign, UserX } from 'lucide-react';
 
 
 function formatDate(d) {
@@ -121,6 +121,9 @@ export default function Dashboard({ profile, userRole, userId }) {
   const canEdit = userRole === 'pm' || userRole === 'admin';
   const isMia = profile?.full_name?.toLowerCase().startsWith('mia');
   const showGrantAlert = isMia || userRole === 'pm';
+  const showLabDash = profile?.can_see_lab_dashboard ?? true;
+  const showLeadershipDash = (profile?.can_see_leadership_dashboard ?? showGrantAlert) && showGrantAlert;
+  const showPersonalDash = profile?.can_see_personal_dashboard ?? true;
 
   // Lab data
   const [outToday, setOutToday] = useState([]);
@@ -134,6 +137,7 @@ export default function Dashboard({ profile, userRole, userId }) {
   const [myTasks, setMyTasks] = useState([]);
   const [myRecurOccs, setMyRecurOccs] = useState([]);
   const [grants, setGrants] = useState([]);
+  const [unassignedTasks, setUnassignedTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [overlapWarning, setOverlapWarning] = useState(null);
 
@@ -199,6 +203,14 @@ export default function Dashboard({ profile, userRole, userId }) {
       showGrantAlert
         ? supabase.from('grants').select('id, name, end_date, total_amount, remaining_balance')
         : Promise.resolve({ data: [] }),
+      // unassigned sporadic tasks (for Mia and PM only)
+      showGrantAlert
+        ? supabase.from('sporadic_tasks')
+            .select('id, title, due_date, status')
+            .is('assigned_to', null)
+            .or('status.is.null,status.in.(pending,in_progress)')
+            .order('due_date')
+        : Promise.resolve({ data: [] }),
       // recur productivity for initial load (bundled so all cards appear together)
       (() => { const { from, to } = prodDateRange('current'); return supabase.from('task_occurrences').select('id, due_date, status, completed_at, assigned_to').not('assigned_to', 'is', null).gte('due_date', from).lte('due_date', to); })(),
     ];
@@ -212,6 +224,7 @@ export default function Dashboard({ profile, userRole, userId }) {
       { data: memberData },
       { data: grantData },
       { data: initRecurOccData },
+      { data: unassignedData },
     ] = await Promise.all(queries);
 
     const allVac = vacData || [];
@@ -225,6 +238,7 @@ export default function Dashboard({ profile, userRole, userId }) {
     setMyRecurOccs(myRecurData || []);
     setTeamMembers(memberData || []);
     setGrants(grantData || []);
+    setUnassignedTasks(unassignedData || []);
     const todayForProd = new Date().toISOString().split('T')[0];
     const byPersonInit = {};
     (initRecurOccData || []).forEach(o => { if (!byPersonInit[o.assigned_to]) byPersonInit[o.assigned_to] = []; byPersonInit[o.assigned_to].push(o); });
@@ -283,6 +297,24 @@ export default function Dashboard({ profile, userRole, userId }) {
     return ids;
   })();
 
+  const tripleVacOverlapInfo = (() => {
+    const all = [...outToday, ...nextWeekOut];
+    const seen = new Set();
+    const deduped = all.filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
+    const result = {};
+    deduped.forEach(r => {
+      const others = deduped.filter(o => o.id !== r.id && o.start_date <= r.end_date && r.start_date <= o.end_date);
+      if (others.length >= 2) {
+        result[r.id] = others.map(o => ({
+          name: o.requester?.full_name || 'Unknown',
+          start: o.start_date > r.start_date ? o.start_date : r.start_date,
+          end: o.end_date < r.end_date ? o.end_date : r.end_date,
+        }));
+      }
+    });
+    return result;
+  })();
+
   const vacRequestOverlapIds = showGrantAlert ? (() => {
     const ids = new Set();
     for (let i = 0; i < myTimeOff.length; i++) {
@@ -328,6 +360,11 @@ export default function Dashboard({ profile, userRole, userId }) {
     return (pct !== null && pct < 25) || (daysLeft !== null && daysLeft <= 90);
   });
 
+  const next7 = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+  const next30 = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+  const unassigned7 = unassignedTasks.filter(t => t.due_date && t.due_date <= next7);
+  const unassigned30 = unassignedTasks.filter(t => t.due_date && t.due_date <= next30);
+
   const STATUS_COLORS = {
     approved: { bg: '#EAF7F0', text: '#27AE60' },
     pending:  { bg: '#FEF9E7', text: '#F39C12' },
@@ -346,256 +383,15 @@ export default function Dashboard({ profile, userRole, userId }) {
       {loading ? (
         <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading...</div>
       ) : (
-        <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', animation: 'fadeIn 0.25s ease both' }}>
-
-          {/* ══ PERSONAL DASHBOARD ══ */}
-          <div style={{ flex: 1, minWidth: 0, order: 2, background: '#FBF8FF', border: '1px solid #E4D9F5', borderRadius: '16px', padding: '20px' }}>
-            <h2 style={{ fontSize: '13px', fontWeight: 800, color: '#7B3FA0', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: '10px', borderLeft: '3px solid #7B3FA0', lineHeight: 1.2, margin: '0 0 16px' }}>Personal Dashboard</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-
-            {/* Grant Alerts — Mia and PM only */}
-            {showGrantAlert && alertGrants.length > 0 && (
-              <div style={{ background: '#FEF9E7', border: '1px solid #FAD7A0', borderRadius: 'var(--radius-md)', padding: '14px 16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
-                  <AlertTriangle size={14} color="#F39C12" />
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#F39C12', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Grant Alerts</span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {alertGrants.map(g => {
-                    const pct = g.total_amount && g.remaining_balance ? (g.remaining_balance / g.total_amount) * 100 : null;
-                    const daysLeft = g.end_date ? Math.ceil((new Date(g.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null;
-                    const urgent = daysLeft !== null && daysLeft <= 14;
-                    return (
-                      <div key={g.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{g.name}</span>
-                        <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                          {pct !== null && pct < 25 && (
-                            <span style={{ padding: '2px 7px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: '#FDEDEC', color: '#E74C3C' }}>
-                              {pct.toFixed(0)}% remaining
-                            </span>
-                          )}
-                          {daysLeft !== null && daysLeft <= 90 && (
-                            <span style={{ padding: '2px 7px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: urgent ? '#FDEDEC' : '#FEF9E7', color: urgent ? '#E74C3C' : '#F39C12' }}>
-                              Expires in {daysLeft}d
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Recurring task status */}
-            <TaskStatusCard
-              icon={<ClipboardList size={13} color="var(--text-primary)" />}
-              title="Recurrent task status"
-              tasks={myRecurOccs}
-              getTitle={t => t.task_def?.title || 'Task'}
-              dateKey="due_date"
-            />
-
-            {/* Ad hoc task status */}
-            <TaskStatusCard
-              icon={<ClipboardList size={13} color="#27AE60" />}
-              title="Ad hoc task status"
-              tasks={myPersonalAdhocTasks}
-              getTitle={t => t.title}
-              dateKey="due_date"
-              upcomingLabel="Upcoming"
-            />
-
-            {/* My time off */}
-            <Card icon={<Palmtree size={13} color="#F39C12" />} title="My time off">
-              {myTimeOff.length === 0 ? (
-                <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No time off requests.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {myTimeOff.map((r, i) => {
-                    const s = STATUS_COLORS[r.status] || STATUS_COLORS.pending;
-                    const hasOverlap = vacRequestOverlapIds.has(r.id);
-                    const tripleInfo = tripleVacRequestOverlapInfo[r.id];
-                    const warningOpen = overlapWarning === `req_${r.id}`;
-                    const openUpward = i >= Math.ceil(myTimeOff.length / 2);
-                    const label = showGrantAlert
-                      ? (r.requester?.full_name || 'Unknown')
-                      : r.leave_type;
-                    return (
-                      <div key={r.id} style={{ position: 'relative' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: hasOverlap ? '#FEF5F5' : undefined }}>
-                          <div style={{ minWidth: 0 }}>
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)' }}>{label}</span>
-                            <p style={{ margin: '1px 0 0', fontSize: '11px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)' }}>
-                              {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
-                            </p>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-                            {tripleInfo ? (
-                              <button
-                                onClick={() => setOverlapWarning(warningOpen ? null : `req_${r.id}`)}
-                                title="3+ members overlapping — click for details"
-                                style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '1px 7px', fontSize: 10, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer' }}>
-                                ⚠ {tripleInfo.length + 1} overlap
-                              </button>
-                            ) : hasOverlap ? (
-                              <span style={{ fontSize: 9, fontWeight: 700, color: '#E74C3C', background: '#FDEDEC', padding: '1px 5px', borderRadius: 6, border: '1px solid #F1948A' }}>OVERLAP</span>
-                            ) : null}
-                            <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.text }}>
-                              {r.status === 'pending' ? 'Pending approval' : r.status.charAt(0).toUpperCase() + r.status.slice(1)}
-                            </span>
-                          </div>
-                        </div>
-                        {warningOpen && tripleInfo && (
-                          <div style={{ position: 'absolute', right: 14, ...(openUpward ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }), zIndex: 50, background: 'white', border: '1px solid #F59E0B', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.12)', padding: '10px 14px', minWidth: 230 }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: '#92400E', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                              ⚠ Overlapping with {label}
-                            </div>
-                            {tripleInfo.map((o, idx) => (
-                              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '4px 0', borderTop: idx > 0 ? '1px solid #FEF3C7' : 'none' }}>
-                                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{o.name}</span>
-                                <span style={{ fontSize: 11, color: '#92400E', whiteSpace: 'nowrap' }}>{formatDate(o.start)}–{formatDate(o.end)}</span>
-                              </div>
-                            ))}
-                            <button onClick={() => setOverlapWarning(null)} style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Dismiss</button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </Card>
-
-
-          </div>
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', animation: 'fadeIn 0.25s ease both' }}>
 
           {/* ══ LAB DASHBOARD ══ */}
-          <div style={{ flex: 1, minWidth: 0, order: 1, background: '#F0F4FF', border: '1px solid #D8E0F5', borderRadius: '16px', padding: '20px' }}>
-            <h2 style={{ fontSize: '13px', fontWeight: 800, color: '#3B5BDB', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px', paddingLeft: '10px', borderLeft: '3px solid #3B5BDB', lineHeight: 1.2, margin: '0 0 16px' }}>Lab Dashboard</h2>
+          {showLabDash && <div style={{ background: '#F0F4FF', border: '1px solid #D8E0F5', borderRadius: '16px', padding: '20px' }}>
+            <h2 style={{ fontSize: '13px', fontWeight: 800, color: '#3B5BDB', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: '10px', borderLeft: '3px solid #3B5BDB', lineHeight: 1.2, margin: '0 0 16px' }}>Lab Dashboard</h2>
             <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
 
-              {/* ── LEFT column ── */}
-              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-
-                {/* Out today */}
-                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-                  <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
-                    <Palmtree size={13} color="#F39C12" />
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Out today</span>
-                  </div>
-                  {outToday.length === 0 ? (
-                    <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>Everyone is in today.</p>
-                  ) : (
-                    <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                      {outToday.map(r => (
-                        <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {r.requester?.full_name}
-                          </span>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                            {formatDate(r.start_date)}{r.start_date !== r.end_date ? `–${formatDate(r.end_date)}` : ''}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Out next 8 weeks */}
-                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-                  <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
-                    <Calendar size={13} color="var(--text-primary)" />
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Out next 8 weeks</span>
-                  </div>
-                  {nextWeekOut.length === 0 ? (
-                    <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No one out in the next 8 weeks.</p>
-                  ) : (
-                    <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                      {nextWeekOut.map(r => {
-                        const hasOverlap = vacOverlapIds.has(r.id);
-                        return (
-                          <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {r.requester?.full_name}
-                            </span>
-                            <span style={{ fontSize: '11px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                              {formatDate(r.start_date)}{r.start_date !== r.end_date ? `–${formatDate(r.end_date)}` : ''}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Upcoming lab meetings */}
-                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-                  <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
-                    <Calendar size={13} color="var(--text-primary)" />
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Upcoming lab meetings</span>
-                  </div>
-                  {labMeetings.length === 0 ? (
-                    <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>None scheduled.</p>
-                  ) : (
-                    <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {labMeetings.map(m => (
-                        <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-                          <div>
-                            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              {new Date(m.meeting_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })}
-                              {m.is_sof && <Star size={10} color="#7B3FA0" fill="#7B3FA0" />}
-                            </div>
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '1px' }}>
-                              {m.presenter?.full_name || m.guest_name || <em>TBD</em>}
-                            </div>
-                          </div>
-                          {m.is_sof && (
-                            <span style={{ padding: '1px 6px', borderRadius: '8px', fontSize: '9px', fontWeight: 700, background: 'var(--purple-faint)', color: 'var(--text-primary)', flexShrink: 0 }}>SOF</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Upcoming ad hoc meetings */}
-                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-                  <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
-                    <Calendar size={13} color="var(--text-primary)" />
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Upcoming ad hoc meetings</span>
-                  </div>
-                  {adhocMeetings.length === 0 ? (
-                    <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>None scheduled.</p>
-                  ) : (
-                    <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {adhocMeetings.map(m => (
-                        <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-                          <div>
-                            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              {new Date(m.meeting_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })}
-                              {m.is_sof && <Star size={10} color="#7B3FA0" fill="#7B3FA0" />}
-                            </div>
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '1px' }}>
-                              {m.presenter?.full_name || m.guest_name || <em>TBD</em>}
-                            </div>
-                          </div>
-                          {m.is_sof && (
-                            <span style={{ padding: '1px 6px', borderRadius: '8px', fontSize: '9px', fontWeight: 700, background: 'var(--purple-faint)', color: 'var(--text-primary)', flexShrink: 0 }}>SOF</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-              </div>
-
-              {/* ── RIGHT column ── */}
-              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-
-                {/* Recurrent lab task productivity */}
+              {/* Col 1 — Recurrent lab task productivity */}
+              <div style={{ flex: '26 1 0', minWidth: 0 }}>
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
                   <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -613,7 +409,7 @@ export default function Dashboard({ profile, userRole, userId }) {
                         </div>
                       ))}
                     </div>
-                    <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>% tasks completed on time</span>
+                    <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>% on time</span>
                   </div>
                   {recurLoading ? (
                     <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Loading…</p>
@@ -625,14 +421,15 @@ export default function Dashboard({ profile, userRole, userId }) {
                     </div>
                   )}
                 </div>
+              </div>
 
-                {/* Ad hoc task productivity */}
+              {/* Col 2 — Ad hoc task productivity */}
+              <div style={{ flex: '35 1 0', minWidth: 0 }}>
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
                   <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 7 }}>
                     <ClipboardList size={13} color="#27AE60" />
                     <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Ad hoc task productivity</span>
                   </div>
-
                   {sortedAdhocTasks.filter(t => t.status !== 'done' && t.status !== 'submitted').length === 0 ? (
                     <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>No upcoming or overdue tasks.</p>
                   ) : (
@@ -663,11 +460,404 @@ export default function Dashboard({ profile, userRole, userId }) {
                     </div>
                   )}
                 </div>
+              </div>
 
+              {/* Col 3 — Out today + Out 8 weeks stacked */}
+              <div style={{ flex: '24 1 0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {/* Out today */}
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                  <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
+                    <Palmtree size={13} color="#F39C12" />
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Out today</span>
+                  </div>
+                  {outToday.length === 0 ? (
+                    <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>Everyone in.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {outToday.map((r, i) => {
+                        const hasOverlap = vacOverlapIds.has(r.id);
+                        const tripleInfo = tripleVacOverlapInfo[r.id];
+                        const warningOpen = overlapWarning === `vac_${r.id}`;
+                        const s = STATUS_COLORS[r.status] || STATUS_COLORS.pending;
+                        return (
+                          <div key={r.id} style={{ position: 'relative' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: hasOverlap ? '#FEF5F5' : undefined }}>
+                              <div style={{ minWidth: 0 }}>
+                                <span style={{ fontSize: '12px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)' }}>{r.requester?.full_name}</span>
+                                <p style={{ margin: '1px 0 0', fontSize: '11px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)' }}>
+                                  {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
+                                </p>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                                {tripleInfo ? (
+                                  <button onClick={() => setOverlapWarning(warningOpen ? null : `vac_${r.id}`)}
+                                    title="3+ members overlapping — click for details"
+                                    style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '1px 7px', fontSize: 10, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer' }}>
+                                    ⚠ {tripleInfo.length + 1} overlap
+                                  </button>
+                                ) : hasOverlap ? (
+                                  <span style={{ fontSize: 9, fontWeight: 700, color: '#E74C3C', background: '#FDEDEC', padding: '1px 5px', borderRadius: 6, border: '1px solid #F1948A' }}>OVERLAP</span>
+                                ) : null}
+                                <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.text }}>
+                                  {r.status === 'pending' ? 'Pending' : r.status.charAt(0).toUpperCase() + r.status.slice(1)}
+                                </span>
+                              </div>
+                            </div>
+                            {warningOpen && tripleInfo && (
+                              <div style={{ position: 'absolute', right: 14, top: '100%', marginTop: 4, zIndex: 50, background: 'white', border: '1px solid #F59E0B', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.12)', padding: '10px 14px', minWidth: 230 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: '#92400E', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>⚠ Overlapping with {r.requester?.full_name}</div>
+                                {tripleInfo.map((o, idx) => (
+                                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '4px 0', borderTop: idx > 0 ? '1px solid #FEF3C7' : 'none' }}>
+                                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{o.name}</span>
+                                    <span style={{ fontSize: 11, color: '#92400E', whiteSpace: 'nowrap' }}>{formatDate(o.start)}–{formatDate(o.end)}</span>
+                                  </div>
+                                ))}
+                                <button onClick={() => setOverlapWarning(null)} style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Dismiss</button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                {/* Out next 8 weeks */}
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                  <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
+                    <Calendar size={13} color="var(--text-primary)" />
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Out — next 8 weeks</span>
+                  </div>
+                  {nextWeekOut.length === 0 ? (
+                    <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>None scheduled.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {nextWeekOut.map((r, i) => {
+                        const hasOverlap = vacOverlapIds.has(r.id);
+                        const tripleInfo = tripleVacOverlapInfo[r.id];
+                        const warningOpen = overlapWarning === `vac_${r.id}`;
+                        const openUpward = i >= Math.ceil(nextWeekOut.length / 2);
+                        const s = STATUS_COLORS[r.status] || STATUS_COLORS.pending;
+                        return (
+                          <div key={r.id} style={{ position: 'relative' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: hasOverlap ? '#FEF5F5' : undefined }}>
+                              <div style={{ minWidth: 0 }}>
+                                <span style={{ fontSize: '12px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)' }}>{r.requester?.full_name}</span>
+                                <p style={{ margin: '1px 0 0', fontSize: '11px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)' }}>
+                                  {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
+                                </p>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                                {tripleInfo ? (
+                                  <button onClick={() => setOverlapWarning(warningOpen ? null : `vac_${r.id}`)}
+                                    title="3+ members overlapping — click for details"
+                                    style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '1px 7px', fontSize: 10, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer' }}>
+                                    ⚠ {tripleInfo.length + 1} overlap
+                                  </button>
+                                ) : hasOverlap ? (
+                                  <span style={{ fontSize: 9, fontWeight: 700, color: '#E74C3C', background: '#FDEDEC', padding: '1px 5px', borderRadius: 6, border: '1px solid #F1948A' }}>OVERLAP</span>
+                                ) : null}
+                                <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.text }}>
+                                  {r.status === 'pending' ? 'Pending' : r.status.charAt(0).toUpperCase() + r.status.slice(1)}
+                                </span>
+                              </div>
+                            </div>
+                            {warningOpen && tripleInfo && (
+                              <div style={{ position: 'absolute', right: 14, ...(openUpward ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }), zIndex: 50, background: 'white', border: '1px solid #F59E0B', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.12)', padding: '10px 14px', minWidth: 230 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: '#92400E', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>⚠ Overlapping with {r.requester?.full_name}</div>
+                                {tripleInfo.map((o, idx) => (
+                                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '4px 0', borderTop: idx > 0 ? '1px solid #FEF3C7' : 'none' }}>
+                                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{o.name}</span>
+                                    <span style={{ fontSize: 11, color: '#92400E', whiteSpace: 'nowrap' }}>{formatDate(o.start)}–{formatDate(o.end)}</span>
+                                  </div>
+                                ))}
+                                <button onClick={() => setOverlapWarning(null)} style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Dismiss</button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Col 4 — Lab meetings + Ad hoc meetings stacked */}
+              <div style={{ flex: '20 1 0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                  <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
+                    <Calendar size={13} color="var(--text-primary)" />
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Lab meetings</span>
+                  </div>
+                  {labMeetings.length === 0 ? (
+                    <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>None scheduled.</p>
+                  ) : (
+                    <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {labMeetings.map(m => (
+                        <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                          <div>
+                            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              {new Date(m.meeting_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })}
+                              {m.is_sof && <Star size={10} color="#7B3FA0" fill="#7B3FA0" />}
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '1px' }}>{m.presenter?.full_name || m.guest_name || <em>TBD</em>}</div>
+                          </div>
+                          {m.is_sof && <span style={{ padding: '1px 6px', borderRadius: '8px', fontSize: '9px', fontWeight: 700, background: 'var(--purple-faint)', color: 'var(--text-primary)', flexShrink: 0 }}>SOF</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                  <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
+                    <Calendar size={13} color="var(--text-primary)" />
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Ad hoc meetings</span>
+                  </div>
+                  {adhocMeetings.length === 0 ? (
+                    <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>None scheduled.</p>
+                  ) : (
+                    <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {adhocMeetings.map(m => (
+                        <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                          <div>
+                            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {new Date(m.meeting_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })}
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '1px' }}>{m.presenter?.full_name || m.guest_name || m.notes || <em>TBD</em>}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
             </div>
-          </div>
+          </div>}
+
+          {/* ══ LEADERSHIP DASHBOARD ══ */}
+          {showLeadershipDash && (
+            <div style={{ background: '#F5FFF8', border: '1px solid #C8EDD8', borderRadius: '16px', padding: '20px' }}>
+              <h2 style={{ fontSize: '13px', fontWeight: 800, color: '#1A7F4B', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: '10px', borderLeft: '3px solid #1A7F4B', lineHeight: 1.2, margin: '0 0 16px' }}>Leadership Dashboard</h2>
+              <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+
+                {/* Grants */}
+                <div style={{ flex: '3 1 0', minWidth: 0 }}>
+                  <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                    <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <DollarSign size={13} color="#1A7F4B" />
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Grants</span>
+                    </div>
+                    {grants.length === 0 ? (
+                      <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No grants on file.</p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        {/* Header row */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 90px 100px', gap: 8, padding: '6px 14px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                          {['Grant', 'Balance', 'Remaining', 'Expires'].map(h => (
+                            <span key={h} style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</span>
+                          ))}
+                        </div>
+                        {grants.map((g, i) => {
+                          const pct = g.total_amount && g.remaining_balance != null ? (g.remaining_balance / g.total_amount) * 100 : null;
+                          const daysLeft = g.end_date ? Math.ceil((new Date(g.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null;
+                          const lowBalance = pct !== null && pct < 25;
+                          const urgent = daysLeft !== null && daysLeft <= 14;
+                          const expiringSoon = daysLeft !== null && daysLeft <= 90;
+                          const rowAlert = lowBalance || urgent;
+                          return (
+                            <div key={g.id} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 90px 100px', gap: 8, padding: '9px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: rowAlert ? '#FEF5F5' : undefined, alignItems: 'center' }}>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: rowAlert ? '#E74C3C' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.name}</span>
+                              <div>
+                                {pct !== null ? (
+                                  <>
+                                    <div style={{ height: 6, borderRadius: 3, background: '#E5E5EA', overflow: 'hidden', marginBottom: 3 }}>
+                                      <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: pct < 10 ? '#E74C3C' : pct < 25 ? '#F39C12' : '#27AE60', borderRadius: 3, transition: 'width 0.3s ease' }} />
+                                    </div>
+                                    <span style={{ fontSize: 10, color: lowBalance ? '#E74C3C' : 'var(--text-muted)' }}>
+                                      ${g.remaining_balance?.toLocaleString()} / ${g.total_amount?.toLocaleString()}
+                                    </span>
+                                  </>
+                                ) : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>}
+                              </div>
+                              <div>
+                                {pct !== null ? (
+                                  <span style={{ padding: '2px 7px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: lowBalance ? '#FDEDEC' : '#EAF7F0', color: lowBalance ? '#E74C3C' : '#27AE60' }}>
+                                    {pct.toFixed(0)}%
+                                  </span>
+                                ) : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>}
+                              </div>
+                              <div>
+                                {daysLeft !== null ? (
+                                  <span style={{ padding: '2px 7px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: urgent ? '#FDEDEC' : expiringSoon ? '#FEF9E7' : 'var(--bg-secondary)', color: urgent ? '#E74C3C' : expiringSoon ? '#F39C12' : 'var(--text-muted)' }}>
+                                    {daysLeft < 0 ? 'Expired' : `${daysLeft}d left`}
+                                  </span>
+                                ) : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Unassigned tasks */}
+                <div style={{ flex: '2 1 0', minWidth: 0 }}>
+                  <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                    <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <UserX size={13} color="#E74C3C" />
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Unassigned tasks</span>
+                    </div>
+                    {/* Stat pills */}
+                    <div style={{ display: 'flex', gap: 10, padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
+                      <div style={{ flex: 1, background: unassigned7.length > 0 ? '#FDEDEC' : '#EAF7F0', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: unassigned7.length > 0 ? '#E74C3C' : '#27AE60' }}>{unassigned7.length}</div>
+                        <div style={{ fontSize: 10, fontWeight: 600, color: unassigned7.length > 0 ? '#E74C3C' : '#27AE60', marginTop: 2 }}>Next 7 days</div>
+                      </div>
+                      <div style={{ flex: 1, background: unassigned30.length > 0 ? '#FEF9E7' : '#EAF7F0', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: unassigned30.length > 0 ? '#F39C12' : '#27AE60' }}>{unassigned30.length}</div>
+                        <div style={{ fontSize: 10, fontWeight: 600, color: unassigned30.length > 0 ? '#F39C12' : '#27AE60', marginTop: 2 }}>Next 30 days</div>
+                      </div>
+                    </div>
+                    {/* Task list */}
+                    {unassignedTasks.length === 0 ? (
+                      <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>All tasks assigned.</p>
+                    ) : (
+                      <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                        {unassignedTasks.map((t, i) => {
+                          const overdue = t.due_date && t.due_date < today;
+                          const in7 = t.due_date && t.due_date <= next7;
+                          return (
+                            <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '7px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: overdue ? '#FEF5F5' : in7 ? '#FFFBF0' : undefined }}>
+                              <span style={{ fontSize: 12, color: overdue ? '#E74C3C' : 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                              {t.due_date && <span style={{ fontSize: 10, color: overdue ? '#E74C3C' : in7 ? '#D68910' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(t.due_date)}</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* ══ PERSONAL DASHBOARD ══ */}
+          {showPersonalDash && <div style={{ background: '#FBF8FF', border: '1px solid #E4D9F5', borderRadius: '16px', padding: '20px' }}>
+            <h2 style={{ fontSize: '13px', fontWeight: 800, color: '#7B3FA0', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: '10px', borderLeft: '3px solid #7B3FA0', lineHeight: 1.2, margin: '0 0 16px' }}>Personal Dashboard</h2>
+
+            {/* Grant Alerts — full width above columns */}
+            {showGrantAlert && alertGrants.length > 0 && (
+              <div style={{ background: '#FEF9E7', border: '1px solid #FAD7A0', borderRadius: 'var(--radius-md)', padding: '14px 16px', marginBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
+                  <AlertTriangle size={14} color="#F39C12" />
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#F39C12', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Grant Alerts</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {alertGrants.map(g => {
+                    const pct = g.total_amount && g.remaining_balance ? (g.remaining_balance / g.total_amount) * 100 : null;
+                    const daysLeft = g.end_date ? Math.ceil((new Date(g.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null;
+                    const urgent = daysLeft !== null && daysLeft <= 14;
+                    return (
+                      <div key={g.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{g.name}</span>
+                        <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                          {pct !== null && pct < 25 && <span style={{ padding: '2px 7px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: '#FDEDEC', color: '#E74C3C' }}>{pct.toFixed(0)}% remaining</span>}
+                          {daysLeft !== null && daysLeft <= 90 && <span style={{ padding: '2px 7px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: urgent ? '#FDEDEC' : '#FEF9E7', color: urgent ? '#E74C3C' : '#F39C12' }}>Expires in {daysLeft}d</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+
+              {/* Col 1 — Recurring task status */}
+              <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                <TaskStatusCard
+                  icon={<ClipboardList size={13} color="var(--text-primary)" />}
+                  title="Recurrent task status"
+                  tasks={myRecurOccs}
+                  getTitle={t => t.task_def?.title || 'Task'}
+                  dateKey="due_date"
+                />
+              </div>
+
+              {/* Col 2 — Ad hoc task status */}
+              <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                <TaskStatusCard
+                  icon={<ClipboardList size={13} color="#27AE60" />}
+                  title="Ad hoc task status"
+                  tasks={myPersonalAdhocTasks}
+                  getTitle={t => t.title}
+                  dateKey="due_date"
+                  upcomingLabel="Upcoming"
+                />
+              </div>
+
+              {/* Col 3 — My time off */}
+              <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                <Card icon={<Palmtree size={13} color="#F39C12" />} title="My time off">
+                  {myTimeOff.length === 0 ? (
+                    <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No time off requests.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {myTimeOff.map((r, i) => {
+                        const s = STATUS_COLORS[r.status] || STATUS_COLORS.pending;
+                        const hasOverlap = vacRequestOverlapIds.has(r.id);
+                        const tripleInfo = tripleVacRequestOverlapInfo[r.id];
+                        const warningOpen = overlapWarning === `req_${r.id}`;
+                        const openUpward = i >= Math.ceil(myTimeOff.length / 2);
+                        const label = showGrantAlert ? (r.requester?.full_name || 'Unknown') : r.leave_type;
+                        return (
+                          <div key={r.id} style={{ position: 'relative' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: hasOverlap ? '#FEF5F5' : undefined }}>
+                              <div style={{ minWidth: 0 }}>
+                                <span style={{ fontSize: '13px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)' }}>{label}</span>
+                                <p style={{ margin: '1px 0 0', fontSize: '11px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)' }}>
+                                  {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
+                                </p>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                                {tripleInfo ? (
+                                  <button onClick={() => setOverlapWarning(warningOpen ? null : `req_${r.id}`)}
+                                    title="3+ members overlapping — click for details"
+                                    style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '1px 7px', fontSize: 10, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer' }}>
+                                    ⚠ {tripleInfo.length + 1} overlap
+                                  </button>
+                                ) : hasOverlap ? (
+                                  <span style={{ fontSize: 9, fontWeight: 700, color: '#E74C3C', background: '#FDEDEC', padding: '1px 5px', borderRadius: 6, border: '1px solid #F1948A' }}>OVERLAP</span>
+                                ) : null}
+                                <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.text }}>
+                                  {r.status === 'pending' ? 'Pending approval' : r.status.charAt(0).toUpperCase() + r.status.slice(1)}
+                                </span>
+                              </div>
+                            </div>
+                            {warningOpen && tripleInfo && (
+                              <div style={{ position: 'absolute', right: 14, ...(openUpward ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }), zIndex: 50, background: 'white', border: '1px solid #F59E0B', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.12)', padding: '10px 14px', minWidth: 230 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: '#92400E', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>⚠ Overlapping with {label}</div>
+                                {tripleInfo.map((o, idx) => (
+                                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '4px 0', borderTop: idx > 0 ? '1px solid #FEF3C7' : 'none' }}>
+                                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{o.name}</span>
+                                    <span style={{ fontSize: 11, color: '#92400E', whiteSpace: 'nowrap' }}>{formatDate(o.start)}–{formatDate(o.end)}</span>
+                                  </div>
+                                ))}
+                                <button onClick={() => setOverlapWarning(null)} style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Dismiss</button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </Card>
+              </div>
+
+            </div>
+          </div>}
 
         </div>
       )}

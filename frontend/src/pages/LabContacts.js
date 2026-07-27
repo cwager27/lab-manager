@@ -25,6 +25,12 @@ const PERMISSIONS = [
   { key: 'can_add_members', label: 'Add Team Members', description: 'Can add new members to the platform' },
 ];
 
+const DASHBOARD_PERMISSIONS = [
+  { key: 'can_see_lab_dashboard', label: 'Lab Dashboard', description: 'Lab-wide productivity, vacations, meetings' },
+  { key: 'can_see_leadership_dashboard', label: 'Leadership Dashboard', description: 'Grants and unassigned tasks' },
+  { key: 'can_see_personal_dashboard', label: 'Personal Dashboard', description: 'Personal task status and time off' },
+];
+
 const EMPTY_CONTACT = {
   first_name: '', last_name: '', role: 'member', title: '', phone: '', email: '',
   personal_email: '', alternative_email: '', address: '', supervisor: '', supervisor_email: '',
@@ -37,6 +43,7 @@ const EMPTY_MEMBER = {
   can_assign_tasks: false, can_approve_sporadic: false,
   can_edit_meetings: false, can_view_finance: true,
   can_edit_samples: true, can_view_contacts: false, can_add_members: false,
+  can_see_lab_dashboard: true, can_see_leadership_dashboard: false, can_see_personal_dashboard: true,
   title: '', personal_email: '', phone: '', address: '',
   emergency_contact_name: '', emergency_contact_phone: '',
   emergency_contact_email: '', emergency_contact_relationship: '',
@@ -606,18 +613,55 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
               </div>
             )}
             {/* Permission toggles */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '8px' }}>
-              {PERMISSIONS.map(perm => (
-                <div key={perm.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-                  <div>
+            <div style={{ marginBottom: '14px' }}>
+              <p style={{ margin: '0 0 8px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Permissions</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '8px' }}>
+                {PERMISSIONS.map(perm => (
+                  <div key={perm.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
                     <p style={{ margin: 0, fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)' }}>{perm.label}</p>
+                    <button onClick={() => onUpdatePermissions(member.id, perm.key, !member[perm.key])}
+                      style={{ width: '36px', height: '20px', borderRadius: '10px', border: 'none', background: member[perm.key] ? 'var(--purple-primary)' : 'var(--border)', cursor: 'pointer', position: 'relative', flexShrink: 0 }}>
+                      <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: 'white', position: 'absolute', top: '3px', left: member[perm.key] ? '19px' : '3px', transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                    </button>
                   </div>
-                  <button onClick={() => onUpdatePermissions(member.id, perm.key, !member[perm.key])}
-                    style={{ width: '36px', height: '20px', borderRadius: '10px', border: 'none', background: member[perm.key] ? 'var(--purple-primary)' : 'var(--border)', cursor: 'pointer', position: 'relative', flexShrink: 0 }}>
-                    <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: 'white', position: 'absolute', top: '3px', left: member[perm.key] ? '19px' : '3px', transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Presenter rotation */}
+            <div style={{ paddingTop: '12px', borderTop: '1px solid var(--border)', marginBottom: '14px' }}>
+              <p style={{ margin: '0 0 8px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Lab Meeting Rotor</p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: `1px solid ${member.is_presenter ? 'rgba(123,63,160,0.3)' : 'var(--border)'}`, maxWidth: 280 }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: member.is_presenter ? 'var(--purple-primary)' : 'var(--text-secondary)' }}>Presenter</p>
+                  <p style={{ margin: '1px 0 0', fontSize: '10px', color: 'var(--text-muted)' }}>Included in the lab meeting rotation</p>
                 </div>
-              ))}
+                <button onClick={() => onUpdatePermissions(member.id, 'is_presenter', !member.is_presenter)}
+                  style={{ width: '36px', height: '20px', borderRadius: '10px', border: 'none', background: member.is_presenter ? 'var(--purple-primary)' : 'var(--border)', cursor: 'pointer', position: 'relative', flexShrink: 0 }}>
+                  <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: 'white', position: 'absolute', top: '3px', left: member.is_presenter ? '19px' : '3px', transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                </button>
+              </div>
+            </div>
+
+            {/* Dashboard access */}
+            <div style={{ paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
+              <p style={{ margin: '0 0 8px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dashboard Access</p>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {DASHBOARD_PERMISSIONS.map(perm => {
+                  const isOn = member[perm.key] !== false;
+                  return (
+                    <div key={perm.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '8px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: `1px solid ${isOn ? 'rgba(123,63,160,0.3)' : 'var(--border)'}`, minWidth: 180 }}>
+                      <div>
+                        <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: isOn ? 'var(--purple-primary)' : 'var(--text-secondary)' }}>{perm.label}</p>
+                        <p style={{ margin: '1px 0 0', fontSize: '10px', color: 'var(--text-muted)' }}>{perm.description}</p>
+                      </div>
+                      <button onClick={() => onUpdatePermissions(member.id, perm.key, !isOn)}
+                        style={{ width: '36px', height: '20px', borderRadius: '10px', border: 'none', background: isOn ? 'var(--purple-primary)' : 'var(--border)', cursor: 'pointer', position: 'relative', flexShrink: 0 }}>
+                        <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: 'white', position: 'absolute', top: '3px', left: isOn ? '19px' : '3px', transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </td>
         </tr>
@@ -772,10 +816,10 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
 
   async function handleUpdateRole(memberId, role) {
     const defaults = {
-      admin: { can_assign_tasks: true, can_approve_sporadic: true, can_edit_meetings: true, can_view_finance: true, can_edit_samples: true, can_view_contacts: true, can_add_members: true },
-      pm: { can_assign_tasks: true, can_approve_sporadic: true, can_edit_meetings: false, can_view_finance: true, can_edit_samples: true, can_view_contacts: true, can_add_members: true },
-      member: { can_assign_tasks: false, can_approve_sporadic: false, can_edit_meetings: false, can_view_finance: true, can_edit_samples: true, can_view_contacts: false, can_add_members: false },
-      intern: { can_assign_tasks: false, can_approve_sporadic: false, can_edit_meetings: false, can_view_finance: false, can_edit_samples: true, can_view_contacts: false, can_add_members: false },
+      admin: { can_assign_tasks: true, can_approve_sporadic: true, can_edit_meetings: true, can_view_finance: true, can_edit_samples: true, can_view_contacts: true, can_add_members: true, can_see_lab_dashboard: true, can_see_leadership_dashboard: true, can_see_personal_dashboard: true },
+      pm: { can_assign_tasks: true, can_approve_sporadic: true, can_edit_meetings: false, can_view_finance: true, can_edit_samples: true, can_view_contacts: true, can_add_members: true, can_see_lab_dashboard: true, can_see_leadership_dashboard: true, can_see_personal_dashboard: true },
+      member: { can_assign_tasks: false, can_approve_sporadic: false, can_edit_meetings: false, can_view_finance: true, can_edit_samples: true, can_view_contacts: false, can_add_members: false, can_see_lab_dashboard: true, can_see_leadership_dashboard: false, can_see_personal_dashboard: true },
+      intern: { can_assign_tasks: false, can_approve_sporadic: false, can_edit_meetings: false, can_view_finance: false, can_edit_samples: true, can_view_contacts: false, can_add_members: false, can_see_lab_dashboard: false, can_see_leadership_dashboard: false, can_see_personal_dashboard: true },
     };
     const oldRole = members.find(m => m.id === memberId)?.role;
     await supabase.from('profiles').update({ role, ...defaults[role] }).eq('id', memberId);
@@ -828,10 +872,10 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
 
   function setDefaultPermissions(role) {
     const defaults = {
-      admin: { can_assign_tasks: true, can_approve_sporadic: true, can_edit_meetings: true, can_view_finance: true, can_edit_samples: true, can_view_contacts: true, can_add_members: true },
-      pm: { can_assign_tasks: true, can_approve_sporadic: true, can_edit_meetings: false, can_view_finance: true, can_edit_samples: true, can_view_contacts: true, can_add_members: true },
-      member: { can_assign_tasks: false, can_approve_sporadic: false, can_edit_meetings: false, can_view_finance: true, can_edit_samples: true, can_view_contacts: false, can_add_members: false },
-      intern: { can_assign_tasks: false, can_approve_sporadic: false, can_edit_meetings: false, can_view_finance: false, can_edit_samples: true, can_view_contacts: false, can_add_members: false },
+      admin: { can_assign_tasks: true, can_approve_sporadic: true, can_edit_meetings: true, can_view_finance: true, can_edit_samples: true, can_view_contacts: true, can_add_members: true, can_see_lab_dashboard: true, can_see_leadership_dashboard: true, can_see_personal_dashboard: true },
+      pm: { can_assign_tasks: true, can_approve_sporadic: true, can_edit_meetings: false, can_view_finance: true, can_edit_samples: true, can_view_contacts: true, can_add_members: true, can_see_lab_dashboard: true, can_see_leadership_dashboard: true, can_see_personal_dashboard: true },
+      member: { can_assign_tasks: false, can_approve_sporadic: false, can_edit_meetings: false, can_view_finance: true, can_edit_samples: true, can_view_contacts: false, can_add_members: false, can_see_lab_dashboard: true, can_see_leadership_dashboard: false, can_see_personal_dashboard: true },
+      intern: { can_assign_tasks: false, can_approve_sporadic: false, can_edit_meetings: false, can_view_finance: false, can_edit_samples: true, can_view_contacts: false, can_add_members: false, can_see_lab_dashboard: false, can_see_leadership_dashboard: false, can_see_personal_dashboard: true },
     };
     setMemberForm(p => ({ ...p, role, ...defaults[role] }));
   }

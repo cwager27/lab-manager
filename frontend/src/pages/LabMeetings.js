@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { fmtName, sortByLast } from '../lib/nameUtils';
 import { Plus, X, Star, AlertTriangle, CheckCircle, ExternalLink } from 'lucide-react';
@@ -50,17 +50,56 @@ function isOnVacationFn(memberId, date, vacations) {
   return vacations.some(v => v.requested_by === memberId && v.start_date <= date && v.end_date >= date);
 }
 
-function getFairPresenter(meetings, members, date, vacations, excludeId = null) {
-  const counts = {};
-  members.forEach(m => { counts[m.id] = 0; });
-  meetings
+function isHoliday(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + 'T12:00:00');
+  const month = d.getMonth() + 1;
+  const day = d.getDate();
+  const year = d.getFullYear();
+  if (month === 7 && day === 4) return 'Independence Day';
+  if (month === 12 && day === 25) return 'Christmas';
+  if (month === 11 && d.getDay() === 4) {
+    const firstDow = new Date(year, 10, 1).getDay();
+    const firstThu = firstDow <= 4 ? 5 - firstDow : 12 - firstDow;
+    if (day === firstThu + 21) return 'Thanksgiving';
+  }
+  return null;
+}
+
+// Rotor: picks presenter who went longest ago (or never) among is_presenter members.
+// Never picks the immediately previous presenter (no back-to-back).
+// `history` = all non-cancelled lab meetings up to (not including) target date.
+function getRotorPresenter(history, presenters, date, vacations, excludeId = null) {
+  if (isHoliday(date)) return null;
+  const valid = history
     .filter(m => m.status !== 'cancelled' && m.presenter_id)
-    .forEach(m => { counts[m.presenter_id] = (counts[m.presenter_id] || 0) + 1; });
-  const available = members.filter(m =>
-    m.id !== excludeId && !isOnVacationFn(m.id, date, vacations)
+    .sort((a, b) => a.meeting_date.localeCompare(b.meeting_date));
+
+  const lastDate = {};
+  valid.forEach(m => { lastDate[m.presenter_id] = m.meeting_date; });
+
+  // The most recent non-cancelled presenter before this date
+  const prevPresenterId = valid.length ? valid[valid.length - 1].presenter_id : null;
+
+  const sortFn = (a, b) => {
+    const la = lastDate[a.id], lb = lastDate[b.id];
+    if (!la && !lb) return (a.full_name || '').localeCompare(b.full_name || '');
+    if (!la) return -1;
+    if (!lb) return 1;
+    return la.localeCompare(lb);
+  };
+
+  // Prefer someone who isn't the previous presenter
+  const preferred = presenters.filter(p =>
+    p.id !== excludeId && p.id !== prevPresenterId && !isOnVacationFn(p.id, date, vacations)
   );
-  if (!available.length) return null;
-  return [...available].sort((a, b) => (counts[a.id] || 0) - (counts[b.id] || 0))[0];
+  if (preferred.length) return [...preferred].sort(sortFn)[0];
+
+  // Fallback: allow previous presenter only if no one else is available
+  const fallback = presenters.filter(p =>
+    p.id !== excludeId && !isOnVacationFn(p.id, date, vacations)
+  );
+  return fallback.length ? [...fallback].sort(sortFn)[0] : null;
 }
 
 export default function LabMeetings({ userRole, userId, profile }) {
@@ -83,6 +122,8 @@ export default function LabMeetings({ userRole, userId, profile }) {
 
   const canEdit = userRole === 'pm' || profile?.full_name?.toLowerCase().startsWith('mia');
   const today = new Date().toISOString().split('T')[0];
+  const presenters = members.filter(m => m.is_presenter);
+  const fixingRef = useRef(false);
 
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -91,6 +132,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
       supabase.from('profiles').select('*').order('full_name'),
       supabase.from('vacation_requests').select('*').eq('status', 'approved'),
     ]);
+    if (fixingRef.current) return; // suppress realtime updates while fixRotation is writing
     const all = allMeetings || [];
     setLabMeetings(all.filter(m => m.meeting_type !== 'adhoc_meeting'));
     setAdhocMeetings(all.filter(m => m.meeting_type === 'adhoc_meeting'));
@@ -171,17 +213,136 @@ export default function LabMeetings({ userRole, userId, profile }) {
 
     setEditingCell(null);
     setCellValue('');
+
+    // After a lab presenter swap, re-sequence all future TBD lab meetings
+    if (field === 'presenter_id' && table === 'lab' && value !== (meeting.presenter_id || '')) {
+      const updatedAll = [...labMeetings, ...adhocMeetings].map(m =>
+        m.id === id ? { ...m, presenter_id: update.presenter_id ?? null, guest_name: update.guest_name ?? null } : m
+      );
+      await resequenceFutureMeetings(meeting.meeting_date, updatedAll);
+    }
+
     fetchData(true);
+  }
+
+  // Full reset from a chosen date: clears and re-runs the cycle, leaving earlier meetings untouched.
+  async function fixRotation() {
+    const fromDate = window.prompt(
+      'Re-assign all lab meetings from this date onwards (YYYY-MM-DD).\n\nMeetings before this date are left untouched.',
+      today
+    );
+    if (!fromDate || !/^\d{4}-\d{2}-\d{2}$/.test(fromDate.trim())) return;
+    const cleanDate = fromDate.trim();
+
+    const pool = presenters.length ? presenters : members;
+    if (!pool.length) { alert('No members found. Please refresh and try again.'); return; }
+
+    const toFix = labMeetings
+      .filter(m => m.status === 'scheduled' && m.meeting_date >= cleanDate)
+      .sort((a, b) => a.meeting_date.localeCompare(b.meeting_date));
+    if (!toFix.length) { alert(`No scheduled meetings found on or after ${cleanDate}.`); return; }
+
+    // Compute planned assignments first (preview before writing)
+    let working = labMeetings.map(m =>
+      toFix.find(f => f.id === m.id) ? { ...m, presenter_id: null } : m
+    );
+    const plan = [];
+    for (const mtg of toFix) {
+      const holiday = isHoliday(mtg.meeting_date);
+      if (holiday) { plan.push({ mtg, next: null, holiday }); continue; }
+      const history = working.filter(m => m.meeting_date < mtg.meeting_date);
+      const next = getRotorPresenter(history, pool, mtg.meeting_date, vacations);
+      plan.push({ mtg, next, holiday: null });
+      if (next) working = working.map(m => m.id === mtg.id ? { ...m, presenter_id: next.id } : m);
+    }
+
+    const preview = plan.slice(0, 12).map(({ mtg, next, holiday }) =>
+      `${mtg.meeting_date}: ${holiday ? `🏖 ${holiday}` : (next?.full_name || 'TBD (no one available)')}`
+    ).join('\n');
+    const poolNames = pool.map(p => p.full_name).join(', ');
+    if (!window.confirm(
+      `Pool (${pool.length}): ${poolNames}\n\nPlanned assignments:\n${preview}${plan.length > 12 ? `\n…and ${plan.length - 12} more` : ''}\n\nApply?`
+    )) return;
+
+    // Lock out realtime-triggered fetchData calls during writes so they can't clobber the result
+    fixingRef.current = true;
+    setSaving(true);
+    try {
+      await Promise.all(toFix.map(m =>
+        supabase.from('lab_meetings').update({ presenter_id: null, updated_at: new Date().toISOString() }).eq('id', m.id)
+      ));
+      await Promise.all(plan
+        .filter(({ next }) => next)
+        .map(({ mtg, next }) =>
+          supabase.from('lab_meetings').update({ presenter_id: next.id, updated_at: new Date().toISOString() }).eq('id', mtg.id)
+        )
+      );
+    } finally {
+      fixingRef.current = false;
+      setSaving(false);
+    }
+
+    // One clean fetch now that all writes are committed and the lock is released
+    await fetchData(true);
+  }
+
+  // Re-assigns all future TBD lab meetings in cycle order after a change.
+  async function resequenceFutureMeetings(fromDate, updatedMeetings) {
+    const pool = presenters.length ? presenters : members;
+    if (!pool.length) return;
+    const futureTbd = updatedMeetings
+      .filter(m => m.meeting_type !== 'adhoc_meeting' && m.status === 'scheduled' && !m.presenter_id && m.meeting_date >= fromDate)
+      .sort((a, b) => a.meeting_date.localeCompare(b.meeting_date));
+    if (!futureTbd.length) return;
+    let working = [...updatedMeetings];
+    for (const mtg of futureTbd) {
+      if (isHoliday(mtg.meeting_date)) continue;
+      const history = working.filter(m => m.meeting_type !== 'adhoc_meeting' && m.meeting_date < mtg.meeting_date);
+      const next = getRotorPresenter(history, pool, mtg.meeting_date, vacations);
+      if (next) {
+        await supabase.from('lab_meetings').update({ presenter_id: next.id, updated_at: new Date().toISOString() }).eq('id', mtg.id);
+        working = working.map(m => m.id === mtg.id ? { ...m, presenter_id: next.id } : m);
+      }
+    }
   }
 
   async function handleCancelMeeting(id, table) {
     const meeting = getMeetings(table).find(m => m.id === id);
-    await supabase.from(tblName()).update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', id);
+    if (!meeting) return;
+
+    // Cancel the meeting and clear presenter so it doesn't count in rotation history
+    await supabase.from(tblName()).update({
+      status: 'cancelled', presenter_id: null, updated_at: new Date().toISOString(),
+    }).eq('id', id);
+
     await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/meeting-cancelled`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meetingDate: meeting?.meeting_date, cancelledByName: profile?.full_name }),
+      body: JSON.stringify({ meetingDate: meeting.meeting_date, cancelledByName: profile?.full_name }),
     });
-    fetchData(true);
+
+    if (table === 'lab' && meeting.presenter_id && meeting.meeting_date) {
+      // Shift: cancelled presenter moves to next slot, everyone else pushes down one
+      const futureSlots = labMeetings
+        .filter(m => m.id !== id && m.status === 'scheduled' && m.meeting_date > meeting.meeting_date && !isHoliday(m.meeting_date))
+        .sort((a, b) => a.meeting_date.localeCompare(b.meeting_date));
+
+      if (futureSlots.length > 0) {
+        const newQueue = [meeting.presenter_id, ...futureSlots.map(m => m.presenter_id).filter(Boolean)];
+        const ts = new Date().toISOString();
+        fixingRef.current = true;
+        try {
+          await Promise.all(
+            futureSlots.map((m, i) =>
+              supabase.from('lab_meetings').update({ presenter_id: newQueue[i] ?? null, updated_at: ts }).eq('id', m.id)
+            )
+          );
+        } finally {
+          fixingRef.current = false;
+        }
+      }
+    }
+
+    await fetchData(true);
   }
 
   async function commitZoomInfo(meetingId, fields) {
@@ -199,7 +360,10 @@ export default function LabMeetings({ userRole, userId, profile }) {
     const meetings = getMeetings(showAddForm);
     let presenterId = newMeeting.presenter_id || null;
     if (!presenterId && newMeeting.presenter_id !== 'guest') {
-      const fair = getFairPresenter(meetings, members, newMeeting.meeting_date, vacations);
+      const pool = showAddForm === 'lab' ? (presenters.length ? presenters : members) : members;
+      const fair = showAddForm === 'lab'
+        ? getRotorPresenter(labMeetings, pool, newMeeting.meeting_date, vacations)
+        : getRotorPresenter(meetings, pool, newMeeting.meeting_date, vacations);
       if (fair) presenterId = fair.id;
     }
 
@@ -252,10 +416,9 @@ export default function LabMeetings({ userRole, userId, profile }) {
     const statusStyle = STATUS_STYLES[meeting.status] || STATUS_STYLES.scheduled;
     const isPast = meeting.meeting_date < today;
     const isAdhoc = table === 'adhoc';
-    const gridTemplate = isAdhoc ? '70px 1fr 130px 80px 1fr 48px 140px 22px' : '74px 1fr 28px 80px 1fr 22px';
-    const awayMembers = isAdhoc
-      ? members.filter(m => vacations.some(v => v.requested_by === m.id && v.start_date <= meeting.meeting_date && v.end_date >= meeting.meeting_date))
-      : [];
+    const gridTemplate = isAdhoc ? '70px 1fr 130px 80px 1fr 48px 140px 22px' : '74px 1fr 28px 80px 1fr 1fr 22px';
+    const awayMembers = members.filter(m => vacations.some(v => v.requested_by === m.id && v.start_date <= meeting.meeting_date && v.end_date >= meeting.meeting_date));
+    const holiday = !isAdhoc ? isHoliday(meeting.meeting_date) : null;
 
     return (
       <div key={meeting.id} style={{
@@ -315,7 +478,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
                 onBlur={() => { if (cellValue !== 'guest') setEditingCell(null); }}
                 style={{ fontSize: '12px', padding: '2px 3px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%' }}>
                 <option value="">TBD</option>
-                {members.map(m => {
+                {(isAdhoc ? members : (presenters.length ? presenters : members)).map(m => {
                   const ov = isOnVacationFn(m.id, meeting.meeting_date, vacations);
                   return <option key={m.id} value={m.id}>{fmtName(m.full_name)}{ov ? ' ⚠' : ''}</option>;
                 })}
@@ -387,9 +550,9 @@ export default function LabMeetings({ userRole, userId, profile }) {
           <div style={{ overflow: 'hidden', minWidth: 0 }}>
             {awayMembers.length > 0 ? (
               <span
-                title={awayMembers.map(m => m.full_name).join(', ')}
+                title={awayMembers.map(m => m.full_name).join(' · ')}
                 style={{ fontSize: '10px', color: '#E67E22', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {awayMembers.map(m => fmtName(m.full_name)).join(', ')}
+                {awayMembers.map(m => m.full_name?.split(' ').pop() || m.full_name).join(', ')}
               </span>
             ) : (
               <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>—</span>
@@ -438,6 +601,22 @@ export default function LabMeetings({ userRole, userId, profile }) {
               <span onClick={() => setEditingZoomInfo({ meetingId: meeting.id, fields: [{ key: 'Meeting ID', value: '', customKey: '' }] })}
                 style={{ cursor: 'pointer', fontSize: '9px', color: 'var(--text-muted)', fontStyle: 'italic' }}>+ info</span>
             ) : null}
+          </div>
+        )}
+
+        {/* Away (lab only) */}
+        {!isAdhoc && (
+          <div style={{ overflow: 'hidden', minWidth: 0 }}>
+            {holiday ? (
+              <span style={{ fontSize: '10px', color: '#E74C3C', fontWeight: 600 }}>🏖 {holiday}</span>
+            ) : awayMembers.length > 0 ? (
+              <span title={awayMembers.map(m => m.full_name).join(' · ')}
+                style={{ fontSize: '10px', color: '#E67E22', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {awayMembers.map(m => m.full_name?.split(' ').pop() || m.full_name).join(', ')}
+              </span>
+            ) : (
+              <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>—</span>
+            )}
           </div>
         )}
 
@@ -507,10 +686,18 @@ export default function LabMeetings({ userRole, userId, profile }) {
             )}
           </div>
           {canEdit && (
-            <button onClick={() => { setShowAddForm(table); setNewMeeting(EMPTY_MEETING); }}
-              style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 10px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '12px' }}>
-              <Plus size={12} /> Add
-            </button>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              {isLab && (
+                <button onClick={fixRotation}
+                  style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 10px', background: 'transparent', color: 'var(--purple-primary)', border: '1px solid var(--purple-primary)', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '12px', cursor: 'pointer' }}>
+                  Fix Rotation
+                </button>
+              )}
+              <button onClick={() => { setShowAddForm(table); setNewMeeting(EMPTY_MEETING); }}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 10px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '12px' }}>
+                <Plus size={12} /> Add
+              </button>
+            </div>
           )}
         </div>
 
@@ -540,13 +727,13 @@ export default function LabMeetings({ userRole, userId, profile }) {
         </div>
 
         {/* Column headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: isLab ? '74px 1fr 28px 80px 1fr 22px' : '70px 1fr 130px 80px 1fr 48px 140px 22px', gap: isLab ? '6px' : '8px', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', marginBottom: '4px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isLab ? '74px 1fr 28px 80px 1fr 1fr 22px' : '70px 1fr 130px 80px 1fr 48px 140px 22px', gap: isLab ? '6px' : '8px', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', marginBottom: '4px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           <span>Date</span>
           {!isLab && <span>Description</span>}
           <span>Presenter</span>
           {isLab && <span>SOF</span>}
           <span>Status</span>
-          {!isLab && <span>Away</span>}
+          <span>Away</span>
           {!isLab && <span>Zoom Link</span>}
           {!isLab && <span>Zoom Info</span>}
           {isLab && <span>Notes</span>}
@@ -562,10 +749,20 @@ export default function LabMeetings({ userRole, userId, profile }) {
     );
   }
 
-  // Suggested presenter for add form
+  // Suggested presenter for add form — uses rotor for lab, fair-count for adhoc
   const suggested = showAddForm && newMeeting.meeting_date
-    ? getFairPresenter(getMeetings(showAddForm), members, newMeeting.meeting_date, vacations)
+    ? showAddForm === 'lab'
+      ? getRotorPresenter(labMeetings, presenters.length ? presenters : members, newMeeting.meeting_date, vacations)
+      : (() => {
+          const pool = members;
+          const counts = {};
+          pool.forEach(m => { counts[m.id] = 0; });
+          adhocMeetings.filter(m => m.status !== 'cancelled' && m.presenter_id).forEach(m => { counts[m.presenter_id] = (counts[m.presenter_id] || 0) + 1; });
+          const avail = pool.filter(m => !isOnVacationFn(m.id, newMeeting.meeting_date, vacations));
+          return avail.length ? [...avail].sort((a, b) => (counts[a.id] || 0) - (counts[b.id] || 0))[0] : null;
+        })()
     : null;
+  const suggestedHoliday = showAddForm === 'lab' && newMeeting.meeting_date ? isHoliday(newMeeting.meeting_date) : null;
 
   return (
     <div>
@@ -613,7 +810,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
                   }}
                   style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none' }}>
                   <option value="">{suggested ? `Auto: ${fmtName(suggested.full_name)}` : 'Select…'}</option>
-                  {members.map(m => {
+                  {(showAddForm === 'lab' ? (presenters.length ? presenters : members) : members).map(m => {
                     const ov = isOnVacationFn(m.id, newMeeting.meeting_date, vacations);
                     return <option key={m.id} value={m.id}>{fmtName(m.full_name)}{ov ? ' ⚠ out' : ''}</option>;
                   })}
@@ -711,6 +908,11 @@ export default function LabMeetings({ userRole, userId, profile }) {
               </>
             )}
 
+            {suggestedHoliday && (
+              <div style={{ background: '#FDEDEC', border: '1px solid #F1948A', borderRadius: 'var(--radius-md)', padding: '8px 12px', marginBottom: '14px', fontSize: '12px', color: '#E74C3C', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <AlertTriangle size={13} /> This date falls on {suggestedHoliday} — lab meetings are not scheduled on holidays.
+              </div>
+            )}
             {vacWarn && (
               <div style={{ background: '#FEF9E7', border: '1px solid #FAD7A0', borderRadius: 'var(--radius-md)', padding: '8px 12px', marginBottom: '14px', fontSize: '12px', color: '#E67E22', display: 'flex', gap: '6px', alignItems: 'center' }}>
                 <AlertTriangle size={13} /> {vacWarn}

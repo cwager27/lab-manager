@@ -17,6 +17,10 @@ CREATE TABLE IF NOT EXISTS profiles (
   can_edit_samples    boolean DEFAULT false,
   can_view_contacts   boolean DEFAULT false,
   can_add_members     boolean DEFAULT false,
+  can_see_lab_dashboard        boolean DEFAULT true,
+  can_see_leadership_dashboard boolean DEFAULT false,
+  can_see_personal_dashboard   boolean DEFAULT true,
+  is_presenter                 boolean DEFAULT false,
   created_at          timestamptz DEFAULT now()
 );
 
