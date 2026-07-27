@@ -310,12 +310,16 @@ export default function LabMeetings({ userRole, userId, profile }) {
     const meeting = getMeetings(table).find(m => m.id === id);
     if (!meeting) return;
 
-    // Cancel the meeting and clear presenter so it doesn't count in rotation history
-    await supabase.from(tblName()).update({
+    // Optimistic update: reflect cancellation in UI immediately
+    const setter = table === 'lab' ? setLabMeetings : setAdhocMeetings;
+    setter(prev => prev.map(m => m.id === id ? { ...m, status: 'cancelled', presenter_id: null } : m));
+
+    // Persist cancellation to DB
+    supabase.from(tblName()).update({
       status: 'cancelled', presenter_id: null, updated_at: new Date().toISOString(),
     }).eq('id', id);
 
-    await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/meeting-cancelled`, {
+    fetch(`${process.env.REACT_APP_BACKEND_URL}/api/meeting-cancelled`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ meetingDate: meeting.meeting_date, cancelledByName: profile?.full_name }),
     });
@@ -329,20 +333,32 @@ export default function LabMeetings({ userRole, userId, profile }) {
       if (futureSlots.length > 0) {
         const newQueue = [meeting.presenter_id, ...futureSlots.map(m => m.presenter_id).filter(Boolean)];
         const ts = new Date().toISOString();
-        fixingRef.current = true;
-        try {
-          await Promise.all(
-            futureSlots.map((m, i) =>
-              supabase.from('lab_meetings').update({ presenter_id: newQueue[i] ?? null, updated_at: ts }).eq('id', m.id)
-            )
-          );
-        } finally {
-          fixingRef.current = false;
-        }
-      }
-    }
 
-    await fetchData(true);
+        // Optimistic: update shifted assignments in local state immediately
+        setLabMeetings(prev => prev.map(m => {
+          const idx = futureSlots.findIndex(f => f.id === m.id);
+          if (idx === -1) return m;
+          const newPresenterId = newQueue[idx] ?? null;
+          const presenter = newPresenterId ? members.find(mb => mb.id === newPresenterId) ?? null : null;
+          return { ...m, presenter_id: newPresenterId, presenter: presenter ? { id: presenter.id, full_name: presenter.full_name, email: presenter.email } : null };
+        }));
+
+        // Persist shift to DB in background
+        fixingRef.current = true;
+        Promise.all(
+          futureSlots.map((m, i) =>
+            supabase.from('lab_meetings').update({ presenter_id: newQueue[i] ?? null, updated_at: ts }).eq('id', m.id)
+          )
+        ).finally(() => {
+          fixingRef.current = false;
+          fetchData(true);
+        });
+      } else {
+        fetchData(true);
+      }
+    } else {
+      fetchData(true);
+    }
   }
 
   async function commitZoomInfo(meetingId, fields) {
