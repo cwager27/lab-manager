@@ -143,17 +143,21 @@ function AdminContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, o
           </div>
         </td>
         <td style={{ padding: '10px 14px', fontSize: '12px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            {contact.email ? <a href={`mailto:${contact.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{contact.email}</a> : <span style={{ color: 'var(--text-secondary)' }}>—</span>}
-            {contact.personal_email && <a href={`mailto:${contact.personal_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}><Mail size={10} />{contact.personal_email}</a>}
-          </div>
+          {contact.email ? <a href={`mailto:${contact.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{contact.email}</a> : <span style={{ color: 'var(--text-secondary)' }}>—</span>}
         </td>
+        <td style={{ padding: '10px 14px', fontSize: '12px' }}>
+          {contact.personal_email ? <a href={`mailto:${contact.personal_email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{contact.personal_email}</a> : <span style={{ color: 'var(--text-secondary)' }}>—</span>}
+        </td>
+        {canViewPersonalPhone && (
+          <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
+            {contact.phone ? <a href={`tel:${contact.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.phone}</a> : '—'}
+          </td>
+        )}
         <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
-          {contact.phone ? <a href={`tel:${contact.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.phone}</a> : '—'}
+          {contact.alternative_email ? <a href={`tel:${contact.alternative_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.alternative_email}</a> : '—'}
         </td>
-        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>—</td>
-        {canViewPersonalPhone && <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>—</td>}
-        {canViewPersonalPhone && <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>{contact.address || '—'}</td>}
+        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>{contact.address || '—'}</td>
+        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: 220 }}>{contact.notes || '—'}</td>
         {canManage && (
           <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
             <div style={{ display: 'flex', gap: '4px' }}>
