@@ -432,14 +432,14 @@ export default function LabMeetings({ userRole, userId, profile }) {
     const statusStyle = STATUS_STYLES[meeting.status] || STATUS_STYLES.scheduled;
     const isPast = meeting.meeting_date < today;
     const isAdhoc = table === 'adhoc';
-    const gridTemplate = isAdhoc ? '70px 1fr 130px 80px 1fr 48px 140px 22px' : '74px 1fr 28px 80px 1fr 1fr 22px';
+    const gridTemplate = isAdhoc ? '70px 1fr 120px 80px 80px 48px 1fr 22px' : '74px 1fr 28px 80px 1fr 1fr 22px';
     const awayMembers = members.filter(m => vacations.some(v => v.requested_by === m.id && v.start_date <= meeting.meeting_date && v.end_date >= meeting.meeting_date));
     const holiday = !isAdhoc ? isHoliday(meeting.meeting_date) : null;
 
     return (
       <div key={meeting.id} style={{
         display: 'grid', gridTemplateColumns: gridTemplate,
-        gap: isAdhoc ? '8px' : '6px', padding: '5px 8px', alignItems: 'center',
+        gap: isAdhoc ? '8px' : '6px', padding: '5px 8px', alignItems: isAdhoc ? 'start' : 'center',
         background: (!isAdhoc && meeting.is_sof) ? 'var(--purple-faint)' : 'var(--bg-card)',
         border: `1px solid ${(!isAdhoc && meeting.is_sof) ? 'var(--purple-border)' : 'var(--border)'}`,
         borderRadius: 'var(--radius-sm)', marginBottom: '3px', fontSize: '12px',
@@ -603,17 +603,29 @@ export default function LabMeetings({ userRole, userId, profile }) {
           </div>
         )}
 
-        {/* Zoom Info (adhoc only) */}
+        {/* Zoom Info (adhoc only) — each field on its own line */}
         {isAdhoc && (
-          <div style={{ overflow: 'hidden', minWidth: 0 }}>
-            {meeting.zoom_info ? (
-              <span
-                onClick={() => canEdit && setEditingZoomInfo({ meetingId: meeting.id, fields: parseZoomInfo(meeting.zoom_info) })}
-                title={canEdit ? 'Click to edit' : formatZoomInfo(meeting.zoom_info)}
-                style={{ cursor: canEdit ? 'pointer' : 'default', fontSize: '10px', color: 'var(--text-secondary)', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {formatZoomInfo(meeting.zoom_info)}
-              </span>
-            ) : canEdit ? (
+          <div style={{ minWidth: 0 }}>
+            {meeting.zoom_info ? (() => {
+              let fields = [];
+              try { fields = JSON.parse(meeting.zoom_info).filter(f => f.value); } catch {}
+              return (
+                <div
+                  onClick={() => canEdit && setEditingZoomInfo({ meetingId: meeting.id, fields: parseZoomInfo(meeting.zoom_info) })}
+                  style={{ cursor: canEdit ? 'pointer' : 'default' }}>
+                  {fields.map((f, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 4, lineHeight: 1.6 }}>
+                      <span style={{ fontSize: '9px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        {ZOOM_SHORT[f.key] || f.key}:
+                      </span>
+                      <span style={{ fontSize: '10px', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
+                        {f.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })() : canEdit ? (
               <span onClick={() => setEditingZoomInfo({ meetingId: meeting.id, fields: [{ key: 'Meeting ID', value: '', customKey: '' }] })}
                 style={{ cursor: 'pointer', fontSize: '9px', color: 'var(--text-muted)', fontStyle: 'italic' }}>+ info</span>
             ) : null}
@@ -743,7 +755,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
         </div>
 
         {/* Column headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: isLab ? '74px 1fr 28px 80px 1fr 1fr 22px' : '70px 1fr 130px 80px 1fr 48px 140px 22px', gap: isLab ? '6px' : '8px', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', marginBottom: '4px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isLab ? '74px 1fr 28px 80px 1fr 1fr 22px' : '70px 1fr 120px 80px 80px 48px 1fr 22px', gap: isLab ? '6px' : '8px', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', marginBottom: '4px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           <span>Date</span>
           {!isLab && <span>Description</span>}
           <span>Presenter</span>

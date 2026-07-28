@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import * as XLSX from 'xlsx';
 import {
   Plus, Edit2, Trash2, Phone, Mail,
   Shield, Key, Eye, EyeOff,
-  ChevronDown, ChevronUp, Search, CheckCircle, XCircle
+  ChevronDown, ChevronUp, Search, CheckCircle, XCircle, Download
 } from 'lucide-react';
 
 const ROLE_LABELS = { admin: 'Supervisor', pm: 'Program Manager', member: 'Lab Member', intern: 'Intern', external: 'NYU Contact' };
@@ -996,6 +997,95 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
     if (c.full_name) memberExtraMap[c.full_name.toLowerCase().trim()] = c;
   });
 
+  function handleExport() {
+    const wb = XLSX.utils.book_new();
+
+    // Admin sheet
+    const adminRows = filteredAdminContacts.map(c => ({
+      'Name': getDisplayName(c),
+      'Title': c.title || '',
+      'Work Email': c.email || '',
+      'Work Phone': c.alternative_email || '',
+      'Personal Phone': c.phone || '',
+      'Office / Dept': c.address || '',
+      'Responsibilities': c.notes || '',
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(adminRows), 'Admin Contacts');
+
+    // Lab sheet — combine profile members + pending contacts
+    const labRows = [
+      ...sortedMembers.filter(m => m.lab_status !== 'alumni').map(m => {
+        const ex = memberExtraMap[(m.full_name || '').toLowerCase().trim()] || {};
+        return {
+          'Name': formatMemberName(m.full_name),
+          'Role': ROLE_LABELS[m.role] || m.role,
+          'Work Email': m.email || '',
+          'Personal Email': ex.personal_email || '',
+          'Phone': ex.phone || '',
+          'Dietary': ex.dietary_restrictions || '',
+          'Address': ex.address || '',
+          'Emergency Contact': ex.emergency_contact_name ? `${ex.emergency_contact_name}${ex.emergency_contact_relationship ? ` (${ex.emergency_contact_relationship})` : ''}` : '',
+          'Emergency Phone': ex.emergency_contact_phone || '',
+          'Emergency Email': ex.emergency_contact_email || '',
+          'Notes': ex.notes || '',
+        };
+      }),
+      ...contacts.filter(c => {
+        if (c.role === 'external') return false;
+        if (memberNames.has(getRawName(c).toLowerCase().trim())) return false;
+        if (c.email && memberEmails.has(c.email.toLowerCase().trim())) return false;
+        return true;
+      }).map(c => ({
+        'Name': getDisplayName(c),
+        'Role': '',
+        'Work Email': c.email || '',
+        'Personal Email': c.personal_email || '',
+        'Phone': c.phone || '',
+        'Dietary': '',
+        'Address': c.address || '',
+        'Emergency Contact': '',
+        'Emergency Phone': '',
+        'Emergency Email': '',
+        'Notes': c.notes || '',
+      })),
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(labRows), 'Lab Contacts');
+
+    // Alumni sheet
+    const alumniRows = [
+      ...sortedMembers.filter(m => m.lab_status === 'alumni').map(m => {
+        const ex = memberExtraMap[(m.full_name || '').toLowerCase().trim()] || {};
+        return {
+          'Name': formatMemberName(m.full_name),
+          'Work Email': m.email || '',
+          'Personal Email': ex.personal_email || '',
+          'Phone': ex.phone || '',
+          'Dietary': ex.dietary_restrictions || '',
+          'Notes': ex.notes || '',
+          'Address': ex.address || '',
+          'Emergency Contact': ex.emergency_contact_name ? `${ex.emergency_contact_name}${ex.emergency_contact_relationship ? ` (${ex.emergency_contact_relationship})` : ''}` : '',
+          'Emergency Phone': ex.emergency_contact_phone || '',
+          'Emergency Email': ex.emergency_contact_email || '',
+        };
+      }),
+      ...contacts.filter(c => c.status === 'alumni').map(c => ({
+        'Name': getDisplayName(c),
+        'Work Email': c.email || '',
+        'Personal Email': c.personal_email || '',
+        'Phone': c.phone || '',
+        'Dietary': '',
+        'Notes': c.notes || '',
+        'Address': c.address || '',
+        'Emergency Contact': '',
+        'Emergency Phone': '',
+        'Emergency Email': '',
+      })),
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(alumniRows), 'Alumni');
+
+    XLSX.writeFile(wb, `lab-contacts-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
   const pendingLabContacts = contacts.filter(c => {
     if (c.role === 'external') return false;
     if (memberNames.has(getRawName(c).toLowerCase().trim())) return false;
@@ -1013,20 +1103,27 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Contacts</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>Team directory and member management</p>
         </div>
-        {canManage && activeTab === 'admin' && (
-          <button onClick={() => { setContactForm(EMPTY_CONTACT); setShowContactForm(true); }} style={{
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button onClick={handleExport} title="Export all contacts to Excel" style={{
             display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
-            background: 'var(--purple-primary)', color: 'white', border: 'none',
-            borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer'
-          }}><Plus size={16} /> Add Contact</button>
-        )}
-        {canManage && (activeTab === 'lab' || activeTab === 'alumni') && (
-          <button onClick={() => { setMemberForm(EMPTY_MEMBER); setShowMemberForm(true); }} style={{
-            display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
-            background: 'var(--purple-primary)', color: 'white', border: 'none',
-            borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer'
-          }}><Plus size={16} /> Add Member</button>
-        )}
+            background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer'
+          }}><Download size={15} /> Export</button>
+          {canManage && activeTab === 'admin' && (
+            <button onClick={() => { setContactForm(EMPTY_CONTACT); setShowContactForm(true); }} style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
+              background: 'var(--purple-primary)', color: 'white', border: 'none',
+              borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer'
+            }}><Plus size={16} /> Add Contact</button>
+          )}
+          {canManage && (activeTab === 'lab' || activeTab === 'alumni') && (
+            <button onClick={() => { setMemberForm(EMPTY_MEMBER); setShowMemberForm(true); }} style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
+              background: 'var(--purple-primary)', color: 'white', border: 'none',
+              borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer'
+            }}><Plus size={16} /> Add Member</button>
+          )}
+        </div>
       </div>
 
       {/* Tab switcher */}
