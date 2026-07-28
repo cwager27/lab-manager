@@ -1,23 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { createClient } = require('@supabase/supabase-js');
-const nodemailer = require('nodemailer');
-const multer = require('multer');
-const XLSX = require('xlsx');
-require('dotenv').config();
-
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-const upload = multer({ storage: multer.memoryStorage() });
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD
-  }
-});
-// EMAILS PAUSED — remove this line to resume
-transporter.sendMail = async () => {};
+const transporter = { sendMail: async () => {} }; // emails disabled
 
 const MONTH_MAP = { Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12' };
 

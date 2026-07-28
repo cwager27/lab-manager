@@ -920,16 +920,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     return tasksInLeaf(cat, freq).filter(t => selectedTaskIds.has(t.id));
   }
 
-  function getGroupsForLeaf(cat, freq) {
-    const groupMap = new Map();
-    tasksInLeaf(cat, freq).forEach(t => {
-      const key = t.group_name || t.title;
-      if (!groupMap.has(key)) groupMap.set(key, { name: key, tasks: [] });
-      groupMap.get(key).tasks.push(t);
-    });
-    return [...groupMap.values()];
-  }
-
   function getAuditAreasForLeaf(cat, freq) {
     const areaMap = new Map();
     tasksInLeaf(cat, freq).forEach(t => {
@@ -941,10 +931,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       aEntry.groupMap.get(groupKey).tasks.push(t);
     });
     return [...areaMap.values()].map(a => ({ name: a.name, groups: [...a.groupMap.values()] }));
-  }
-
-  function handleGroupRowClick(group) {
-    setExpandedGroups(prev => { const n = new Set(prev); n.has(group.name) ? n.delete(group.name) : n.add(group.name); return n; });
   }
 
   function selectAllGroup(group) {
@@ -2894,7 +2880,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             const isActive = cat === activeCat;
             return (
               <button key={cat} onClick={() => { setStep1Cat(cat); setStep1Freq(''); setExpandedGroups(new Set()); }}
-                style={{ padding: '6px 16px', borderRadius: 20, border: 'none', cursor: 'pointer', userSelect: 'none',
+                style={{ padding: '6px 16px', borderRadius: 20, cursor: 'pointer', userSelect: 'none',
                          background: isActive ? 'rgba(123,63,160,0.12)' : 'var(--bg-primary)',
                          color: isActive ? 'var(--purple-primary)' : 'var(--text-primary)',
                          fontWeight: isActive ? 700 : 500, fontSize: 13,

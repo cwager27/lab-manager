@@ -1,15 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const nodemailer = require('nodemailer');
-const { generateOccurrences, computeGaps, parseDate } = require('../lib/occurrenceGenerator');
-const { supabaseAdmin } = require('../lib/supabaseAdmin');
-
-const mailer = nodemailer.createTransport({
-  service: 'gmail',
-  auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
-});
-// EMAILS PAUSED — remove this line to resume
-mailer.sendMail = async () => {};
+const transporter = { sendMail: async () => {} }; // emails disabled
 
 function reminderHtml(name, taskName, dueDate, message) {
   const fmt = new Date(dueDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });

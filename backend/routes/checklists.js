@@ -1,19 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { createClient } = require('@supabase/supabase-js');
-const nodemailer = require('nodemailer');
-require('dotenv').config();
-
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD
-  }
-});
-transporter.sendMail = async () => {}; // paused
+const transporter = { sendMail: async () => {} }; // emails disabled
 
 router.post('/submit-checklist', async (req, res) => {
   const { assignmentId, responses, submittedBy, submittedByName, cycleStart } = req.body;
