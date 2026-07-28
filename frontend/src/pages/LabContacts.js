@@ -955,7 +955,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
 
   const filteredAdminContacts = Object.values(
     contacts
-      .filter(c => c.role === 'external')
+      .filter(c => c.role === 'external' && c.status !== 'alumni')
       .reduce((acc, c) => {
         const key = `${(c.last_name || '').toLowerCase().trim()}__${(c.first_name || '').toLowerCase().trim()}`;
         if (!acc[key] || countFields(c) > countFields(acc[key])) acc[key] = c;
@@ -1088,6 +1088,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
 
   const pendingLabContacts = contacts.filter(c => {
     if (c.role === 'external') return false;
+    if (c.status === 'alumni') return false;
     if (memberNames.has(getRawName(c).toLowerCase().trim())) return false;
     if (c.email && memberEmails.has(c.email.toLowerCase().trim())) return false;
     if (!labSearch) return true;
@@ -1128,7 +1129,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
 
       {/* Tab switcher */}
       <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content', marginBottom: '20px' }}>
-        {[{ id: 'admin', label: 'Admin Contacts' }, { id: 'lab', label: 'Lab Contacts' }, { id: 'alumni', label: 'Lab Alumni' }].map(tab => (
+        {[{ id: 'admin', label: 'Admin Contacts' }, { id: 'lab', label: 'Lab Contacts' }, { id: 'alumni', label: 'Alumni' }].map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
             style={{ padding: '10px 20px', background: activeTab === tab.id ? 'var(--purple-primary)' : 'transparent', color: activeTab === tab.id ? 'white' : 'var(--text-secondary)', border: 'none', fontWeight: activeTab === tab.id ? 600 : 400, fontSize: '13px', cursor: 'pointer' }}>
             {tab.label}
