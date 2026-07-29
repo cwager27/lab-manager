@@ -906,7 +906,11 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
       sort_order: form.sort_order ?? 99,
       notes: form.notes || '',
     };
-    await supabase.from('lab_contacts').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', contactId);
+    const { error } = await supabase.from('lab_contacts').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', contactId);
+    if (error) {
+      alert(`Failed to save contact: ${error.message}\n\nIf this keeps happening, run in Supabase SQL editor:\nALTER TABLE lab_contacts ADD COLUMN IF NOT EXISTS alternative_email text;`);
+      return;
+    }
     await fetchData(true);
   }
 

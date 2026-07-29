@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useResizableColumns, ColResizer } from '../lib/useResizableColumns';
 import { supabase } from '../lib/supabase';
 import { Upload, Plus, Trash2, Edit2, ChevronDown, ChevronUp, CheckCircle, XCircle, FileText } from 'lucide-react';
 
@@ -22,6 +23,8 @@ export default function StudiesTab({ studies, members, canManage, showStudyForm,
   const [uploadingFile, setUploadingFile] = useState(false);
   const [savingApprovedWork, setSavingApprovedWork] = useState(false);
   const [approvedWorkText, setApprovedWorkText] = useState({});
+
+  const { widths: sampleTrackerWidths, onColMouseDown: sampleTrackerResize } = useResizableColumns(6);
 
   async function loadStudyDetails(studyId) {
     const [{ data: checks }, { data: samples }, { data: files }] = await Promise.all([
@@ -259,11 +262,12 @@ export default function StudiesTab({ studies, members, canManage, showStudyForm,
                         <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>No samples tracked yet.</p>
                       ) : (
                         <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <table className="resizable-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                            <colgroup>{sampleTrackerWidths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
                             <thead>
                               <tr style={{ background: 'var(--bg-secondary)' }}>
-                                {['Sample ID', 'Type', 'Date Collected', 'Status', 'Notes', ''].map(h => (
-                                  <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                                {['Sample ID', 'Type', 'Date Collected', 'Status', 'Notes', ''].map((h, i) => (
+                                  <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', position: 'relative' }}>{h}<ColResizer colIdx={i} totalCols={6} onColMouseDown={sampleTrackerResize} /></th>
                                 ))}
                               </tr>
                             </thead>

@@ -47,6 +47,14 @@ input, select, textarea {
   font-family: 'Inter', sans-serif;
 }
 
+/* Resizable tables — clip overflowing content with ellipsis in both headers and cells */
+.resizable-table th,
+.resizable-table td {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 /* Dashboard responsive grid */
 .dashboard-grid {
   display: grid;

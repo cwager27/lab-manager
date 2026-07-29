@@ -28,9 +28,18 @@ function missingColumns(fileHeaders, required) {
   return required.filter(h => !present.has(h));
 }
 
+// Derive fallback date for dateless rows: FY27 → 2026-07-01
+function fyFallbackDate(fiscalYear) {
+  const m = (fiscalYear || '').match(/^fy(\d{2})$/i);
+  if (!m) return null;
+  const calYear = 2000 + parseInt(m[1]) - 1;
+  return `${calYear}-07-01`;
+}
+
 // Preview new orders from uploaded file
 router.post('/preview-orders', upload.single('file'), async (req, res) => {
   try {
+    const fallbackDate = fyFallbackDate(req.body.fiscalYear);
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheet = workbook.Sheets['Orders'] || workbook.Sheets[workbook.SheetNames[0]];
 
@@ -88,7 +97,7 @@ router.post('/preview-orders', upload.single('file'), async (req, res) => {
         unit_price: parseFloat(rawUnitPrice) || null,
         units: parseInt(row['Units (n)'] || row['Units'] || row['units']) || null,
         total_price: parseFloat(rawTotalPrice) || null,
-        order_date: excelDateToString(row['Date'] || row['Order Date'] || row['date']),
+        order_date: excelDateToString(row['Date'] || row['Order Date'] || row['date']) || fallbackDate,
         requestor: (row['Requestor'] || row['requestor'] || '').trim() || null,
         status: (row['Status'] || row['status'] || 'pending').trim().toLowerCase(),
         notes: (row['Notes'] || row['notes'] || '').trim() || null

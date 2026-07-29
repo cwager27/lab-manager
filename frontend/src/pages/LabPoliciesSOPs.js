@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useResizableColumns, ColResizer } from '../lib/useResizableColumns';
 import { FileText, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import PoliciesTab from './PoliciesTab';
@@ -58,17 +59,19 @@ const STORAGE_BOXES = [
 ];
 
 function ReagentCategorizationSOP() {
+  const { widths: reagentCatWidths, onColMouseDown: reagentCatResize } = useResizableColumns(2);
   return (
     <div>
       <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 6px' }}>Reagent Categorization SOP</h2>
       <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 20px' }}>Quartzy categories with definitions and scope</p>
 
       <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: 28 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table className="resizable-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+          <colgroup>{reagentCatWidths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
           <thead>
             <tr style={{ background: 'var(--bg-secondary)' }}>
-              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', width: '30%', borderBottom: '1px solid var(--border)' }}>Category</th>
-              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid var(--border)' }}>Definition / Scope</th>
+              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid var(--border)', position: 'relative' }}>Category<ColResizer colIdx={0} totalCols={2} onColMouseDown={reagentCatResize} /></th>
+              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid var(--border)', position: 'relative' }}>Definition / Scope<ColResizer colIdx={1} totalCols={2} onColMouseDown={reagentCatResize} /></th>
             </tr>
           </thead>
           <tbody>
@@ -109,16 +112,18 @@ const REAGENT_LOCATIONS = [
 ];
 
 function ReagentCategoryLocations() {
+  const { widths: reagentLocWidths, onColMouseDown: reagentLocResize } = useResizableColumns(2);
   return (
     <div>
       <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 6px' }}>Reagent Category Locations</h2>
       <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 20px' }}>Storage locations by inventory type</p>
       <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table className="resizable-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+          <colgroup>{reagentLocWidths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
           <thead>
             <tr style={{ background: 'var(--bg-secondary)' }}>
-              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', width: '35%', borderBottom: '1px solid var(--border)' }}>Inventory Type</th>
-              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid var(--border)' }}>Locations</th>
+              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid var(--border)', position: 'relative' }}>Inventory Type<ColResizer colIdx={0} totalCols={2} onColMouseDown={reagentLocResize} /></th>
+              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid var(--border)', position: 'relative' }}>Locations<ColResizer colIdx={1} totalCols={2} onColMouseDown={reagentLocResize} /></th>
             </tr>
           </thead>
           <tbody>

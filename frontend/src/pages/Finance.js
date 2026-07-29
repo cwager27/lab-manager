@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useResizableColumns, ColResizer } from '../lib/useResizableColumns';
 import { supabase } from '../lib/supabase';
 import { AlertTriangle, Upload, Plus, Search, CheckCircle, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -199,6 +200,11 @@ export default function Finance({ userRole }) {
   const [confirmDeleteOrder, setConfirmDeleteOrder] = useState(false);
   const [ordersYearTab, setOrdersYearTab] = useState('fy27');
   const [importError, setImportError] = useState(null);
+  const [showImportFYModal, setShowImportFYModal] = useState(false);
+  const [importFYInput, setImportFYInput] = useState('');
+  const [importFYError, setImportFYError] = useState('');
+  const importFileInputRef = useRef(null);
+  const pendingFYRef = useRef('');
   const [ordersSortCol, setOrdersSortCol] = useState(null);
   const [ordersSortDir, setOrdersSortDir] = useState('asc');
   const [showAddGrant, setShowAddGrant] = useState(false);
@@ -214,6 +220,17 @@ export default function Finance({ userRole }) {
   const [editingReagent, setEditingReagent] = useState(null);
   const [editReagentForm, setEditReagentForm] = useState({});
   const [confirmDeleteReagent, setConfirmDeleteReagent] = useState(false);
+
+  const allFYs = useMemo(() => {
+    const s = new Set(['fy26', 'fy25', 'fy24']);
+    orders.forEach(o => { if (o.order_date) s.add(getFiscalYear(o.order_date)); });
+    return [...s].sort().reverse();
+  }, [orders]);
+
+  const { widths: grantsWidths, onColMouseDown: grantsResize } = useResizableColumns(8);
+  const { widths: ordersWidths, onColMouseDown: ordersResize } = useResizableColumns(14);
+  const { widths: reagentsWidths, onColMouseDown: reagentsResize } = useResizableColumns(8 + allFYs.length + 1);
+  const { widths: nanoseqWidths, onColMouseDown: nanoseqResize } = useResizableColumns(8 + allFYs.length + 1);
 
   const canManage = userRole === 'admin' || userRole === 'pm';
 
@@ -261,7 +278,7 @@ export default function Finance({ userRole }) {
       ['item', 'Item Name'], ['vendor', 'Vendor'], ['catalog_number', 'Catalog Number'],
       ['category', 'Category'], ['grant_name', 'Grant'], ['requisition_id', 'Requisition ID'],
       ['unit_description', 'Unit Description'], ['unit_price', 'Unit Price'],
-      ['units', 'Units'], ['order_date', 'Order Date'],
+      ['units', 'Units'], ['order_date', 'Order Date'], ['requestor', 'Requestor'],
     ];
     const missing = REQUIRED_FIELDS.filter(([key]) => !String(newOrder[key] ?? '').trim()).map(([, label]) => label);
     if (missing.length > 0) {
@@ -284,6 +301,17 @@ export default function Finance({ userRole }) {
     } else if (error) {
       setAddOrderError(error.message);
     }
+  }
+
+  function handleConfirmImportFY() {
+    const trimmed = importFYInput.trim();
+    if (!/^fy\d{2}$/i.test(trimmed)) {
+      setImportFYError('Must be in format FYXX (e.g. FY27). Accepts upper or lower case.');
+      return;
+    }
+    pendingFYRef.current = trimmed.toUpperCase();
+    setShowImportFYModal(false);
+    importFileInputRef.current?.click();
   }
 
   async function handleConfirmImport() {
@@ -334,12 +362,6 @@ export default function Finance({ userRole }) {
     return { data: months.map(m => byMonth[m]), months };
   }, [orders, selectedUsers, selectedGlobalYears]);
 
-  const allFYs = useMemo(() => {
-    const s = new Set(['fy26', 'fy25', 'fy24']);
-    orders.forEach(o => { if (o.order_date) s.add(getFiscalYear(o.order_date)); });
-    return [...s].sort().reverse();
-  }, [orders]);
-
   const catalogRows = useMemo(() => {
     const map = {};
     orders.forEach(o => {
@@ -354,12 +376,19 @@ export default function Finance({ userRole }) {
       if (o.unit_price != null) r.unit_price = o.unit_price;
       if (o.units != null) r.units = o.units;
       const fy = getFiscalYear(o.order_date);
-      if (fy) r.fyCounts[fy] = (r.fyCounts[fy] || 0) + 1;
-      r.total++;
+      const units = parseInt(o.units) || 0;
+      if (fy) r.fyCounts[fy] = (r.fyCounts[fy] || 0) + units;
+      r.total += units;
     });
     const reagentCats = new Set(reagents.map(r => (r.catalog_number || '').trim()).filter(Boolean));
     return Object.values(map).map(r => ({ ...r, is_standardized: reagentCats.has(r.catalog_number) }));
   }, [orders, reagents]);
+
+  const catalogByNum = useMemo(() => {
+    const m = {};
+    catalogRows.forEach(r => { m[r.catalog_number] = r; });
+    return m;
+  }, [catalogRows]);
 
   const sortedCatalogRows = useMemo(() => {
     const rows = [...catalogRows];
@@ -619,13 +648,22 @@ export default function Finance({ userRole }) {
     const filtered = q ? reagents.filter(r => ['name','vendor','catalog_number','category'].some(k => r[k] != null && String(r[k]).toLowerCase().includes(q))) : reagents;
     if (!reagentsSortCol) return filtered;
     return [...filtered].sort((a, b) => {
-      let av = a[reagentsSortCol], bv = b[reagentsSortCol];
+      let av, bv;
+      if (allFYs.includes(reagentsSortCol)) {
+        av = catalogByNum[a.catalog_number]?.fyCounts?.[reagentsSortCol] || 0;
+        bv = catalogByNum[b.catalog_number]?.fyCounts?.[reagentsSortCol] || 0;
+      } else if (reagentsSortCol === 'fy_total') {
+        av = Object.values(catalogByNum[a.catalog_number]?.fyCounts || {}).reduce((s,n) => s+n, 0);
+        bv = Object.values(catalogByNum[b.catalog_number]?.fyCounts || {}).reduce((s,n) => s+n, 0);
+      } else {
+        av = a[reagentsSortCol]; bv = b[reagentsSortCol];
+      }
       if (av == null && bv == null) return 0;
       if (av == null) return 1; if (bv == null) return -1;
       const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv));
       return reagentsSortDir === 'asc' ? cmp : -cmp;
     });
-  }, [reagents, reagentSearch, reagentsSortCol, reagentsSortDir]);
+  }, [reagents, reagentSearch, reagentsSortCol, reagentsSortDir, catalogByNum, allFYs]);
 
   const totalComplete = catStatusData.reduce((s, r) => s + (r.complete || 0), 0);
   const totalProcessing = catStatusData.reduce((s, r) => s + (r.processing || 0), 0);
@@ -841,20 +879,22 @@ export default function Finance({ userRole }) {
               <button onClick={handleDownloadTemplate} title="Download blank import template" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
                 Template
               </button>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
-                <Upload size={14} /> {uploadingFile ? 'Processing…' : `Import ${ordersYearTab.toUpperCase()}`}
-                <input type="file" accept=".xlsx,.csv,.tsv" style={{ display: 'none' }} onChange={async (e) => {
-                  const file = e.target.files[0]; if (!file) return;
-                  setUploadingFile(true); setImportError(null);
-                  const formData = new FormData(); formData.append('file', file);
-                  const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/preview-orders`, { method: 'POST', body: formData });
-                  const data = await res.json();
-                  if (data.error) { setImportError(data); }
-                  else if (data.newOrders) { setPreviewData(data.newOrders); }
-                  setUploadingFile(false);
-                  e.target.value = '';
-                }} />
-              </label>
+              <button onClick={() => { setShowImportFYModal(true); setImportFYInput(''); setImportFYError(''); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
+                <Upload size={14} /> {uploadingFile ? 'Processing…' : 'Import'}
+              </button>
+              <input ref={importFileInputRef} type="file" accept=".xlsx,.csv,.tsv" style={{ display: 'none' }} onChange={async (e) => {
+                const file = e.target.files[0]; if (!file) return;
+                setUploadingFile(true); setImportError(null);
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('fiscalYear', pendingFYRef.current);
+                const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/preview-orders`, { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.error) { setImportError(data); }
+                else if (data.newOrders) { setPreviewData(data.newOrders); }
+                setUploadingFile(false);
+                e.target.value = '';
+              }} />
               <button onClick={() => setShowAddOrder(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Order</button>
             </>
           )}
@@ -957,11 +997,12 @@ export default function Finance({ userRole }) {
         <>
           {activeTab === 'grants' && (
             <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
-              <table style={{ width: '100%', minWidth: '900px', borderCollapse: 'collapse' }}>
+              <table className="resizable-table" style={{ width: '100%', minWidth: '900px', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                <colgroup>{grantsWidths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
                 <thead>
                   <tr style={{ background: 'var(--bg-secondary)' }}>
-                    {['Grant', 'Chartering', 'Flags', 'Total', 'Balance Remaining', 'Start Date', 'End Date', 'Notes'].map(h => (
-                      <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', fontWeight: 600 }}>{h}</th>
+                    {['Grant', 'Chartering', 'Flags', 'Total', 'Balance Remaining', 'Start Date', 'End Date', 'Notes'].map((h, i) => (
+                      <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', fontWeight: 600, position: 'relative' }}>{h}<ColResizer colIdx={i} totalCols={8} onColMouseDown={grantsResize} /></th>
                     ))}
                   </tr>
                 </thead>
@@ -1049,23 +1090,8 @@ export default function Finance({ userRole }) {
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{sortedOrders.length} orders</span>
               </div>
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
-                <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
-                  <colgroup>
-                    <col style={{ width: '9%' }} />
-                    <col style={{ width: '6%' }} />
-                    <col style={{ width: '7%' }} />
-                    <col style={{ width: '8%' }} />
-                    <col style={{ width: '7%' }} />
-                    <col style={{ width: '7%' }} />
-                    <col style={{ width: '6%' }} />
-                    <col style={{ width: '6%' }} />
-                    <col style={{ width: '5%' }} />
-                    <col style={{ width: '6%' }} />
-                    <col style={{ width: '6%' }} />
-                    <col style={{ width: '6%' }} />
-                    <col style={{ width: '7%' }} />
-                    <col style={{ width: '8%' }} />
-                  </colgroup>
+                <table className="resizable-table" style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
+                  <colgroup>{ordersWidths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
                   <thead>
                     <tr style={{ background: 'var(--bg-secondary)' }}>
                       {[
@@ -1083,14 +1109,14 @@ export default function Finance({ userRole }) {
                         { label: 'Requestor', key: 'requestor' },
                         { label: 'Status', key: 'status' },
                         { label: 'Notes', key: 'notes' },
-                      ].map(({ label, key }) => (
+                      ].map(({ label, key }, i) => (
                         <th key={key}
                           onClick={() => {
                             if (ordersSortCol === key) setOrdersSortDir(d => d === 'asc' ? 'desc' : 'asc');
                             else { setOrdersSortCol(key); setOrdersSortDir('asc'); }
                           }}
-                          style={{ padding: '7px 6px', textAlign: 'left', fontSize: '10px', color: ordersSortCol === key ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', userSelect: 'none' }}>
-                          {label}{ordersSortCol === key ? (ordersSortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                          style={{ padding: '7px 6px', textAlign: 'left', fontSize: '10px', color: ordersSortCol === key ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', userSelect: 'none', position: 'relative' }}>
+                          {label}{ordersSortCol === key ? (ordersSortDir === 'asc' ? ' ↑' : ' ↓') : ''}<ColResizer colIdx={i} totalCols={14} onColMouseDown={ordersResize} />
                         </th>
                       ))}
                     </tr>
@@ -1182,19 +1208,28 @@ export default function Finance({ userRole }) {
 
               {reagentTab === 'misc' && (
                 <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflowX: 'auto' }}>
-                  <table style={{ width: '100%', minWidth: '1200px', borderCollapse: 'collapse' }}>
+                  <table className="resizable-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                    <colgroup>{reagentsWidths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
                     <thead>
                       <tr style={{ background: 'var(--bg-secondary)' }}>
-                        {[['category','Category'],['name','Item (name)'],['vendor','Vendor'],['catalog_number','Cat number'],['unit_description','Unit description'],['unit_price','Unit price'],['units','Units (n)'],['quantity_in_lab','Unused'],['fy26_purchases',"FY'26"],['fy25_purchases',"FY'25"],['fy24_purchases',"FY'24"]].map(([key, label]) => (
-                          <th key={key} onClick={() => { if (reagentsSortCol === key) { setReagentsSortDir(d => d === 'asc' ? 'desc' : 'asc'); } else { setReagentsSortCol(key); setReagentsSortDir('asc'); } }} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: reagentsSortCol === key ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>
-                            {label}{reagentsSortCol === key ? (reagentsSortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                        {[['category','Category'],['name','Item'],['vendor','Vendor'],['catalog_number','Cat number'],['unit_description','Unit description'],['unit_price','Unit price'],['units','Units (n)'],['quantity_in_lab','Unused']].map(([key, label], i) => (
+                          <th key={key} onClick={() => { if (reagentsSortCol === key) { setReagentsSortDir(d => d === 'asc' ? 'desc' : 'asc'); } else { setReagentsSortCol(key); setReagentsSortDir('asc'); } }} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: reagentsSortCol === key ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', position: 'relative' }}>
+                            {label}{reagentsSortCol === key ? (reagentsSortDir === 'asc' ? ' ↑' : ' ↓') : ''}<ColResizer colIdx={i} totalCols={8 + allFYs.length + 1} onColMouseDown={reagentsResize} />
                           </th>
                         ))}
+                        {allFYs.map((fy, fi) => (
+                          <th key={fy} onClick={() => { if (reagentsSortCol === fy) { setReagentsSortDir(d => d === 'asc' ? 'desc' : 'asc'); } else { setReagentsSortCol(fy); setReagentsSortDir('asc'); } }} style={{ padding: '10px 12px', textAlign: 'center', fontSize: '11px', color: reagentsSortCol === fy ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', position: 'relative' }}>
+                            {fyLabel(fy)}{reagentsSortCol === fy ? (reagentsSortDir === 'asc' ? ' ↑' : ' ↓') : ''}<ColResizer colIdx={8 + fi} totalCols={8 + allFYs.length + 1} onColMouseDown={reagentsResize} />
+                          </th>
+                        ))}
+                        <th onClick={() => { if (reagentsSortCol === 'fy_total') { setReagentsSortDir(d => d === 'asc' ? 'desc' : 'asc'); } else { setReagentsSortCol('fy_total'); setReagentsSortDir('asc'); } }} style={{ padding: '10px 12px', textAlign: 'center', fontSize: '11px', color: reagentsSortCol === 'fy_total' ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>
+                          Total{reagentsSortCol === 'fy_total' ? (reagentsSortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {sortedReagents.length === 0 && (
-                        <tr><td colSpan={11} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>{reagentSearch ? `No reagents match "${reagentSearch}"` : 'No reagents yet.'}</td></tr>
+                        <tr><td colSpan={8 + allFYs.length + 1} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>{reagentSearch ? `No reagents match "${reagentSearch}"` : 'No reagents yet.'}</td></tr>
                       )}
                       {sortedReagents.map(r => (
                         <tr key={r.id} onClick={() => canManage && openEditReagent(r)} style={{ borderTop: '1px solid var(--border)', cursor: canManage ? 'pointer' : 'default' }}
@@ -1208,9 +1243,8 @@ export default function Finance({ userRole }) {
                           <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{r.unit_price != null ? `$${Number(r.unit_price).toLocaleString()}` : '—'}</td>
                           <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'center' }}>{r.units ?? '—'}</td>
                           <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center' }}>{r.quantity_in_lab ?? '—'}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.fy26_purchases ?? '—'}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.fy25_purchases ?? '—'}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.fy24_purchases ?? '—'}</td>
+                          {allFYs.map(fy => { const cnt = catalogByNum[r.catalog_number]?.fyCounts?.[fy] || 0; return <td key={fy} style={{ padding: '10px 12px', fontSize: '12px', color: cnt ? 'var(--purple-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: cnt ? 600 : 400 }}>{cnt || '—'}</td>; })}
+                          {(() => { const total = Object.values(catalogByNum[r.catalog_number]?.fyCounts || {}).reduce((s,n) => s+n, 0); return <td style={{ padding: '10px 12px', fontSize: '12px', color: total ? 'var(--text-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: total ? 600 : 400 }}>{total || '—'}</td>; })()}
                         </tr>
                       ))}
                     </tbody>
@@ -1228,13 +1262,14 @@ export default function Finance({ userRole }) {
                   {nanoseq.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>No Nanoseq reagents loaded yet. Click Import Nanoseq to upload.</div>
                   ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead><tr style={{ background: 'var(--bg-secondary)' }}>{['Protocol','Reagent','Vendor','Code','Cost','Amount','nRxn','Link'].map(h => <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
+                    <table className="resizable-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                      <colgroup>{nanoseqWidths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
+                      <thead><tr style={{ background: 'var(--bg-secondary)' }}>{['Protocol','Item','Vendor','Code','Cost','Amount','nRxn','Link'].map((h, i) => <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', position: 'relative' }}>{h}<ColResizer colIdx={i} totalCols={8 + allFYs.length + 1} onColMouseDown={nanoseqResize} /></th>)}{allFYs.map((fy, fi) => <th key={fy} style={{ padding: '10px 12px', textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', position: 'relative' }}>{fyLabel(fy)}<ColResizer colIdx={8 + fi} totalCols={8 + allFYs.length + 1} onColMouseDown={nanoseqResize} /></th>)}<th style={{ padding: '10px 12px', textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Total</th></tr></thead>
                       <tbody>
                         {filteredNanoseq.length === 0 && (
-                          <tr><td colSpan={8} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No reagents match "{reagentSearch}"</td></tr>
+                          <tr><td colSpan={8 + allFYs.length + 1} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No reagents match "{reagentSearch}"</td></tr>
                         )}
-                        {filteredNanoseq.map(r => <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.protocol}</td><td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-primary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.company}</td><td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{r.code}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-primary)' }}>{r.cost ? `$${r.cost.toLocaleString()}` : '—'}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{r.amount}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.n_reactions ?? '—'}</td><td style={{ padding: '10px 12px', fontSize: '12px' }}>{r.link && <a href={r.link} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--purple-primary)', textDecoration: 'none', fontSize: '11px' }}>View</a>}</td></tr>)}
+                        {filteredNanoseq.map(r => { const fyData = catalogByNum[r.code]?.fyCounts || {}; const total = Object.values(fyData).reduce((s,n) => s+n, 0); return <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.protocol}</td><td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-primary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.company}</td><td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{r.code}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-primary)' }}>{r.cost ? `$${r.cost.toLocaleString()}` : '—'}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{r.amount}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.n_reactions ?? '—'}</td><td style={{ padding: '10px 12px', fontSize: '12px' }}>{r.link && <a href={r.link} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--purple-primary)', textDecoration: 'none', fontSize: '11px' }}>View</a>}</td>{allFYs.map(fy => { const cnt = fyData[fy] || 0; return <td key={fy} style={{ padding: '10px 12px', fontSize: '12px', color: cnt ? 'var(--purple-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: cnt ? 600 : 400 }}>{cnt || '—'}</td>; })}<td style={{ padding: '10px 12px', fontSize: '12px', color: total ? 'var(--text-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: total ? 600 : 400 }}>{total || '—'}</td></tr>; })}
                       </tbody>
                     </table>
                   )}
@@ -1874,6 +1909,31 @@ export default function Finance({ userRole }) {
         </div>
       )}
 
+      {showImportFYModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300 }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '28px', width: '380px', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px' }}>Import Orders — Select Fiscal Year</h2>
+            <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fiscal Year *</label>
+            <input
+              type="text"
+              value={importFYInput}
+              onChange={e => { setImportFYInput(e.target.value); setImportFYError(''); }}
+              onKeyDown={e => { if (e.key === 'Enter') handleConfirmImportFY(); }}
+              placeholder="e.g. FY27"
+              autoFocus
+              style={{ width: '100%', padding: '8px 10px', border: `1px solid ${importFYError ? 'var(--danger)' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box', marginBottom: '6px' }}
+            />
+            <p style={{ fontSize: '11px', color: importFYError ? 'var(--danger)' : 'var(--text-muted)', margin: '0 0 16px', fontWeight: importFYError ? 600 : 400 }}>
+              {importFYError || 'Required format: FY followed by 2 digits (e.g. FY24, FY27). Upper or lower case accepted.'}
+            </p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowImportFYModal(false)} style={{ padding: '8px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleConfirmImportFY} style={{ padding: '8px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Continue</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showAddOrder && canManage && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '580px', maxHeight: '80vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
@@ -1884,28 +1944,35 @@ export default function Finance({ userRole }) {
               </div>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-              {[{label:'Item Name',key:'item',full:true},{label:'Catalog Number',key:'catalog_number'},{label:'Category',key:'category'},{label:'Requisition ID',key:'requisition_id'},{label:'Unit Description',key:'unit_description'},{label:'Unit Price ($)',key:'unit_price',type:'number'},{label:'Units (n)',key:'units',type:'number'},{label:'Order Date',key:'order_date',type:'date'}].map(field => (
+              {[{label:'Item Name *',key:'item',full:true},{label:'Catalog Number *',key:'catalog_number'},{label:'Requisition ID *',key:'requisition_id'},{label:'Unit Description *',key:'unit_description'},{label:'Unit Price ($) *',key:'unit_price',type:'number'},{label:'Units (n) *',key:'units',type:'number'},{label:'Order Date *',key:'order_date',type:'date'}].map(field => (
                 <div key={field.key} style={{ gridColumn: field.full ? '1 / -1' : 'auto' }}>
                   <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
                   <input type={field.type || 'text'} value={newOrder[field.key]} onChange={e => setNewOrder(p => ({ ...p, [field.key]: e.target.value }))} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
                 </div>
               ))}
               <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Grant</label>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Category *</label>
+                <select value={newOrder.category} onChange={e => setNewOrder(p => ({ ...p, category: e.target.value }))} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', background: 'var(--bg-primary)' }}>
+                  <option value="">— Select category —</option>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Grant *</label>
                 <input list="order-grant-list" value={newOrder.grant_name} onChange={e => setNewOrder(p => ({ ...p, grant_name: e.target.value }))} placeholder="Select or type grant..." style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
                 <datalist id="order-grant-list">
                   {grants.map(g => <option key={g.id} value={g.name} />)}
                 </datalist>
               </div>
               <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Vendor</label>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Vendor *</label>
                 <input list="order-vendor-list" value={newOrder.vendor} onChange={e => setNewOrder(p => ({ ...p, vendor: e.target.value }))} placeholder="Select or type vendor..." style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
                 <datalist id="order-vendor-list">
                   {vendors.map(v => <option key={v.id} value={v.name} />)}
                 </datalist>
               </div>
               <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Requestor</label>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Requestor *</label>
                 <input
                   type="text"
                   autoCapitalize="words"
@@ -1916,10 +1983,14 @@ export default function Finance({ userRole }) {
                 />
               </div>
               <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</label>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status *</label>
                 <select value={newOrder.status} onChange={e => setNewOrder(p => ({ ...p, status: e.target.value }))} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none' }}>
                   <option value="pending">Pending</option><option value="processing">Processing</option><option value="complete">Complete</option><option value="cancelled">Cancelled</option>
                 </select>
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Notes</label>
+                <textarea value={newOrder.notes} onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))} rows={2} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
             </div>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>

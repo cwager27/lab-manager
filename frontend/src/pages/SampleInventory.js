@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useResizableColumns, ColResizer } from '../lib/useResizableColumns';
 import { supabase } from '../lib/supabase';
 import {
   Plus, Search,
@@ -276,6 +277,10 @@ export default function SampleInventory({ userRole, userId, profile }) {
     { key: 'notes', label: 'Notes', full: true },
   ];
 
+  const { widths: sampleWidths, onColMouseDown: sampleResize } = useResizableColumns(10);
+  const { widths: auditWidths, onColMouseDown: auditResize } = useResizableColumns(5);
+  const { widths: reagentWidths, onColMouseDown: reagentResize } = useResizableColumns(8);
+
   const currentFields = activeTab === 'cell_lines' ? cellLineFields : activeTab === 'mouse' ? mouseSampleFields : humanSampleFields;
   const currentEmpty = activeTab === 'cell_lines' ? EMPTY_CELL_LINE : activeTab === 'mouse' ? EMPTY_MOUSE : EMPTY_HUMAN;
 
@@ -462,14 +467,15 @@ export default function SampleInventory({ userRole, userId, profile }) {
 
           {(activeTab === 'mouse' || activeTab === 'human') && (
             <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <table className="resizable-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                <colgroup>{sampleWidths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
                 <thead>
                   <tr style={{ background: 'var(--bg-secondary)' }}>
                     {(activeTab === 'mouse'
                       ? ['Sample ID', 'Mouse ID', 'Tissue', 'Collection Date', 'Freezer', 'Shelf', 'Study', 'IRB', 'Status', 'Actions']
                       : ['Sample ID', 'Patient ID', 'Tissue', 'Collection Date', 'Freezer', 'Shelf', 'Study', 'IRB', 'Status', 'Actions']
-                    ).map(h => (
-                      <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                    ).map((h, i) => (
+                      <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', position: 'relative' }}>{h}<ColResizer colIdx={i} totalCols={10} onColMouseDown={sampleResize} /></th>
                     ))}
                   </tr>
                 </thead>
@@ -520,11 +526,12 @@ export default function SampleInventory({ userRole, userId, profile }) {
               {auditLog.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>No audit log entries yet.</div>
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <table className="resizable-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                  <colgroup>{auditWidths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
                   <thead>
                     <tr style={{ background: 'var(--bg-secondary)' }}>
-                      {['Time', 'Action', 'Sample', 'Type', 'By'].map(h => (
-                        <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                      {['Time', 'Action', 'Sample', 'Type', 'By'].map((h, i) => (
+                        <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', position: 'relative' }}>{h}<ColResizer colIdx={i} totalCols={5} onColMouseDown={auditResize} /></th>
                       ))}
                     </tr>
                   </thead>
@@ -569,11 +576,12 @@ export default function SampleInventory({ userRole, userId, profile }) {
             </div>
           ) : (
             <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <table className="resizable-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                <colgroup>{reagentWidths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
                 <thead>
                   <tr style={{ background: 'var(--bg-secondary)' }}>
-                    {['Name', 'Category', 'Location', 'Quantity', 'Status', 'Last Updated', 'Notes', ''].map(h => (
-                      <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                    {['Name', 'Category', 'Location', 'Quantity', 'Status', 'Last Updated', 'Notes', ''].map((h, i) => (
+                      <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', position: 'relative' }}>{h}<ColResizer colIdx={i} totalCols={8} onColMouseDown={reagentResize} /></th>
                     ))}
                   </tr>
                 </thead>

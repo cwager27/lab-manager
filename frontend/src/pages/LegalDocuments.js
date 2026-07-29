@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useResizableColumns, ColResizer } from '../lib/useResizableColumns';
 import { supabase } from '../lib/supabase';
 import {
   Scale, Plus, Search, X, Trash2, Download, Eye, ChevronRight,
@@ -592,6 +593,7 @@ function FileRow({ doc, onPreview, onDelete, canManage, odd }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function LegalDocuments({ userRole, userId, profile }) {
+  const { widths: searchDocWidths, onColMouseDown: searchDocResize } = useResizableColumns(6);
   const canManage = userRole === 'admin' || userRole === 'pm';
 
   const [docs, setDocs] = useState([]);
@@ -840,11 +842,12 @@ export default function LegalDocuments({ userRole, userId, profile }) {
           <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)', background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)' }}>No documents match your search.</div>
         ) : (
           <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: 'var(--bg-card)' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table className="resizable-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+              <colgroup>{searchDocWidths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
               <thead>
                 <tr style={{ background: 'var(--bg-secondary)' }}>
-                  {['Document', 'Type', 'Date Added', 'Key Info', 'Expiry', ''].map(h => (
-                    <th key={h} style={{ padding: '10px 14px', textAlign: 'left', ...labelStyle, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
+                  {['Document', 'Type', 'Date Added', 'Key Info', 'Expiry', ''].map((h, i) => (
+                    <th key={h} style={{ padding: '10px 14px', textAlign: 'left', ...labelStyle, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap', position: 'relative' }}>{h}<ColResizer colIdx={i} totalCols={6} onColMouseDown={searchDocResize} /></th>
                   ))}
                 </tr>
               </thead>
@@ -972,14 +975,16 @@ export default function LegalDocuments({ userRole, userId, profile }) {
 }
 
 function DocTable({ docs, onPreview, onDelete, canManage }) {
+  const { widths: docWidths, onColMouseDown: docResize } = useResizableColumns(6);
   const labelStyle = { fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' };
   return (
     <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: 'var(--bg-card)' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <table className="resizable-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+        <colgroup>{docWidths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
         <thead>
           <tr style={{ background: 'var(--bg-secondary)' }}>
-            {['Document', 'File Type', 'Date Added', 'Key Info', 'Expiry', ''].map(h => (
-              <th key={h} style={{ padding: '10px 14px', textAlign: 'left', ...labelStyle, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
+            {['Document', 'File Type', 'Date Added', 'Key Info', 'Expiry', ''].map((h, i) => (
+              <th key={h} style={{ padding: '10px 14px', textAlign: 'left', ...labelStyle, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap', position: 'relative' }}>{h}<ColResizer colIdx={i} totalCols={6} onColMouseDown={docResize} /></th>
             ))}
           </tr>
         </thead>
