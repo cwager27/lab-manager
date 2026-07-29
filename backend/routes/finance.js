@@ -263,8 +263,10 @@ router.post('/preview-nanoseq', upload.single('file'), async (req, res) => {
     if (missing.length > 0) return res.status(400).json({ error: `File rejected — ${missing.length} required column(s) missing. Make sure you are using the Nanoseq Draft template, not the Misc template.`, details: missing.map(h => `Missing: "${h}"`) });
 
     const { data: existing } = await supabase.from('nanoseq_reagents').select('code, name');
-    const existingCodes = new Set((existing || []).filter(e => e.code).map(e => String(e.code).trim().toLowerCase()));
-    const existingNames = new Set((existing || []).map(e => String(e.name || '').trim().toLowerCase()));
+    const normStr = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const existingCodes = new Set((existing || []).filter(e => e.code).map(e => normStr(e.code)));
+    const existingNames = new Set((existing || []).map(e => normStr(e.name)));
+    console.log('[preview-nanoseq] existing names:', [...existingNames]);
 
     const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
     const newReagents = [];
@@ -272,8 +274,9 @@ router.post('/preview-nanoseq', upload.single('file'), async (req, res) => {
       const name = String(row['Name'] || '').trim();
       const code = String(row['Code'] || '').trim();
       if (!name) continue;
-      if (code && existingCodes.has(code.toLowerCase())) continue;
-      if (existingNames.has(name.toLowerCase())) continue;
+      console.log(`[preview-nanoseq] checking row name="${normStr(name)}" code="${normStr(code)}" — nameMatch=${existingNames.has(normStr(name))} codeMatch=${code ? existingCodes.has(normStr(code)) : 'n/a'}`);
+      if (code && existingCodes.has(normStr(code))) continue;
+      if (existingNames.has(normStr(name))) continue;
       newReagents.push({
         protocol: String(row['Protocol'] || '').trim() || null,
         name,
