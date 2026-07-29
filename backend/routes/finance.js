@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { createClient } = require('@supabase/supabase-js');
 const multer = require('multer');
+const XLSX = require('xlsx');
 const upload = multer({ storage: multer.memoryStorage() });
 const transporter = { sendMail: async () => {} }; // emails disabled
 
