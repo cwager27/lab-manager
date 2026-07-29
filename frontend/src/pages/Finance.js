@@ -730,12 +730,42 @@ export default function Finance({ userRole }) {
     exportTableXLSX(rows, 'complete_processing_by_expense_type.xlsx');
   }
   function exportCatMonthTable() {
-    const rows = activeCats.map(cat => {
-      const row = { Category: cat };
-      userCatData.months.forEach((m, mi) => { row[m] = userCatData.data[mi]?.[cat] ?? ''; });
-      return row;
-    });
-    exportTableXLSX(rows, 'monthly_spending_by_category_user.xlsx');
+    const date = new Date().toISOString().split('T')[0];
+    const months = userCatData.months;
+    const data = userCatData.data;
+
+    const aoa = [
+      ['Exported:', date],
+      [],
+      ['Category', ...months, 'Total'],
+      ...activeCats.map(cat => {
+        let rowTotal = 0;
+        const vals = months.map((m, mi) => {
+          const v = data[mi]?.[cat] ?? null;
+          if (v != null) rowTotal += v;
+          return v ?? '';
+        });
+        return [cat, ...vals, rowTotal];
+      }),
+      ['Grand Total',
+        ...months.map((m, mi) => activeCats.reduce((s, cat) => s + (data[mi]?.[cat] || 0), 0)),
+        activeCats.reduce((s, cat) => s + months.reduce((ss, m, mi) => ss + (data[mi]?.[cat] || 0), 0), 0),
+      ],
+    ];
+
+    const yearPart = selectedGlobalYears.length === 0 ? 'allYears' : selectedGlobalYears.map(fy => fy.toUpperCase()).join('-');
+    const userPart = selectedUsers.length === 0 ? 'allUsers' : selectedUsers.join('-');
+    const catPart = (selectedCategories.length === 0 || selectedCategories.length === CATEGORIES.length) ? 'allCategories' : selectedCategories.join('-');
+    const allAll = yearPart === 'allYears' && userPart === 'allUsers' && catPart === 'allCategories';
+    const filename = (allAll
+      ? `spending_summaries_all_data_${date}`
+      : `spending_summaries_${yearPart}_${userPart}_${catPart}_${date}`
+    ).replace(/\s+/g, '_') + '.xlsx';
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Spending');
+    XLSX.writeFile(wb, filename);
   }
 
   function handleExportCatalog() {
@@ -1506,6 +1536,7 @@ export default function Finance({ userRole }) {
                           <th style={{ padding: '7px 10px', textAlign: 'left', color: 'white', fontWeight: 600 }}>Category</th>
                           <th style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600 }}>Complete</th>
                           <th style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600 }}>Processing</th>
+                          <th style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600 }}>Total</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1514,9 +1545,18 @@ export default function Finance({ userRole }) {
                             <td style={{ padding: '5px 10px', color: '#1A1A2E' }}>{row.name}</td>
                             <td style={{ padding: '5px 10px', textAlign: 'right', color: CHART_BLUE }}>{row.complete > 0 ? `$${row.complete.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}</td>
                             <td style={{ padding: '5px 10px', textAlign: 'right', color: CHART_RED }}>{row.processing > 0 ? `$${row.processing.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}</td>
+                            <td style={{ padding: '5px 10px', textAlign: 'right', fontWeight: 700, color: '#1A1A2E' }}>{(row.complete + row.processing) > 0 ? `$${(row.complete + row.processing).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}</td>
                           </tr>
                         ))}
                       </tbody>
+                      <tfoot>
+                        <tr style={{ background: '#9DA9C7', borderTop: '2px solid #7A8AB5', fontWeight: 700 }}>
+                          <td style={{ padding: '7px 10px', color: 'white' }}>Grand Total</td>
+                          <td style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066' }}>${catStatusDataFiltered.reduce((s, r) => s + r.complete, 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                          <td style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066' }}>${catStatusDataFiltered.reduce((s, r) => s + r.processing, 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                          <td style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066' }}>${catStatusDataFiltered.reduce((s, r) => s + r.complete + r.processing, 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
                 </div>
@@ -1620,22 +1660,39 @@ export default function Finance({ userRole }) {
                         <tr style={{ background: '#9DA9C7' }}>
                           <th style={{ padding: '7px 10px', textAlign: 'left', color: 'white', fontWeight: 600, whiteSpace: 'nowrap' }}>Category</th>
                           {userCatData.months.map(m => <th key={m} style={{ padding: '7px 8px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>{m}</th>)}
+                          <th style={{ padding: '7px 8px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>Total</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {activeCats.map((cat, i) => (
-                          <tr key={cat} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white', borderTop: '1px solid var(--border)' }}>
-                            <td style={{ padding: '5px 10px', whiteSpace: 'nowrap' }}>
-                              <span style={{ backgroundColor: CATEGORY_COLORS[cat] || '#888888', width: 8, height: 8, borderRadius: '50%', display: 'inline-block', marginRight: 6, verticalAlign: 'middle' }} />
-                              <span style={{ color: '#1A1A2E', verticalAlign: 'middle' }}>{cat}</span>
-                            </td>
-                            {userCatData.months.map((m, mi) => {
-                              const val = userCatData.data[mi]?.[cat];
-                              return <td key={m} style={{ padding: '5px 8px', textAlign: 'right', color: '#1A1A2E', whiteSpace: 'nowrap' }}>{val != null ? `$${val.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}</td>;
-                            })}
-                          </tr>
-                        ))}
+                        {activeCats.map((cat, i) => {
+                          const rowTotal = userCatData.months.reduce((s, m, mi) => s + (userCatData.data[mi]?.[cat] || 0), 0);
+                          return (
+                            <tr key={cat} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white', borderTop: '1px solid var(--border)' }}>
+                              <td style={{ padding: '5px 10px', whiteSpace: 'nowrap' }}>
+                                <span style={{ backgroundColor: CATEGORY_COLORS[cat] || '#888888', width: 8, height: 8, borderRadius: '50%', display: 'inline-block', marginRight: 6, verticalAlign: 'middle' }} />
+                                <span style={{ color: '#1A1A2E', verticalAlign: 'middle' }}>{cat}</span>
+                              </td>
+                              {userCatData.months.map((m, mi) => {
+                                const val = userCatData.data[mi]?.[cat];
+                                return <td key={m} style={{ padding: '5px 8px', textAlign: 'right', color: '#1A1A2E', whiteSpace: 'nowrap' }}>{val != null ? `$${val.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}</td>;
+                              })}
+                              <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, color: '#1A1A2E', whiteSpace: 'nowrap' }}>{rowTotal > 0 ? `$${rowTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
+                      <tfoot>
+                        <tr style={{ background: '#9DA9C7', borderTop: '2px solid #7A8AB5', fontWeight: 700 }}>
+                          <td style={{ padding: '7px 10px', color: 'white', whiteSpace: 'nowrap' }}>Grand Total</td>
+                          {userCatData.months.map((m, mi) => {
+                            const colTotal = activeCats.reduce((s, cat) => s + (userCatData.data[mi]?.[cat] || 0), 0);
+                            return <td key={m} style={{ padding: '7px 8px', textAlign: 'right', color: '#FFE066', whiteSpace: 'nowrap' }}>{colTotal > 0 ? `$${colTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}</td>;
+                          })}
+                          <td style={{ padding: '7px 8px', textAlign: 'right', color: '#FFE066', whiteSpace: 'nowrap' }}>
+                            ${activeCats.reduce((s, cat) => s + userCatData.months.reduce((ss, m, mi) => ss + (userCatData.data[mi]?.[cat] || 0), 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
                 </div>
