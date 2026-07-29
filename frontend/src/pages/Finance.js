@@ -938,8 +938,9 @@ export default function Finance({ userRole }) {
                   const formData = new FormData(); formData.append('file', file);
                   const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/preview-nanoseq`, { method: 'POST', body: formData });
                   const data = await res.json();
-                  if (data.error) { setImportError(data); }
-                  else if (data.newNanoseq) setPreviewNanoseq(data.newNanoseq);
+                  if (data.error) { setImportReagentError(data); }
+                  else if (data.newNanoseq && data.newNanoseq.length > 0) setPreviewNanoseq(data.newNanoseq);
+                  else if (data.newNanoseq && data.newNanoseq.length === 0) setImportReagentError({ error: 'No new reagents found — all catalog codes in this file already exist in the table.' });
                   setUploadingFile(false); e.target.value = '';
                 }} />
               </label>
