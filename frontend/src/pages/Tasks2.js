@@ -375,8 +375,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       .catch(() => setDataLoading(false));
   }, []);
 
-  useEffect(() => { if (tab === 'calendar') loadCalendar(); }, [tab, calYear, calMonth]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (tab === 'calendar') loadCalSummary(); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (tab === 'calendar') { loadCalendar(); loadCalSummary(); } }, [tab, calYear, calMonth]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (tab === 'unassigned') loadUnassigned(); }, [tab]);
   useEffect(() => { if (tab === 'view-all' && !vatLoaded) loadVatData(); }, [tab, vatLoaded]); // eslint-disable-line
   useEffect(() => { if (tab === 'assigned') { loadAssignedTasks(assignedFrom, assignedTo); loadUnassignedOccs(); } }, [tab, assignedFrom, assignedTo]); // eslint-disable-line
@@ -497,8 +496,17 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   function loadCalendar() {
     setCalLoading(true);
     setCalDayPanel(null);
-    fetch(`${API}/api/tasks2/calendar?year=${calYear}&month=${calMonth}`)
-      .then(r => r.json()).then(d => { setCalData(Array.isArray(d) ? d : []); setCalLoading(false); })
+    // Generate any missing occurrences first (180-day window), then fetch calendar data.
+    // Generation is idempotent — safe to call on every load.
+    fetch(`${API}/api/tasks/generate-occurrences`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ windowDays: 180 }),
+    })
+      .catch(() => {})
+      .then(() => fetch(`${API}/api/tasks2/calendar?year=${calYear}&month=${calMonth}`))
+      .then(r => r.json())
+      .then(d => { setCalData(Array.isArray(d) ? d : []); setCalLoading(false); })
       .catch(() => setCalLoading(false));
   }
 
