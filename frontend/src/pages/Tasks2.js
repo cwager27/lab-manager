@@ -535,6 +535,10 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       sort_order: src.sort_order ?? 0,
       sop_trigger: src.sop_trigger || false,
       sop_url: src.conditional_text || '',
+      recWeekday: src.recurrence_rule?.weekday || 'monday',
+      recMonthDay: src.recurrence_rule?.day || 1,
+      recBiweeklyWeeks: src.recurrence_rule?.weeks || [1, 3],
+      recAnchor: src.recurrence_anchor || new Date().toISOString().split('T')[0],
       respYes: opts.length ? opts.includes('yes') : (src.response_type === 'yes_no' || src.response_type === 'yes_no_na' || !src.id),
       respNo: opts.length ? opts.includes('no') : (src.response_type === 'yes_no' || src.response_type === 'yes_no_na' || !src.id),
       respNa: opts.length ? opts.includes('na') : src.response_type === 'yes_no_na',
@@ -563,6 +567,27 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       taskDefForm.respYes && taskDefForm.respNo ? 'yes_no' :
       taskDefForm.respFillIn && !taskDefForm.respYes && !taskDefForm.respNo ? 'text' : 'yes_no';
     const subTasksClean = taskDefForm.subTasks.map(s => s.trim()).filter(Boolean);
+    const freq = taskDefForm.frequency;
+    let recurrence_rule = null;
+    let recurrence_anchor = null;
+    if (freq === 'daily') {
+      recurrence_rule = { type: 'daily' };
+    } else if (freq === 'weekly') {
+      recurrence_rule = { type: 'weekly', weekday: taskDefForm.recWeekday };
+    } else if (freq === 'biweekly') {
+      recurrence_rule = { type: 'nth_weekday', weekday: taskDefForm.recWeekday, weeks: taskDefForm.recBiweeklyWeeks };
+    } else if (freq === 'monthly') {
+      recurrence_rule = { type: 'monthly', day: taskDefForm.recMonthDay };
+    } else if (freq === 'bimonthly') {
+      recurrence_rule = { type: 'monthly_interval', months: 2 };
+      recurrence_anchor = taskDefForm.recAnchor;
+    } else if (freq === 'quarterly') {
+      recurrence_rule = { type: 'monthly_interval', months: 3 };
+      recurrence_anchor = taskDefForm.recAnchor;
+    } else if (freq === 'yearly') {
+      recurrence_rule = { type: 'monthly_interval', months: 12 };
+      recurrence_anchor = taskDefForm.recAnchor;
+    }
     const payload = {
       title: taskDefForm.title.trim(),
       category: taskDefForm.category,
@@ -576,6 +601,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       response_options: response_options.length ? response_options : null,
       sub_tasks: subTasksClean.length ? subTasksClean.map((t, i) => ({ id: i, title: t, trigger: taskDefForm.subTaskTrigger })) : null,
       status: 'published',
+      recurrence_rule,
+      recurrence_anchor,
     };
     if (editingTaskDef?.id) {
       await supabase.from('tasks_definitions').update(payload).eq('id', editingTaskDef.id);
@@ -668,6 +695,44 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             </div>
               );
             })()}
+            {/* Recurrence picker — shown based on frequency */}
+            {['weekly', 'biweekly'].includes(f.frequency) && (
+              <div style={{ display: 'grid', gridTemplateColumns: f.frequency === 'biweekly' ? '1fr 1fr' : '1fr', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Day of Week</label>
+                  <select value={f.recWeekday} onChange={e => tdf({ recWeekday: e.target.value })} style={inputStyle}>
+                    {['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(d => (
+                      <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
+                    ))}
+                  </select>
+                </div>
+                {f.frequency === 'biweekly' && (
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Which Weeks</label>
+                    <select value={JSON.stringify(f.recBiweeklyWeeks)} onChange={e => tdf({ recBiweeklyWeeks: JSON.parse(e.target.value) })} style={inputStyle}>
+                      <option value="[1,3]">1st & 3rd</option>
+                      <option value="[2,4]">2nd & 4th</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+            {f.frequency === 'monthly' && (
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Day of Month</label>
+                <select value={f.recMonthDay} onChange={e => tdf({ recMonthDay: Number(e.target.value) })} style={inputStyle}>
+                  {Array.from({ length: 28 }, (_, i) => i + 1).map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {['bimonthly', 'quarterly', 'yearly'].includes(f.frequency) && (
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Start / Anchor Date</label>
+                <input type="date" value={f.recAnchor} onChange={e => tdf({ recAnchor: e.target.value })} style={inputStyle} />
+              </div>
+            )}
             {/* Audit Area */}
             {(() => {
               const existingAuditAreas = [...new Set(vatTasks.filter(t => t.audit_area && t.category === f.category).map(t => t.audit_area))].sort();
