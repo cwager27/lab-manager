@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { supabaseAdmin } = require('../lib/supabaseAdmin');
 const transporter = { sendMail: async () => {} }; // emails disabled
 
 function reminderHtml(name, taskName, dueDate, message) {

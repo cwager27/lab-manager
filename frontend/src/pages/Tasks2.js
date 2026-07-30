@@ -492,7 +492,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     setCalLoading(true);
     setSelectedDay(null);
     fetch(`${API}/api/tasks2/calendar?year=${calYear}&month=${calMonth}`)
-      .then(r => r.json()).then(d => { setCalData(d); setCalLoading(false); })
+      .then(r => r.json()).then(d => { setCalData(Array.isArray(d) ? d : []); setCalLoading(false); })
       .catch(() => setCalLoading(false));
   }
 

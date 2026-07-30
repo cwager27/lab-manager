@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { supabaseAdmin } = require('../lib/supabaseAdmin');
 const transporter = { sendMail: async () => {} }; // emails disabled
 
 const ROLE_LABELS = { admin: 'Supervisor', pm: 'Program Manager', member: 'Lab Member', intern: 'Intern' };

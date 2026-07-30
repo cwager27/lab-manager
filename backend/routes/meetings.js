@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { createClient } = require('@supabase/supabase-js');
+const { supabaseAdmin } = require('../lib/supabaseAdmin');
 const transporter = { sendMail: async () => {} }; // emails disabled
 
 async function getAllLabEmails() {
