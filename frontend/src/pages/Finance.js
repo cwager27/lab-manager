@@ -130,6 +130,10 @@ export default function Finance({ userRole }) {
   const [vcSelectedYears, setVcSelectedYears] = useState([]);
   const [vcYearOpen, setVcYearOpen] = useState(false);
   const [vcDraftYears, setVcDraftYears] = useState([]);
+  const [vcSelectedCategories, setVcSelectedCategories] = useState([]);
+  const [vcCategoryOpen, setVcCategoryOpen] = useState(false);
+  const [vcDraftCategories, setVcDraftCategories] = useState([]);
+  const [vcCategorySearch, setVcCategorySearch] = useState('');
   const chartData = useMemo(() => {
     const real = orders.filter(o => {
       if (!o.item || o.item.trim() === '' || o.status === 'deleted') return false;
@@ -413,9 +417,11 @@ export default function Finance({ userRole }) {
   const vendorChartData = useMemo(() => {
     const activeV = vcSelectedVendors.length === 0 ? allVendorNames : vcSelectedVendors;
     const activeYrs = vcSelectedYears.length === 0 ? allFYs : vcSelectedYears;
+    const activeCatsFilter = vcSelectedCategories.length > 0 ? new Set(vcSelectedCategories) : null;
     const real = orders.filter(o =>
       o.item && o.status !== 'deleted' && o.total_price != null && o.vendor &&
-      activeV.includes(o.vendor) && (activeYrs.length === 0 || activeYrs.includes(getFiscalYear(o.order_date)))
+      activeV.includes(o.vendor) && (activeYrs.length === 0 || activeYrs.includes(getFiscalYear(o.order_date))) &&
+      (!activeCatsFilter || activeCatsFilter.has(o.category))
     );
     const monthMap = {};
     real.forEach(o => { const m = orderDateToMonth(o.order_date); if (m) monthMap[m] = o.order_date; });
@@ -440,7 +446,7 @@ export default function Finance({ userRole }) {
       Object.values(vendorYearSpend[a] || {}).reduce((s, v) => s + v, 0)
     );
     return { data: months.map(m => byMonth[m]), months, vendorYearSpend, activeV: sortedV, activeYrs };
-  }, [orders, vcSelectedVendors, vcSelectedYears, allVendorNames, allFYs]);
+  }, [orders, vcSelectedVendors, vcSelectedYears, vcSelectedCategories, allVendorNames, allFYs]);
 
   async function commitOrderSelectEdit(id, col, value) {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, [col]: value } : o));
@@ -1719,10 +1725,12 @@ export default function Finance({ userRole }) {
 
               {/* Vendor spending chart */}
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '20px 24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
-                  <h3 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Spending by Vendor</h3>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <h3 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Spending by Vendor</h3>
                     <button onClick={handleExportVendorChart} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
 
                     <div style={{ position: 'relative' }}>
                       <button onClick={() => { setVcDraftYears(vcSelectedYears); setVcYearOpen(v => !v); }} style={filterBtn()}>
@@ -1772,6 +1780,36 @@ export default function Finance({ userRole }) {
                         </div>
                       )}
                     </div>
+
+                    <div style={{ position: 'relative' }}>
+                      <button onClick={() => { setVcDraftCategories(vcSelectedCategories); setVcCategorySearch(''); setVcCategoryOpen(v => !v); }} style={filterBtn()}>
+                        {vcSelectedCategories.length === 0 ? 'All Categories' : `${vcSelectedCategories.length} Categor${vcSelectedCategories.length > 1 ? 'ies' : 'y'} Selected`}
+                        <span style={{ fontSize: '10px' }}>▼</span>
+                      </button>
+                      {vcCategoryOpen && (
+                        <div style={{ ...dropdownBox, width: '280px' }}>
+                          <input value={vcCategorySearch} onChange={e => setVcCategorySearch(e.target.value)} placeholder="Search categories…" style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box', marginBottom: '8px' }} />
+                          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                            <button onClick={() => setVcDraftCategories([...CATEGORIES])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>All</button>
+                            <button onClick={() => setVcDraftCategories([])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Clear</button>
+                          </div>
+                          <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            {CATEGORIES.filter(c => c.toLowerCase().includes(vcCategorySearch.toLowerCase())).map(c => (
+                              <label key={c} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px' }}>
+                                <input type="checkbox" checked={vcDraftCategories.includes(c)} onChange={e => setVcDraftCategories(prev => e.target.checked ? [...prev, c] : prev.filter(x => x !== c))} />
+                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: CATEGORY_COLORS[c] || '#888888', flexShrink: 0 }} />
+                                <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{c}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                            <button onClick={() => setVcCategoryOpen(false)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                            <button onClick={() => { setVcSelectedCategories(vcDraftCategories); setVcCategoryOpen(false); }} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>OK</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                   </div>
                 </div>
 
@@ -1865,7 +1903,7 @@ export default function Finance({ userRole }) {
                       )}
                       {sortedCatalogRows.map((r, i) => (
                         <tr key={r.catalog_number} style={{ borderTop: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
-                          <td style={tdStyle({ maxW: '180px' })}>{r.item}</td>
+                          <td style={{ ...tdStyle(), whiteSpace: 'normal', minWidth: '200px' }}>{r.item}</td>
                           <td style={tdStyle({ maxW: '120px' })}>{r.vendor || '—'}</td>
                           <td style={tdStyle({ maxW: '140px' })}>{r.category || '—'}</td>
                           <td style={tdStyle({ mono: true, color: 'var(--text-muted)' })}>{r.catalog_number}</td>
