@@ -3684,7 +3684,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
         {/* ── Monthly calendar grid ── */}
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 16 }}>
             <button onClick={() => { if (calMonth === 1) { setCalMonth(12); setCalYear(y => y - 1); } else setCalMonth(m => m - 1); }}
               style={{ ...btn('ghost'), padding: '6px 12px' }}>←</button>
             <span style={{ fontSize: 18, fontWeight: 700, minWidth: 160, textAlign: 'center' }}>
