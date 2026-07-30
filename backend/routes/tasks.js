@@ -55,7 +55,7 @@ router.get('/tasks2/data', async (req, res) => {
     const [tasksRes, profilesRes, vacsRes] = await Promise.all([
       supabaseAdmin
         .from('tasks_definitions')
-        .select('id, title, category, frequency, group_name, sort_order, recurrence_rule')
+        .select('id, title, category, frequency, group_name, audit_area, sort_order, recurrence_rule')
         .eq('status', 'published')
         .order('sort_order'),
       supabaseAdmin.from('profiles').select('id, full_name, email, role'),
