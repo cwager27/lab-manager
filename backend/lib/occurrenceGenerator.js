@@ -110,9 +110,25 @@ function computeDates(rule, anchor, windowStart, windowEnd) {
   return dates;
 }
 
+// Derive a sensible default recurrence_rule from a task's frequency when none is stored.
+function defaultRuleForFrequency(frequency) {
+  switch ((frequency || '').toLowerCase()) {
+    case 'daily':      return { type: 'daily' };
+    case 'weekly':     return { type: 'weekly', weekday: 'monday' };
+    case 'biweekly':   return { type: 'nth_weekday', weekday: 'monday', weeks: [1, 3] };
+    case 'monthly':    return { type: 'monthly', day: 1 };
+    case 'bimonthly':  return { type: 'monthly_interval', months: 2 };
+    case 'quarterly':  return { type: 'monthly_interval', months: 3 };
+    case 'yearly':     return { type: 'monthly_interval', months: 12 };
+    default:           return { type: 'monthly', day: 1 };
+  }
+}
+
 // Returns dates in [windowStart, windowEnd] that have no existing occurrence row.
 async function computeGaps(supabase, task, windowStart, windowEnd) {
-  const expected = computeDates(task.recurrence_rule, task.recurrence_anchor, windowStart, windowEnd);
+  const rule = task.recurrence_rule || defaultRuleForFrequency(task.frequency);
+  const anchor = task.recurrence_anchor || toISO(windowStart);
+  const expected = computeDates(rule, anchor, windowStart, windowEnd);
   if (!expected.length) return [];
 
   const { data: existing, error } = await supabase
@@ -138,8 +154,7 @@ async function generateOccurrences(supabase, { windowDays = 90, dryRun = false }
   const { data: tasks, error } = await supabase
     .from('tasks_definitions')
     .select('id, title, frequency, category, recurrence_rule, recurrence_anchor')
-    .eq('status', 'published')
-    .not('recurrence_rule', 'is', null);
+    .eq('status', 'published');
 
   if (error) throw error;
 
@@ -172,4 +187,4 @@ async function generateOccurrences(supabase, { windowDays = 90, dryRun = false }
   };
 }
 
-module.exports = { generateOccurrences, computeDates, computeGaps, parseDate };
+module.exports = { generateOccurrences, computeDates, computeGaps, parseDate, defaultRuleForFrequency };

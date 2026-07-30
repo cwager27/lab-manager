@@ -57,7 +57,6 @@ router.get('/tasks2/data', async (req, res) => {
         .from('tasks_definitions')
         .select('id, title, category, frequency, group_name, sort_order, recurrence_rule')
         .eq('status', 'published')
-        .not('recurrence_rule', 'is', null)
         .order('sort_order'),
       supabaseAdmin.from('profiles').select('id, full_name, email, role'),
       supabaseAdmin
@@ -111,8 +110,7 @@ router.post('/tasks2/ensure-occurrences', async (req, res) => {
       .from('tasks_definitions')
       .select('id, title, frequency, recurrence_rule, recurrence_anchor')
       .in('id', taskIds)
-      .eq('status', 'published')
-      .not('recurrence_rule', 'is', null);
+      .eq('status', 'published');
 
     if (taskErr) throw taskErr;
 
