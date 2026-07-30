@@ -505,7 +505,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     setCalSummaryLoading(true);
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const end = new Date(now.getFullYear(), now.getMonth() + 3, 0).toISOString().split('T')[0];
+    const end = new Date(now.getFullYear(), now.getMonth() + 4, 0).toISOString().split('T')[0];
     fetch(`${API}/api/tasks2/calendar-range?start=${start}&end=${end}`)
       .then(r => r.json())
       .then(d => { setCalSummaryData(Array.isArray(d) ? d : []); setCalSummaryLoading(false); })
@@ -3569,7 +3569,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
     // Summary table: always current month + next 2 months
     const now = new Date();
-    const summaryMonths = [0, 1, 2].map(i => {
+    const summaryMonths = [0, 1, 2, 3].map(i => {
       const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
       return {
         year: d.getFullYear(),
@@ -3579,9 +3579,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       };
     });
 
-    const activeFreqs = FREQ_ORDER.filter(f =>
-      calSummaryData.some(o => (o.task?.frequency || '').toLowerCase() === f)
-    );
+    const activeFreqs = FREQ_ORDER;
 
     // { profileId: { monthKey: { freq: { assigned, completed } } } }
     const summaryLookup = {};
@@ -3627,8 +3625,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           </div>
           {calSummaryLoading ? (
             <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
-          ) : activeFreqs.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)', fontSize: 13 }}>No assigned occurrences in this window</div>
           ) : (
             <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
               <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
