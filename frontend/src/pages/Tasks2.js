@@ -581,6 +581,12 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       await supabase.from('tasks_definitions').update(payload).eq('id', editingTaskDef.id);
     } else {
       await supabase.from('tasks_definitions').insert([payload]);
+      // Generate occurrences immediately so the new task appears in scope
+      fetch(`${API}/api/tasks/generate-occurrences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ windowDays: 90 }),
+      }).catch(() => {});
     }
     const relatedUpdates = Object.entries(relatedTaskEdits).filter(([, t]) => t.trim());
     for (const [id, title] of relatedUpdates) {
