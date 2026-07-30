@@ -21,7 +21,7 @@ const FREQ_COLORS = {
 };
 const ALL_FREQS = ['daily', 'weekly', 'biweekly', 'monthly', 'bimonthly', 'quarterly', 'yearly'];
 
-const FREQ_ORDER = ['yearly', 'quarterly', 'bimonthly', 'monthly', 'biweekly', 'weekly', 'daily'];
+const FREQ_ORDER = ['daily', 'weekly', 'biweekly', 'monthly', 'bimonthly', 'quarterly', 'yearly'];
 const FREQ_LABEL = { yearly: 'Yearly', quarterly: 'Quarterly', bimonthly: 'Bimonthly', monthly: 'Monthly', biweekly: 'Biweekly', weekly: 'Weekly', daily: 'Daily' };
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
