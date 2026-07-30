@@ -331,6 +331,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const [calSummaryData, setCalSummaryData] = useState([]);
   const [calSummaryLoading, setCalSummaryLoading] = useState(false);
   const [calDayPanel, setCalDayPanel] = useState(null);
+  const [calExpandedFreq, setCalExpandedFreq] = useState(null);
   const [calAssigning, setCalAssigning] = useState({});
   const [calAssignSaving, setCalAssignSaving] = useState(false);
 
@@ -3711,7 +3712,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
                     return (
                       <div key={dateStr}
-                        onClick={() => dayOccs.length && setCalDayPanel(isSelected ? null : { date: dateStr })}
+                        onClick={() => { if (!dayOccs.length) return; setCalDayPanel(isSelected ? null : { date: dateStr }); setCalExpandedFreq(null); setCalAssigning({}); }}
                         style={{
                           minHeight: 76, padding: 6, borderRadius: 6, cursor: dayOccs.length ? 'pointer' : 'default',
                           background: isSelected ? 'rgba(123,63,160,0.10)' : 'var(--bg-primary)',
@@ -3748,77 +3749,91 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
               {/* Day panel */}
               {panelDate && (
-                <div style={{ width: 300, flexShrink: 0 }}>
-                  <div style={{ ...card, padding: 16 }}>
+                <div style={{ width: 320, flexShrink: 0 }}>
+                  <div style={{ ...card, padding: 16, maxHeight: '70vh', overflowY: 'auto' }}>
+                    {/* Header */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                       <div style={{ fontWeight: 700, fontSize: 14 }}>{fmtDate(panelDate)}</div>
-                      <button onClick={() => setCalDayPanel(null)} style={{ ...linkBtn, fontSize: 18, padding: '0 4px', color: 'var(--text-muted)' }}>×</button>
+                      <button onClick={() => { setCalDayPanel(null); setCalExpandedFreq(null); setCalAssigning({}); }} style={{ ...linkBtn, fontSize: 20, padding: '0 4px', color: 'var(--text-muted)' }}>×</button>
                     </div>
 
-                    {panelUnassigned.length > 0 && (
-                      <div style={{ marginBottom: 16 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#B45309', marginBottom: 10 }}>
-                          {panelUnassigned.length} unassigned
-                        </div>
-                        {FREQ_ORDER.filter(f => panelByFreq[f]?.length).map(f => (
-                          <div key={f} style={{ marginBottom: 14 }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: FREQ_COLORS[f]?.text || 'var(--text-muted)', marginBottom: 6, textTransform: 'capitalize' }}>
-                              {FREQ_LABEL[f]} — {panelByFreq[f].length} task{panelByFreq[f].length !== 1 ? 's' : ''}
-                            </div>
-                            {panelByFreq[f].map(o => (
-                              <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, padding: '5px 8px', background: 'var(--bg-secondary)', borderRadius: 6 }}>
-                                <div style={{ flex: 1, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }} title={o.task?.title}>
-                                  {o.task?.title || '—'}
-                                </div>
-                                <select
-                                  value={calAssigning[o.id] || ''}
-                                  onChange={e => setCalAssigning(prev => ({ ...prev, [o.id]: e.target.value }))}
-                                  style={{ fontSize: 11, padding: '2px 4px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', maxWidth: 90 }}>
-                                  <option value="">Assign…</option>
-                                  {profiles.map(p => <option key={p.id} value={p.id}>{(p.full_name || '').split(' ')[0]}</option>)}
-                                </select>
-                              </div>
-                            ))}
-                            {panelByFreq[f].some(o => calAssigning[o.id]) && (
-                              <button
-                                onClick={() => saveCalAssignments(panelByFreq[f])}
-                                disabled={calAssignSaving}
-                                style={{ ...btn('primary'), padding: '4px 10px', fontSize: 11, marginTop: 4, width: '100%', opacity: calAssignSaving ? 0.6 : 1 }}>
-                                {calAssignSaving ? 'Saving…' : 'Save'}
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                    {panelUnassigned.length === 0 && panelOccs.length === 0 && (
+                      <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No tasks this day</div>
                     )}
 
-                    {panelOccs.length > 0 && (
-                      <div>
-                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)', marginBottom: 10 }}>
-                          All tasks ({panelOccs.length})
+                    {/* Unassigned accordion */}
+                    {FREQ_ORDER.filter(f => panelByFreq[f]?.length).map(f => {
+                      const isOpen = calExpandedFreq === f;
+                      const freqOccs = panelByFreq[f];
+                      const fc = FREQ_COLORS[f] || { bg: '#f3f4f6', text: '#6b7280', border: '#d1d5db' };
+                      return (
+                        <div key={f} style={{ marginBottom: 6 }}>
+                          {/* Collapsed row */}
+                          <div
+                            onClick={() => { setCalExpandedFreq(isOpen ? null : f); if (!isOpen) setCalAssigning({}); }}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 12px', background: isOpen ? fc.bg : 'var(--bg-secondary)', borderRadius: isOpen ? '8px 8px 0 0' : 8, cursor: 'pointer', border: `1px solid ${isOpen ? fc.border : 'transparent'}`, borderBottom: isOpen ? 'none' : undefined }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: isOpen ? fc.text : 'var(--text-primary)' }}>
+                              {freqOccs.length} unassigned {FREQ_LABEL[f].toLowerCase()}
+                            </span>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                              {isOpen && (
+                                <button
+                                  onClick={e => { e.stopPropagation(); setCalExpandedFreq(null); setCalAssigning({}); }}
+                                  style={{ ...linkBtn, fontSize: 16, padding: '0 2px', color: 'var(--text-muted)', lineHeight: 1 }}>×</button>
+                              )}
+                              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{isOpen ? '▲' : '▼'}</span>
+                            </div>
+                          </div>
+
+                          {/* Expanded task list */}
+                          {isOpen && (
+                            <div style={{ border: `1px solid ${fc.border}`, borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '10px 12px', background: 'var(--bg-primary)' }}>
+                              {freqOccs.map(o => (
+                                <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                                  <div style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }} title={o.task?.title}>
+                                    {o.task?.title || '—'}
+                                  </div>
+                                  <select
+                                    value={calAssigning[o.id] || ''}
+                                    onChange={e => setCalAssigning(prev => ({ ...prev, [o.id]: e.target.value }))}
+                                    style={{ fontSize: 11, padding: '3px 5px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', maxWidth: 100, flexShrink: 0 }}>
+                                    <option value="">Assign…</option>
+                                    {profiles.map(p => <option key={p.id} value={p.id}>{(p.full_name || '').split(' ')[0]}</option>)}
+                                  </select>
+                                </div>
+                              ))}
+                              {freqOccs.some(o => calAssigning[o.id]) && (
+                                <button
+                                  onClick={() => saveCalAssignments(freqOccs)}
+                                  disabled={calAssignSaving}
+                                  style={{ ...btn('primary'), padding: '5px 10px', fontSize: 11, marginTop: 6, width: '100%', opacity: calAssignSaving ? 0.6 : 1 }}>
+                                  {calAssignSaving ? 'Saving…' : 'Save assignments'}
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        {panelOccs.map(o => {
+                      );
+                    })}
+
+                    {/* Assigned/done tasks */}
+                    {panelOccs.filter(o => o.status !== 'unassigned').length > 0 && (
+                      <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)', marginBottom: 8 }}>
+                          Assigned / done
+                        </div>
+                        {panelOccs.filter(o => o.status !== 'unassigned').map(o => {
                           const st = occStatus(o);
-                          const stColors = { done: '#22c55e', pending: '#f59e0b', late: '#ef4444', unassigned: '#9ca3af' };
+                          const stColors = { done: '#22c55e', pending: '#f59e0b', late: '#ef4444' };
                           return (
-                            <div key={o.id} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
-                              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, lineHeight: 1.4 }}>
-                                {o.task?.title || '—'}
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: `${stColors[st]}22`, color: stColors[st], fontWeight: 700, textTransform: 'capitalize' }}>{st}</span>
-                                {o.assignee?.full_name
-                                  ? <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{o.assignee.full_name}</span>
-                                  : <span style={{ fontSize: 11, color: '#9ca3af' }}>No assignee</span>}
-                              </div>
+                            <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7 }}>
+                              <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: `${stColors[st]}22`, color: stColors[st], fontWeight: 700, textTransform: 'capitalize', whiteSpace: 'nowrap', flexShrink: 0 }}>{st}</span>
+                              <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }} title={o.task?.title}>{o.task?.title || '—'}</span>
+                              <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{(o.assignee?.full_name || '').split(' ')[0]}</span>
                             </div>
                           );
                         })}
                       </div>
-                    )}
-
-                    {panelOccs.length === 0 && (
-                      <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No tasks this day</div>
                     )}
                   </div>
                 </div>
