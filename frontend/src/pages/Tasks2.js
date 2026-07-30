@@ -608,12 +608,16 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       await supabase.from('tasks_definitions').update(payload).eq('id', editingTaskDef.id);
     } else {
       await supabase.from('tasks_definitions').insert([payload]);
-      // Generate occurrences immediately so the new task appears in scope
+      // Generate occurrences and reload scope task list so new task/frequency appears immediately
       fetch(`${API}/api/tasks/generate-occurrences`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ windowDays: 90 }),
       }).catch(() => {});
+      fetch(`${API}/api/tasks2/data`)
+        .then(r => r.json())
+        .then(d => { if (d.tasks) setTasks(d.tasks); })
+        .catch(() => {});
     }
     const relatedUpdates = Object.entries(relatedTaskEdits).filter(([, t]) => t.trim());
     for (const [id, title] of relatedUpdates) {
