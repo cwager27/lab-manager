@@ -3626,8 +3626,9 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           {calSummaryLoading ? (
             <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
           ) : (
-            <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-              <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+            <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: '100%' }}>
                 <thead>
                   <tr>
                     <th rowSpan={2} style={{ ...thSt, borderBottom: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 12 }}>Member</th>
@@ -3667,6 +3668,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                   ))}
                 </tbody>
               </table>
+            </div>
             </div>
           )}
         </div>
@@ -4293,7 +4295,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   ];
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto' }}>
+    <div style={{ maxWidth: tab === 'calendar' ? '100%' : 900, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>Task assignment</h1>
@@ -4338,7 +4340,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       )}
 
       {canManage && tab === 'calendar' && (
-        <div style={card}>
+        <div style={{ ...card, overflowX: 'hidden' }}>
           {renderCalendar()}
         </div>
       )}
