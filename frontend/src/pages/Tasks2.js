@@ -328,7 +328,11 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1);
   const [calData, setCalData] = useState([]);
   const [calLoading, setCalLoading] = useState(false);
-  const [selectedDay, setSelectedDay] = useState(null);
+  const [calSummaryData, setCalSummaryData] = useState([]);
+  const [calSummaryLoading, setCalSummaryLoading] = useState(false);
+  const [calDayPanel, setCalDayPanel] = useState(null);
+  const [calAssigning, setCalAssigning] = useState({});
+  const [calAssignSaving, setCalAssignSaving] = useState(false);
 
   // ── Unassigned state ──────────────────────────────────────────────────────
   const [unassigned, setUnassigned] = useState([]);
@@ -371,6 +375,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   }, []);
 
   useEffect(() => { if (tab === 'calendar') loadCalendar(); }, [tab, calYear, calMonth]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (tab === 'calendar') loadCalSummary(); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (tab === 'unassigned') loadUnassigned(); }, [tab]);
   useEffect(() => { if (tab === 'view-all' && !vatLoaded) loadVatData(); }, [tab, vatLoaded]); // eslint-disable-line
   useEffect(() => { if (tab === 'assigned') { loadAssignedTasks(assignedFrom, assignedTo); loadUnassignedOccs(); } }, [tab, assignedFrom, assignedTo]); // eslint-disable-line
@@ -490,10 +495,46 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
   function loadCalendar() {
     setCalLoading(true);
-    setSelectedDay(null);
+    setCalDayPanel(null);
     fetch(`${API}/api/tasks2/calendar?year=${calYear}&month=${calMonth}`)
       .then(r => r.json()).then(d => { setCalData(Array.isArray(d) ? d : []); setCalLoading(false); })
       .catch(() => setCalLoading(false));
+  }
+
+  function loadCalSummary() {
+    setCalSummaryLoading(true);
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const end = new Date(now.getFullYear(), now.getMonth() + 3, 0).toISOString().split('T')[0];
+    fetch(`${API}/api/tasks2/calendar-range?start=${start}&end=${end}`)
+      .then(r => r.json())
+      .then(d => { setCalSummaryData(Array.isArray(d) ? d : []); setCalSummaryLoading(false); })
+      .catch(() => setCalSummaryLoading(false));
+  }
+
+  async function saveCalAssignments(occs) {
+    const toSave = occs.filter(o => calAssigning[o.id]);
+    if (!toSave.length) return;
+    setCalAssignSaving(true);
+    try {
+      await Promise.all(toSave.map(o =>
+        fetch(`${API}/api/tasks2/assign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assigneeIds: [calAssigning[o.id]], occurrenceIds: [o.id], rotateEvery: 1 }),
+        }).then(r => r.json())
+      ));
+      setCalAssigning(prev => {
+        const next = { ...prev };
+        toSave.forEach(o => delete next[o.id]);
+        return next;
+      });
+      loadCalendar();
+      loadCalSummary();
+    } catch (e) {
+      console.error('cal assign error:', e);
+    }
+    setCalAssignSaving(false);
   }
 
   function loadUnassigned() {
@@ -3524,27 +3565,118 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   // ── Calendar tab ──────────────────────────────────────────────────────────
 
   function renderCalendar() {
-    const firstDow = new Date(calYear, calMonth - 1, 1).getDay();
-    const daysInMonth = new Date(calYear, calMonth, 0).getDate();
     const todayStr = today();
 
+    // Summary table: always current month + next 2 months
+    const now = new Date();
+    const summaryMonths = [0, 1, 2].map(i => {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      return {
+        year: d.getFullYear(),
+        month: d.getMonth() + 1,
+        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+        label: `${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`,
+      };
+    });
+
+    const activeFreqs = FREQ_ORDER.filter(f =>
+      calSummaryData.some(o => (o.task?.frequency || '').toLowerCase() === f)
+    );
+
+    // { profileId: { monthKey: { freq: { assigned, completed } } } }
+    const summaryLookup = {};
+    calSummaryData.forEach(o => {
+      if (!o.assigned_to) return;
+      const freq = (o.task?.frequency || '').toLowerCase();
+      const mk = o.due_date.slice(0, 7);
+      if (!summaryLookup[o.assigned_to]) summaryLookup[o.assigned_to] = {};
+      if (!summaryLookup[o.assigned_to][mk]) summaryLookup[o.assigned_to][mk] = {};
+      if (!summaryLookup[o.assigned_to][mk][freq]) summaryLookup[o.assigned_to][mk][freq] = { assigned: 0, completed: 0 };
+      summaryLookup[o.assigned_to][mk][freq].assigned++;
+      if (o.status === 'done') summaryLookup[o.assigned_to][mk][freq].completed++;
+    });
+
+    const thSt = { padding: '7px 10px', fontSize: 11, fontWeight: 700, background: 'var(--bg-secondary)', border: '1px solid var(--border)', textAlign: 'left', whiteSpace: 'nowrap', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' };
+    const tdSt = { padding: '7px 10px', fontSize: 12, border: '1px solid var(--border)', verticalAlign: 'middle' };
+
+    // Calendar grid
+    const firstDow = new Date(calYear, calMonth - 1, 1).getDay();
+    const daysInMonth = new Date(calYear, calMonth, 0).getDate();
     const byDate = {};
     calData.forEach(o => { if (!byDate[o.due_date]) byDate[o.due_date] = []; byDate[o.due_date].push(o); });
+    const cells = [...Array(firstDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
 
-    const unassignedCount = calData.filter(o => o.status === 'unassigned').length;
-
-    const cells = [
-      ...Array(firstDow).fill(null),
-      ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-    ];
-
-    const selectedDayOccs = selectedDay ? (byDate[selectedDay] || []) : [];
+    // Day panel
+    const panelDate = calDayPanel?.date;
+    const panelOccs = panelDate ? (byDate[panelDate] || []) : [];
+    const panelUnassigned = panelOccs.filter(o => o.status === 'unassigned');
+    const panelByFreq = {};
+    panelUnassigned.forEach(o => {
+      const f = (o.task?.frequency || '').toLowerCase() || 'other';
+      if (!panelByFreq[f]) panelByFreq[f] = [];
+      panelByFreq[f].push(o);
+    });
 
     return (
-      <div style={{ display: 'flex', gap: 24 }}>
-        {/* Grid */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Month nav */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+
+        {/* ── 3-Month Summary Table ── */}
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: 'var(--text-primary)' }}>
+            3-Month Outlook
+          </div>
+          {calSummaryLoading ? (
+            <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
+          ) : activeFreqs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)', fontSize: 13 }}>No assigned occurrences in this window</div>
+          ) : (
+            <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+              <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th rowSpan={2} style={{ ...thSt, borderBottom: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 12 }}>Member</th>
+                    {summaryMonths.map(m => (
+                      <th key={m.key} colSpan={activeFreqs.length} style={{ ...thSt, textAlign: 'center', borderBottom: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 12, fontWeight: 700 }}>
+                        {m.label}
+                      </th>
+                    ))}
+                  </tr>
+                  <tr>
+                    {summaryMonths.flatMap(m =>
+                      activeFreqs.map(f => (
+                        <th key={`${m.key}_${f}`} style={{ ...thSt, textAlign: 'center', color: FREQ_COLORS[f]?.text || 'var(--text-muted)', background: FREQ_COLORS[f]?.bg || 'var(--bg-secondary)' }}>
+                          {FREQ_LABEL[f]}
+                        </th>
+                      ))
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {profiles.map((p, pi) => (
+                    <tr key={p.id} style={{ background: pi % 2 === 0 ? 'var(--bg-primary)' : 'rgba(0,0,0,0.02)' }}>
+                      <td style={{ ...tdSt, fontWeight: 600, whiteSpace: 'nowrap' }}>{p.full_name}</td>
+                      {summaryMonths.flatMap(m =>
+                        activeFreqs.map(f => {
+                          const cell = summaryLookup[p.id]?.[m.key]?.[f];
+                          if (!cell) return <td key={`${p.id}_${m.key}_${f}`} style={{ ...tdSt, textAlign: 'center', color: '#9ca3af' }}>—</td>;
+                          const allDone = cell.completed === cell.assigned;
+                          return (
+                            <td key={`${p.id}_${m.key}_${f}`} style={{ ...tdSt, textAlign: 'center', fontWeight: 600, color: allDone ? '#22c55e' : 'var(--text-primary)' }}>
+                              {cell.completed}/{cell.assigned}
+                            </td>
+                          );
+                        })
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* ── Monthly calendar grid ── */}
+        <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
             <button onClick={() => { if (calMonth === 1) { setCalMonth(12); setCalYear(y => y - 1); } else setCalMonth(m => m - 1); }}
               style={{ ...btn('ghost'), padding: '6px 12px' }}>←</button>
@@ -3555,110 +3687,147 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
               style={{ ...btn('ghost'), padding: '6px 12px' }}>→</button>
           </div>
 
-          {/* Banner */}
-          {unassignedCount > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#FFF3CD', border: '1px solid #FFC107', borderRadius: 8, padding: '8px 14px', marginBottom: 12, fontSize: 13 }}>
-              <span>{unassignedCount} unassigned occurrence{unassignedCount !== 1 ? 's' : ''} this month</span>
-              <button onClick={() => setTab('unassigned')} style={{ ...linkBtn, fontSize: 12 }}>Review →</button>
-            </div>
-          )}
-
           {calLoading ? (
             <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading…</div>
           ) : (
-            <>
-              {/* Day headers */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 2 }}>
-                {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
-                  <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', padding: '4px 0', textTransform: 'uppercase', letterSpacing: 1 }}>{d}</div>
-                ))}
-              </div>
+            <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
               {/* Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
-                {cells.map((day, i) => {
-                  if (!day) return <div key={`e${i}`} style={{ minHeight: 72, background: 'var(--bg-secondary)', borderRadius: 6 }} />;
-                  const dateStr = `${calYear}-${String(calMonth).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-                  const dayOccs = byDate[dateStr] || [];
-                  const isToday = dateStr === todayStr;
-                  const isSelected = selectedDay === dateStr;
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 2 }}>
+                  {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
+                    <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', padding: '4px 0', textTransform: 'uppercase', letterSpacing: 1 }}>{d}</div>
+                  ))}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+                  {cells.map((day, i) => {
+                    if (!day) return <div key={`e${i}`} style={{ minHeight: 76, background: 'var(--bg-secondary)', borderRadius: 6 }} />;
+                    const dateStr = `${calYear}-${String(calMonth).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                    const dayOccs = byDate[dateStr] || [];
+                    const isToday = dateStr === todayStr;
+                    const isSelected = panelDate === dateStr;
+                    const unassignedOccs = dayOccs.filter(o => o.status === 'unassigned');
+                    const statuses = dayOccs.map(o => occStatus(o));
+                    const hasDone = statuses.includes('done');
+                    const hasLate = statuses.includes('late');
+                    const hasPending = statuses.includes('pending');
 
-                  const statuses = dayOccs.map(o => occStatus(o));
-                  const hasDone = statuses.includes('done');
-                  const hasLate = statuses.includes('late');
-                  const hasPending = statuses.includes('pending');
-                  const hasUnassigned = statuses.includes('unassigned');
-
-                  return (
-                    <div key={dateStr} onClick={() => dayOccs.length && setSelectedDay(isSelected ? null : dateStr)}
-                      style={{
-                        minHeight: 72, padding: 6, borderRadius: 6, cursor: dayOccs.length ? 'pointer' : 'default',
-                        background: isSelected ? 'rgba(123,63,160,0.12)' : 'var(--bg-primary)',
-                        border: isToday ? '2px solid var(--purple-primary)' : isSelected ? '2px solid rgba(123,63,160,0.4)' : '1px solid var(--border)',
-                      }}>
-                      <div style={{ fontSize: 12, fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--purple-primary)' : 'var(--text-primary)', marginBottom: 4 }}>{day}</div>
-                      {dayOccs.length > 0 && (
+                    return (
+                      <div key={dateStr}
+                        onClick={() => dayOccs.length && setCalDayPanel(isSelected ? null : { date: dateStr })}
+                        style={{
+                          minHeight: 76, padding: 6, borderRadius: 6, cursor: dayOccs.length ? 'pointer' : 'default',
+                          background: isSelected ? 'rgba(123,63,160,0.10)' : 'var(--bg-primary)',
+                          border: isToday ? '2px solid var(--purple-primary)' : isSelected ? '2px solid rgba(123,63,160,0.4)' : '1px solid var(--border)',
+                        }}>
+                        <div style={{ fontSize: 12, fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--purple-primary)' : 'var(--text-primary)', marginBottom: 4 }}>{day}</div>
+                        {unassignedOccs.length > 0 && (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', background: '#FFF3CD', border: '1.5px solid #F59E0B', color: '#B45309', fontSize: 9, fontWeight: 800, marginBottom: 3 }}>
+                            !
+                          </div>
+                        )}
                         <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}>
-                          {hasUnassigned && <div style={{ width: 7, height: 7, borderRadius: '50%', border: '1.5px solid #9ca3af' }} />}
-                          {hasLate && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#ef4444' }} />}
-                          {hasPending && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#f59e0b' }} />}
-                          {hasDone && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e' }} />}
+                          {hasLate && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444' }} />}
+                          {hasPending && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b' }} />}
+                          {hasDone && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} />}
                           {dayOccs.length > 1 && <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 700 }}>×{dayOccs.length}</span>}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Legend */}
-              <div style={{ display: 'flex', gap: 16, marginTop: 16, fontSize: 12, color: 'var(--text-muted)' }}>
-                {[['Done','#22c55e'],['Pending','#f59e0b'],['Late','#ef4444']].map(([l, c]) => (
-                  <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: c, display: 'inline-block' }} />{l}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ display: 'flex', gap: 16, marginTop: 14, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+                  {[['Done','#22c55e'],['Pending','#f59e0b'],['Late','#ef4444']].map(([l, c]) => (
+                    <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: c, display: 'inline-block' }} />{l}
+                    </span>
+                  ))}
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 12, height: 12, borderRadius: '50%', background: '#FFF3CD', border: '1.5px solid #F59E0B', fontSize: 8, fontWeight: 800, color: '#B45309' }}>!</span>
+                    Unassigned
                   </span>
-                ))}
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', border: '1.5px solid #9ca3af', display: 'inline-block' }} />Unassigned
-                </span>
+                </div>
               </div>
-            </>
-          )}
-        </div>
 
-        {/* Day detail panel */}
-        {selectedDay && (
-          <div style={{ width: 280, flexShrink: 0 }}>
-            <div style={{ ...card, padding: 16 }}>
-              <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 14 }}>{fmtDate(selectedDay)}</div>
-              {selectedDayOccs.length === 0 && (
-                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No occurrences</div>
-              )}
-              {selectedDayOccs.map(o => {
-                const st = occStatus(o);
-                const stColors = { done: '#22c55e', pending: '#f59e0b', late: '#ef4444', unassigned: '#9ca3af' };
-                return (
-                  <div key={o.id} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, lineHeight: 1.4 }}>
-                      {o.task?.title || o.task_definition_id}
+              {/* Day panel */}
+              {panelDate && (
+                <div style={{ width: 300, flexShrink: 0 }}>
+                  <div style={{ ...card, padding: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{fmtDate(panelDate)}</div>
+                      <button onClick={() => setCalDayPanel(null)} style={{ ...linkBtn, fontSize: 18, padding: '0 4px', color: 'var(--text-muted)' }}>×</button>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: `${stColors[st]}22`, color: stColors[st], fontWeight: 700, textTransform: 'capitalize' }}>{st}</span>
-                      {o.assignee?.full_name
-                        ? <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{o.assignee.full_name}</span>
-                        : <span style={{ fontSize: 12, color: '#9ca3af' }}>No assignee</span>}
-                    </div>
-                    {st === 'unassigned' && (
-                      <button onClick={() => { setQuickAssign({ occurrenceId: o.id, task: o.task, task_definition_id: o.task_definition_id, due_date: o.due_date }); setQaStart(o.due_date); setQaEnd(''); setQaAssignees([]); setQaPreview(null); setQaDone(false); }}
-                        style={{ ...btn('outline'), padding: '4px 10px', fontSize: 12, marginTop: 6 }}>
-                        Assign
-                      </button>
+
+                    {panelUnassigned.length > 0 && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#B45309', marginBottom: 10 }}>
+                          {panelUnassigned.length} unassigned
+                        </div>
+                        {FREQ_ORDER.filter(f => panelByFreq[f]?.length).map(f => (
+                          <div key={f} style={{ marginBottom: 14 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: FREQ_COLORS[f]?.text || 'var(--text-muted)', marginBottom: 6, textTransform: 'capitalize' }}>
+                              {FREQ_LABEL[f]} — {panelByFreq[f].length} task{panelByFreq[f].length !== 1 ? 's' : ''}
+                            </div>
+                            {panelByFreq[f].map(o => (
+                              <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, padding: '5px 8px', background: 'var(--bg-secondary)', borderRadius: 6 }}>
+                                <div style={{ flex: 1, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }} title={o.task?.title}>
+                                  {o.task?.title || '—'}
+                                </div>
+                                <select
+                                  value={calAssigning[o.id] || ''}
+                                  onChange={e => setCalAssigning(prev => ({ ...prev, [o.id]: e.target.value }))}
+                                  style={{ fontSize: 11, padding: '2px 4px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', maxWidth: 90 }}>
+                                  <option value="">Assign…</option>
+                                  {profiles.map(p => <option key={p.id} value={p.id}>{(p.full_name || '').split(' ')[0]}</option>)}
+                                </select>
+                              </div>
+                            ))}
+                            {panelByFreq[f].some(o => calAssigning[o.id]) && (
+                              <button
+                                onClick={() => saveCalAssignments(panelByFreq[f])}
+                                disabled={calAssignSaving}
+                                style={{ ...btn('primary'), padding: '4px 10px', fontSize: 11, marginTop: 4, width: '100%', opacity: calAssignSaving ? 0.6 : 1 }}>
+                                {calAssignSaving ? 'Saving…' : 'Save'}
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {panelOccs.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)', marginBottom: 10 }}>
+                          All tasks ({panelOccs.length})
+                        </div>
+                        {panelOccs.map(o => {
+                          const st = occStatus(o);
+                          const stColors = { done: '#22c55e', pending: '#f59e0b', late: '#ef4444', unassigned: '#9ca3af' };
+                          return (
+                            <div key={o.id} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, lineHeight: 1.4 }}>
+                                {o.task?.title || '—'}
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: `${stColors[st]}22`, color: stColors[st], fontWeight: 700, textTransform: 'capitalize' }}>{st}</span>
+                                {o.assignee?.full_name
+                                  ? <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{o.assignee.full_name}</span>
+                                  : <span style={{ fontSize: 11, color: '#9ca3af' }}>No assignee</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {panelOccs.length === 0 && (
+                      <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No tasks this day</div>
                     )}
                   </div>
-                );
-              })}
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     );
   }

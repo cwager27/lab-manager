@@ -154,6 +154,25 @@ router.get('/tasks2/calendar', async (req, res) => {
   }
 });
 
+// ── Calendar data for a date range (used by summary table) ───────────────────
+
+router.get('/tasks2/calendar-range', async (req, res) => {
+  try {
+    const { start, end } = req.query;
+    if (!start || !end) return res.status(400).json({ error: 'start and end required' });
+    const { data, error } = await supabaseAdmin
+      .from('task_occurrences')
+      .select('id, task_definition_id, due_date, status, assigned_to, task:tasks_definitions(title, category, frequency), assignee:profiles(full_name)')
+      .gte('due_date', start)
+      .lte('due_date', end)
+      .order('due_date');
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Unassigned occurrences within cadence-scaled lookahead windows ────────────
 
 const LOOKAHEAD_DAYS = { daily: 7, weekly: 14, biweekly: 30, monthly: 60, quarterly: 90, yearly: 90 };
