@@ -312,7 +312,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const [myTaskOccs, setMyTaskOccs] = useState([]);
   const [myTaskOneOffs, setMyTaskOneOffs] = useState([]);
   const [myTaskLoading, setMyTaskLoading] = useState(false);
-  const [myTaskSubTab, setMyTaskSubTab] = useState('summary');
+  const [myTaskSubTab, setMyTaskSubTab] = useState('todo');
   const [myTaskResponses, setMyTaskResponses] = useState({});
   const [myTaskNotes, setMyTaskNotes] = useState({});
   // Tracks occurrence IDs already auto-persisted as 'done' to avoid duplicate DB writes
@@ -2139,7 +2139,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     };
 
 
-    // ── Summary sub-tab ────────────────────────────────────────────────────
+    // ── To Do / Completed split ────────────────────────────────────────────
     const BUCKET_CONFIG = [
       { id: 'overdue', label: 'Overdue',       headColor: '#ef4444',              headBg: '#fef2f2',             isActive: true },
       { id: 'week',    label: 'This Week',      headColor: 'var(--purple-primary)', headBg: '#f5eefb',             isActive: true },
@@ -2149,7 +2149,41 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       { id: 'nodate',  label: 'No Due Date',     headColor: 'var(--text-muted)',     headBg: 'var(--bg-secondary)', isActive: true },
     ];
 
-    const renderSummary = () => (
+    // Split recurrent groups into todo vs completed
+    const todoGroups = allGroups.filter(g => !isGroupComplete(g.tasks, g.groupName, g.dueDate));
+    const doneGroups = allGroups.filter(g => isGroupComplete(g.tasks, g.groupName, g.dueDate));
+
+    // Split ad hoc into todo vs completed
+    const todoOneOffs = myTaskOneOffs.filter(t => t.status !== 'submitted' && t.status !== 'completed' && t.status !== 'done');
+    const doneOneOffs = myTaskOneOffs.filter(t => t.status === 'submitted' || t.status === 'completed' || t.status === 'done');
+
+    const todoBuckets = { overdue: [], week: [], month: [], three: [], beyond: [], nodate: [] };
+    todoGroups.forEach(g => todoBuckets[bucketFor(g.dueDate)].push(g));
+    const todoAdhocBuckets = { overdue: [], week: [], month: [], three: [], beyond: [], nodate: [] };
+    todoOneOffs.sort((a, b) => (a.due_date || '').localeCompare(b.due_date || '')).forEach(t => todoAdhocBuckets[bucketFor(t.due_date)].push(t));
+
+    // Uncheck a completed recurrent group — clears responses and resets DB status
+    const uncheckGroup = async (g) => {
+      const now = new Date().toISOString();
+      const keysToRemove = g.tasks.flatMap(t => {
+        const base = `${t.id}::${g.dueDate}`;
+        const subKeys = (t.sub_tasks || []).map(st => `${t.id}_sub_${st.id}::${g.dueDate}`);
+        return [base, ...subKeys];
+      });
+      setVatResponses(prev => {
+        const next = { ...prev };
+        keysToRemove.forEach(k => delete next[k]);
+        return next;
+      });
+      const occIds = g.tasks.map(t => occsByDefAndDate[t.id]?.[g.dueDate]?.id).filter(Boolean);
+      occIds.forEach(id => persistedCompletionsRef.current.delete(id));
+      await Promise.all(occIds.map(id =>
+        supabase.from('task_occurrences').update({ status: 'assigned', completed_at: null }).eq('id', id)
+      ));
+      setMyTaskOccs(prev => prev.map(o => occIds.includes(o.id) ? { ...o, status: 'assigned', completed_at: null } : o));
+    };
+
+    const renderTodoSection = () => (
       <div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 4 }}>
           <div style={{ padding: '6px 0 8px', fontSize: 12, fontWeight: 700, color: 'var(--purple-primary)', textTransform: 'uppercase', letterSpacing: '0.07em', borderBottom: '2px solid var(--purple-primary)' }}>
@@ -2160,8 +2194,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           </div>
         </div>
         {BUCKET_CONFIG.map(({ id, label, headColor, headBg, isActive }) => {
-          const recItems = recBuckets[id];
-          const adhocItems = adhocBuckets[id];
+          const recItems = todoBuckets[id];
+          const adhocItems = todoAdhocBuckets[id];
           if (recItems.length === 0 && adhocItems.length === 0) return null;
           return (
             <div key={id} style={{ marginBottom: 24 }}>
@@ -2183,8 +2217,50 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             </div>
           );
         })}
-        {allGroups.length + myTaskOneOffs.length === 0 && (
-          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>No tasks assigned to you yet.</div>
+        {todoGroups.length + todoOneOffs.length === 0 && (
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>
+            {allGroups.length + myTaskOneOffs.length === 0 ? 'No tasks assigned to you yet.' : '🎉 All tasks completed!'}
+          </div>
+        )}
+      </div>
+    );
+
+    const renderCompleted = () => (
+      <div>
+        {doneGroups.length === 0 && doneOneOffs.length === 0 ? (
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>No completed tasks yet.</div>
+        ) : (
+          <div>
+            {doneGroups.length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ padding: '6px 0 8px', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', borderBottom: '2px solid var(--border)', marginBottom: 12 }}>
+                  Recurrent Tasks
+                </div>
+                {doneGroups.map(g => (
+                  <div key={`${g.groupName}__${g.dueDate}`} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#EAF7F0', border: '1px solid #A9DFBF', borderRadius: 'var(--radius-md)', padding: '12px 14px', marginBottom: 6 }}>
+                    <button onClick={() => uncheckGroup(g)}
+                      title="Mark as incomplete"
+                      style={{ width: 26, height: 26, borderRadius: '50%', border: '2px solid #27AE60', background: '#27AE60', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+                      <CheckCircle size={13} />
+                    </button>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', textDecoration: 'line-through' }}>{g.groupName}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Due {fmtDate(g.dueDate)} · {g.tasks.length} task{g.tasks.length !== 1 ? 's' : ''}</div>
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#27AE60', background: '#D5F5E3', padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap' }}>✓ Completed</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {doneOneOffs.length > 0 && (
+              <div>
+                <div style={{ padding: '6px 0 8px', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', borderBottom: '2px solid var(--border)', marginBottom: 12 }}>
+                  Ad hoc Tasks
+                </div>
+                {doneOneOffs.map(t => renderOneOffTask(t))}
+              </div>
+            )}
+          </div>
         )}
       </div>
     );
@@ -2283,19 +2359,25 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         </div>
 
         <div style={{ display: 'flex', marginBottom: 24, borderBottom: '2px solid var(--border)' }}>
-          {[{ id: 'summary', label: 'Task Summary' }, { id: 'productivity', label: 'My Productivity' }].map(({ id, label }) => (
+          {[
+            { id: 'todo',        label: 'To Do Tasks' },
+            { id: 'completed',   label: 'Completed', badge: doneGroups.length + doneOneOffs.length || null },
+            { id: 'productivity', label: 'My Productivity' },
+          ].map(({ id, label, badge }) => (
             <button key={id} onClick={() => setMyTaskSubTab(id)}
-              style={{ padding: '8px 20px', fontSize: 14, fontWeight: 600, border: 'none', background: 'transparent', cursor: 'pointer', color: myTaskSubTab === id ? 'var(--purple-primary)' : 'var(--text-muted)', borderBottom: `2px solid ${myTaskSubTab === id ? 'var(--purple-primary)' : 'transparent'}`, marginBottom: -2 }}>
+              style={{ padding: '8px 20px', fontSize: 14, fontWeight: 600, border: 'none', background: 'transparent', cursor: 'pointer', color: myTaskSubTab === id ? 'var(--purple-primary)' : 'var(--text-muted)', borderBottom: `2px solid ${myTaskSubTab === id ? 'var(--purple-primary)' : 'transparent'}`, marginBottom: -2, display: 'flex', alignItems: 'center', gap: 6 }}>
               {label}
+              {badge ? <span style={{ fontSize: 11, background: '#22c55e', color: '#fff', borderRadius: 10, padding: '1px 6px', fontWeight: 700 }}>{badge}</span> : null}
             </button>
           ))}
         </div>
 
-        {(myTaskLoading || (myTaskSubTab === 'summary' && !vatLoaded)) ? (
+        {(myTaskLoading || (myTaskSubTab !== 'productivity' && !vatLoaded)) ? (
           <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
-        ) : (
-          myTaskSubTab === 'summary' ? renderSummary() : renderMyProductivity()
-        )}
+        ) : myTaskSubTab === 'todo' ? renderTodoSection()
+          : myTaskSubTab === 'completed' ? renderCompleted()
+          : renderMyProductivity()
+        }
       </div>
     );
   }
