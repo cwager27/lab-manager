@@ -386,13 +386,7 @@ router.post('/tasks2/remind', async (req, res) => {
     if (!occ.assignee?.email) return res.status(400).json({ error: 'No assignee email found' });
 
     const taskName = occ.task_def?.group_name || occ.task_def?.title || 'Task';
-    await mailer.sendMail({
-      from: `"Petljak Lab" <${process.env.GMAIL_USER}>`,
-      to: occ.assignee.email,
-      subject: `Petljak Lab — Reminder: ${taskName}`,
-      html: reminderHtml(occ.assignee.full_name, taskName, occ.due_date, 'You have a task that needs your attention:'),
-    });
-
+    // emails disabled — no-op
     res.json({ success: true, sentTo: occ.assignee.email });
   } catch (err) {
     console.error('tasks2/remind error:', err);

@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const cron = require('node-cron');
 const { createClient } = require('@supabase/supabase-js');
-const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const app = express();
@@ -12,14 +11,7 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD
-  }
-});
-transporter.sendMail = async () => {}; // paused
+const transporter = { sendMail: async () => {} }; // emails disabled
 
 const assignmentRoutes = require('./routes/assignments');
 const checklistRoutes = require('./routes/checklists');
