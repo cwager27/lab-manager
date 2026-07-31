@@ -1031,7 +1031,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             category: 'MISC',
           },
         ]);
-        await supabase.from('sporadic_tasks').insert(rows).catch(() => {});
+        try { await supabase.from('sporadic_tasks').insert(rows); } catch {}
       }
     }
 
