@@ -1001,6 +1001,38 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       }),
     }).catch(() => {});
 
+    // For MISC daily/biweekly SOP violations, create 2 ad hoc tasks for every PM/admin
+    const freq = task.frequency?.toLowerCase();
+    if (task.category === 'MISC' && (freq === 'daily' || freq === 'biweekly')) {
+      const pmUsers = profiles.filter(p => p.role === 'pm' || p.role === 'admin');
+      if (pmUsers.length > 0) {
+        const today = new Date().toISOString().split('T')[0];
+        const submitter = myProfile?.full_name || 'Lab member';
+        const omission = task.title;
+        const noteText = exc.note?.trim() || '(no note provided)';
+        const detail = `Omission: ${omission}\nReported by: ${submitter} on ${today}\nNote: ${noteText}${photoUrl ? `\nPhoto: ${photoUrl}` : ''}`;
+        const rows = pmUsers.flatMap(pm => [
+          {
+            title: `Post policy violation photo on 'Experimental' Slack thread – ${omission}`,
+            description: detail,
+            assigned_to: pm.id,
+            due_date: today,
+            status: 'pending',
+            category: 'MISC',
+          },
+          {
+            title: `Identify and speak to member who omitted: ${omission}`,
+            description: detail,
+            assigned_to: pm.id,
+            due_date: today,
+            status: 'pending',
+            category: 'MISC',
+          },
+        ]);
+        await supabase.from('sporadic_tasks').insert(rows).catch(() => {});
+      }
+    }
+
     setSopExceptions(p => ({ ...p, [task.id]: { ...p[task.id], submitting: false, submitted: true, photoUrl } }));
   }
 
