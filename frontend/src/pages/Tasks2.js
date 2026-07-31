@@ -2,11 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { fmtName, sortByLast } from '../lib/nameUtils';
 import { CheckCircle, XCircle, AlertTriangle, Upload, Clock, Search, ChevronDown, Bell, Trash2, Plus, Check, Globe, Pencil, X } from 'lucide-react';
-import {
-  getMaintCycleKey, getMaintNextDue, getMaintKey,
-  isMaintParentDone, isMaintFreqDone,
-  EQUIPMENT_MAINTENANCE,
-} from '../data/equipmentMaintenance';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -264,19 +259,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const [vatExpandedAuditAreas, setVatExpandedAuditAreas] = useState(new Set());
   const [vatLoading, setVatLoading] = useState(false);
   const [vatLoaded, setVatLoaded] = useState(false);
-  const [maintChecks, setMaintChecks] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('lab_maint_checks') || '{}'); } catch { return {}; }
-  });
-  const [maintCompleted, setMaintCompleted] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('lab_maint_completed') || '{}'); } catch { return {}; }
-  });
-  const [vatExpandedEquip, setVatExpandedEquip] = useState(
-    () => new Set(EQUIPMENT_MAINTENANCE.map(e => e.id))
-  );
-  const [vatExpandedFreq, setVatExpandedFreq] = useState(
-    () => new Set(EQUIPMENT_MAINTENANCE.flatMap(e => e.frequencies.map(f => `${e.id}|${f.id}`)))
-  );
-
   // ── Assigned Tasks log state ──────────────────────────────────────────────
   const [assignedOccs, setAssignedOccs] = useState([]);
   const [assignedLoading, setAssignedLoading] = useState(false);
@@ -476,26 +458,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     }
   }, [vatResponses, sopExceptions]); // eslint-disable-line
 
-  useEffect(() => {
-    localStorage.setItem('lab_maint_checks', JSON.stringify(maintChecks));
-    const updated = { ...maintCompleted };
-    let changed = false;
-    EQUIPMENT_MAINTENANCE.forEach(equip => {
-      equip.frequencies.forEach(freq => {
-        const key = `${equip.id}|${freq.id}`;
-        const cycleKey = getMaintCycleKey(freq.resetFreq);
-        if (updated[key]?.cycleKey === cycleKey) return;
-        if (isMaintFreqDone(maintChecks, equip, freq)) {
-          updated[key] = { cycleKey, completedAt: new Date().toISOString() };
-          changed = true;
-        }
-      });
-    });
-    if (changed) {
-      setMaintCompleted(updated);
-      localStorage.setItem('lab_maint_completed', JSON.stringify(updated));
-    }
-  }, [maintChecks]); // eslint-disable-line
 
   function loadCalendar() {
     setCalLoading(true);
@@ -946,11 +908,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         </div>
       </div>
     );
-  }
-
-  function toggleMaintCheck(equipId, freqId, resetFreq, parentId, subId, value) {
-    const key = getMaintKey(equipId, freqId, resetFreq, parentId, subId);
-    setMaintChecks(p => ({ ...p, [key]: p[key] === value ? null : value }));
   }
 
   function handleVatResponse(taskId, value) {
@@ -2168,7 +2125,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
     // Uncheck a completed recurrent group — clears responses and resets DB status
     const uncheckGroup = async (g) => {
-      const now = new Date().toISOString();
       const keysToRemove = g.tasks.flatMap(t => {
         const base = `${t.id}::${g.dueDate}`;
         const subKeys = (t.sub_tasks || []).map(st => `${t.id}_sub_${st.id}::${g.dueDate}`);
