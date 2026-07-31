@@ -14,7 +14,7 @@ const ROLE_LABELS = {
 export default function Navigation({ currentPage, setCurrentPage, userRole, profile, onLogout, canManage, permissions }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, always: true },
-    { id: 'tasks2', label: 'Tasks', icon: ClipboardList, adminOnly: true },
+    { id: 'tasks2', label: 'Tasks', icon: ClipboardList, always: true },
     { id: 'vacation', label: 'Time Off', icon: Palmtree, always: true },
     { id: 'meetings', label: 'Team Meetings', icon: Calendar, always: true },
     { id: 'finance', label: 'Finance', icon: DollarSign, always: true },

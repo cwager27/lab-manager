@@ -557,16 +557,18 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
   async function loadVatData() {
     setVatLoading(true);
-    const [{ data: taskData }, { data: respData }] = await Promise.all([
-      supabase.from('tasks_definitions').select('*').eq('status', 'published').order('category').order('frequency').order('sort_order'),
-      supabase.from('task_responses').select('*, assignment:task_assignments(assigned_to, profile:profiles(full_name))').order('responded_at', { ascending: false }),
-    ]);
-    const respMap = {};
-    for (const r of (respData || [])) {
-      if (!respMap[r.task_definition_id]) respMap[r.task_definition_id] = r;
-    }
-    setVatTasks(taskData || []);
-    setVatExisting(respMap);
+    try {
+      const [{ data: taskData }, { data: respData }] = await Promise.all([
+        supabase.from('tasks_definitions').select('*').eq('status', 'published').order('category').order('frequency').order('sort_order'),
+        supabase.from('task_responses').select('*, assignment:task_assignments(assigned_to, profile:profiles(full_name))').order('responded_at', { ascending: false }),
+      ]);
+      const respMap = {};
+      for (const r of (respData || [])) {
+        if (!respMap[r.task_definition_id]) respMap[r.task_definition_id] = r;
+      }
+      setVatTasks(taskData || []);
+      setVatExisting(respMap);
+    } catch {}
     setVatLoading(false);
     setVatLoaded(true);
   }
@@ -2289,7 +2291,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           ))}
         </div>
 
-        {myTaskLoading ? (
+        {(myTaskLoading || (myTaskSubTab === 'summary' && !vatLoaded)) ? (
           <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
         ) : (
           myTaskSubTab === 'summary' ? renderSummary() : renderMyProductivity()
