@@ -315,6 +315,10 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const [myTaskSubTab, setMyTaskSubTab] = useState('todo');
   const [myTaskResponses, setMyTaskResponses] = useState({});
   const [myTaskNotes, setMyTaskNotes] = useState({});
+  const [completedPeriod, setCompletedPeriod] = useState('month');
+  const [completedTypeFilter, setCompletedTypeFilter] = useState('all');
+  const [completedRecCollapsed, setCompletedRecCollapsed] = useState(false);
+  const [completedAdhocCollapsed, setCompletedAdhocCollapsed] = useState(false);
   // Tracks occurrence IDs already auto-persisted as 'done' to avoid duplicate DB writes
   const persistedCompletionsRef = useRef(new Set());
 
@@ -2225,45 +2229,130 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       </div>
     );
 
-    const renderCompleted = () => (
-      <div>
-        {doneGroups.length === 0 && doneOneOffs.length === 0 ? (
-          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>No completed tasks yet.</div>
-        ) : (
-          <div>
-            {doneGroups.length > 0 && (
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ padding: '6px 0 8px', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', borderBottom: '2px solid var(--border)', marginBottom: 12 }}>
-                  Recurrent Tasks
-                </div>
-                {doneGroups.map(g => (
-                  <div key={`${g.groupName}__${g.dueDate}`} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#EAF7F0', border: '1px solid #A9DFBF', borderRadius: 'var(--radius-md)', padding: '12px 14px', marginBottom: 6 }}>
-                    <button onClick={() => uncheckGroup(g)}
-                      title="Mark as incomplete"
-                      style={{ width: 26, height: 26, borderRadius: '50%', border: '2px solid #27AE60', background: '#27AE60', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
-                      <CheckCircle size={13} />
-                    </button>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', textDecoration: 'line-through' }}>{g.groupName}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Due {fmtDate(g.dueDate)} · {g.tasks.length} task{g.tasks.length !== 1 ? 's' : ''}</div>
-                    </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#27AE60', background: '#D5F5E3', padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap' }}>✓ Completed</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {doneOneOffs.length > 0 && (
-              <div>
-                <div style={{ padding: '6px 0 8px', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', borderBottom: '2px solid var(--border)', marginBottom: 12 }}>
-                  Ad hoc Tasks
-                </div>
-                {doneOneOffs.map(t => renderOneOffTask(t))}
-              </div>
-            )}
+    const renderCompleted = () => {
+      // Period cutoff dates
+      const periodCutoffs = {
+        week:  new Date(Date.now() - 7  * 86400000).toISOString(),
+        month: new Date(Date.now() - 30 * 86400000).toISOString(),
+        year:  new Date(Date.now() - 365 * 86400000).toISOString(),
+        all:   null,
+      };
+      const cutoff = periodCutoffs[completedPeriod];
+
+      // Filter completed recurrent groups by period (use occurrence completed_at)
+      const filteredDoneGroups = doneGroups.filter(g => {
+        if (!cutoff) return true;
+        const occ = g.tasks.map(t => occsByDefAndDate[t.id]?.[g.dueDate]).find(Boolean);
+        const completedAt = occ?.completed_at;
+        return completedAt && completedAt >= cutoff;
+      });
+
+      // Filter completed ad hoc by period (use submitted_at or completed_at)
+      const filteredDoneOneOffs = doneOneOffs.filter(t => {
+        if (!cutoff) return true;
+        const ts = t.submitted_at || t.completed_at;
+        return ts && ts >= cutoff;
+      });
+
+      const showRec   = completedTypeFilter === 'all' || completedTypeFilter === 'recurrent';
+      const showAdhoc = completedTypeFilter === 'all' || completedTypeFilter === 'adhoc';
+      const visibleRec   = showRec   ? filteredDoneGroups   : [];
+      const visibleAdhoc = showAdhoc ? filteredDoneOneOffs  : [];
+
+      const PERIOD_OPTIONS = [
+        { id: 'week',  label: 'Last Week' },
+        { id: 'month', label: 'Last Month' },
+        { id: 'year',  label: 'Last Year' },
+        { id: 'all',   label: 'All Time' },
+      ];
+      const TYPE_OPTIONS = [
+        { id: 'all',       label: 'All' },
+        { id: 'recurrent', label: 'Recurrent' },
+        { id: 'adhoc',     label: 'Ad hoc' },
+      ];
+
+      const pillBtn = (active) => ({
+        padding: '5px 13px', borderRadius: 20, border: `1.5px solid ${active ? 'var(--purple-primary)' : 'var(--border)'}`,
+        background: active ? 'var(--purple-primary)' : 'transparent',
+        color: active ? '#fff' : 'var(--text-secondary)',
+        fontSize: 12, fontWeight: 600, cursor: 'pointer',
+      });
+
+      const SectionHeader = ({ label, count, collapsed, onToggle }) => (
+        <button onClick={onToggle} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: collapsed ? 'var(--radius-md)' : 'var(--radius-md) var(--radius-md) 0 0', cursor: 'pointer', marginBottom: collapsed ? 12 : 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</span>
+            <span style={{ fontSize: 11, background: '#D5F5E3', color: '#27AE60', borderRadius: 10, padding: '1px 7px', fontWeight: 700 }}>{count}</span>
           </div>
-        )}
-      </div>
-    );
+          <ChevronDown size={14} style={{ color: 'var(--text-muted)', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }} />
+        </button>
+      );
+
+      return (
+        <div>
+          {/* Filters */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 20, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {PERIOD_OPTIONS.map(({ id, label }) => (
+                <button key={id} onClick={() => setCompletedPeriod(id)} style={pillBtn(completedPeriod === id)}>{label}</button>
+              ))}
+            </div>
+            <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
+            <div style={{ display: 'flex', gap: 6 }}>
+              {TYPE_OPTIONS.map(({ id, label }) => (
+                <button key={id} onClick={() => setCompletedTypeFilter(id)} style={pillBtn(completedTypeFilter === id)}>{label}</button>
+              ))}
+            </div>
+          </div>
+
+          {visibleRec.length === 0 && visibleAdhoc.length === 0 ? (
+            <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>No completed tasks in this period.</div>
+          ) : (
+            <div>
+              {showRec && (
+                <div style={{ marginBottom: 20 }}>
+                  <SectionHeader label="Recurrent Tasks" count={visibleRec.length} collapsed={completedRecCollapsed} onToggle={() => setCompletedRecCollapsed(p => !p)} />
+                  {!completedRecCollapsed && (
+                    <div style={{ border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)', padding: '10px 10px 4px' }}>
+                      {visibleRec.length === 0
+                        ? <div style={{ padding: '12px 4px', fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>None in this period.</div>
+                        : visibleRec.map(g => (
+                          <div key={`${g.groupName}__${g.dueDate}`} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#EAF7F0', border: '1px solid #A9DFBF', borderRadius: 'var(--radius-md)', padding: '11px 14px', marginBottom: 6 }}>
+                            <button onClick={() => uncheckGroup(g)} title="Mark as incomplete"
+                              style={{ width: 26, height: 26, borderRadius: '50%', border: '2px solid #27AE60', background: '#27AE60', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+                              <CheckCircle size={13} />
+                            </button>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', textDecoration: 'line-through' }}>{g.groupName}</div>
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Due {fmtDate(g.dueDate)} · {g.tasks.length} task{g.tasks.length !== 1 ? 's' : ''}</div>
+                            </div>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#27AE60', background: '#D5F5E3', padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap' }}>✓ Completed</span>
+                          </div>
+                        ))
+                      }
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {showAdhoc && (
+                <div style={{ marginBottom: 20 }}>
+                  <SectionHeader label="Ad hoc Tasks" count={visibleAdhoc.length} collapsed={completedAdhocCollapsed} onToggle={() => setCompletedAdhocCollapsed(p => !p)} />
+                  {!completedAdhocCollapsed && (
+                    <div style={{ border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)', padding: '10px 10px 4px' }}>
+                      {visibleAdhoc.length === 0
+                        ? <div style={{ padding: '12px 4px', fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>None in this period.</div>
+                        : visibleAdhoc.map(t => renderOneOffTask(t))
+                      }
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    };
 
     // ── Productivity sub-tab ───────────────────────────────────────────────
     const scoreColor = s => s === null ? 'var(--text-muted)' : s >= 90 ? '#22c55e' : s >= 70 ? '#f59e0b' : s >= 50 ? '#f97316' : '#ef4444';
