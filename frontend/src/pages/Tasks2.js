@@ -2598,8 +2598,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   function renderViewAll() {
     if (vatLoading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>;
 
-    const isRecurring = vatCategory !== 'Equipment';
-
     const visibleTasks = vatTasks.filter(t =>
       t.frequency === vatFreq && t.category === vatCategory &&
       (vatSearch === '' || t.title.toLowerCase().includes(vatSearch.toLowerCase()))
@@ -2642,9 +2640,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           ))}
         </div>
 
-        {/* ── PM / MISC recurring tasks ── */}
-        {isRecurring && (
-          <>
+        {/* ── Recurring tasks (all categories) ── */}
+        <>
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
               {ALL_FREQS.map(freq => {
                 const c = FREQ_COLORS[freq];
@@ -2862,123 +2859,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                 );
               });
             })()}
-          </>
-        )}
-
-        {/* ── Equipment checklist ── */}
-        {vatCategory === 'Equipment' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {EQUIPMENT_MAINTENANCE.map(equip => {
-              const equipOpen = vatExpandedEquip.has(equip.id);
-              const allFreqDone = equip.frequencies.every(f => isMaintFreqDone(maintChecks, equip, f));
-              return (
-                <div key={equip.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-                  <button onClick={() => setVatExpandedEquip(p => { const n = new Set(p); n.has(equip.id) ? n.delete(equip.id) : n.add(equip.id); return n; })}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: allFreqDone ? '#EAF7F0' : 'var(--bg-secondary)', border: 'none', cursor: 'pointer', borderBottom: equipOpen ? '1px solid var(--border)' : 'none', textAlign: 'left' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontSize: '15px', fontWeight: 700, color: allFreqDone ? '#27AE60' : 'var(--text-primary)' }}>{equip.name}</span>
-                      {allFreqDone && <span style={{ fontSize: '11px', fontWeight: 600, color: '#27AE60', background: '#D5F5E3', padding: '2px 8px', borderRadius: '10px' }}>All complete</span>}
-                    </div>
-                    <ChevronDown size={16} style={{ transform: equipOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'var(--text-muted)', flexShrink: 0 }} />
-                  </button>
-
-                  {equipOpen && (
-                    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      {equip.note && (
-                        <div style={{ padding: '10px 12px', background: '#F8F9FA', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: 1.5 }}>
-                          {equip.note}
-                        </div>
-                      )}
-                      {equip.frequencies.map(freq => {
-                        const freqKey = `${equip.id}|${freq.id}`;
-                        const freqOpen = vatExpandedFreq.has(freqKey);
-                        const freqDone = isMaintFreqDone(maintChecks, equip, freq);
-                        const doneParents = freq.parents.filter(p => isMaintParentDone(maintChecks, equip, freq, p)).length;
-                        const nextDue = getMaintNextDue(freq.resetFreq);
-                        const completedRec = maintCompleted[freqKey];
-                        const currentCycle = getMaintCycleKey(freq.resetFreq);
-                        const lastDone = completedRec && completedRec.cycleKey !== currentCycle
-                          ? new Date(completedRec.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                          : null;
-                        return (
-                          <div key={freq.id} style={{ border: `1px solid ${freqDone ? '#A9DFBF' : 'var(--border)'}`, borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
-                            <button onClick={() => setVatExpandedFreq(p => { const n = new Set(p); n.has(freqKey) ? n.delete(freqKey) : n.add(freqKey); return n; })}
-                              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: freqDone ? '#EAF7F0' : 'var(--bg-secondary)', border: 'none', cursor: 'pointer', borderBottom: freqOpen ? `1px solid ${freqDone ? '#A9DFBF' : 'var(--border)'}` : 'none', textAlign: 'left', gap: '10px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                                <span style={{ fontSize: '11px', fontWeight: 700, color: freqDone ? '#27AE60' : 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>{freq.label}</span>
-                                {freq.subtitle && <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>— {freq.subtitle}</span>}
-                                {freqDone
-                                  ? <span style={{ fontSize: '11px', color: '#27AE60', fontWeight: 600, whiteSpace: 'nowrap' }}>✓ Complete this cycle</span>
-                                  : <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{doneParents}/{freq.parents.length} tasks</span>
-                                }
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-                                <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                                  {lastDone && `Last: ${lastDone} · `}Next due: {nextDue}
-                                </span>
-                                <ChevronDown size={13} style={{ transform: freqOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'var(--text-muted)' }} />
-                              </div>
-                            </button>
-                            {freqOpen && (
-                              <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                {freq.parents.map(parent => {
-                                  const parentDone = isMaintParentDone(maintChecks, equip, freq, parent);
-                                  return (
-                                    <div key={parent.id}>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                                        <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: `2px solid ${parentDone ? '#27AE60' : 'var(--border)'}`, background: parentDone ? '#27AE60' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                          {parentDone && <CheckCircle size={11} color="white" />}
-                                        </div>
-                                        <span style={{ fontSize: '13px', fontWeight: 600, color: parentDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: parentDone ? 'line-through' : 'none', lineHeight: 1.4 }}>{parent.label}</span>
-                                      </div>
-                                      <div style={{ marginLeft: '26px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        {parent.subItems.map(sub => {
-                                          const key = getMaintKey(equip.id, freq.id, freq.resetFreq, parent.id, sub.id);
-                                          const val = maintChecks[key] || null;
-                                          const subDone = sub.type === 'yn' ? val === 'Y' : val === 'done';
-                                          return (
-                                            <div key={sub.id}>
-                                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                                                {sub.type === 'yn' ? (
-                                                  <div style={{ display: 'flex', gap: '3px', flexShrink: 0, marginTop: '1px' }}>
-                                                    <button onClick={() => toggleMaintCheck(equip.id, freq.id, freq.resetFreq, parent.id, sub.id, 'Y')} style={{ padding: '2px 9px', borderRadius: '4px', border: `1.5px solid ${val === 'Y' ? '#27AE60' : 'var(--border)'}`, background: val === 'Y' ? '#27AE60' : 'transparent', color: val === 'Y' ? 'white' : 'var(--text-muted)', fontSize: '11px', fontWeight: 700, cursor: 'pointer', lineHeight: 1.4 }}>Y</button>
-                                                    <button onClick={() => toggleMaintCheck(equip.id, freq.id, freq.resetFreq, parent.id, sub.id, 'N')} style={{ padding: '2px 9px', borderRadius: '4px', border: `1.5px solid ${val === 'N' ? '#E74C3C' : 'var(--border)'}`, background: val === 'N' ? '#E74C3C' : 'transparent', color: val === 'N' ? 'white' : 'var(--text-muted)', fontSize: '11px', fontWeight: 700, cursor: 'pointer', lineHeight: 1.4 }}>N</button>
-                                                  </div>
-                                                ) : (
-                                                  <button onClick={() => toggleMaintCheck(equip.id, freq.id, freq.resetFreq, parent.id, sub.id, 'done')} style={{ width: '22px', height: '22px', borderRadius: 'var(--radius-sm)', border: `1.5px solid ${val === 'done' ? 'var(--purple-primary)' : 'var(--border)'}`, background: val === 'done' ? 'var(--purple-primary)' : 'transparent', color: val === 'done' ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, marginTop: '1px' }}>
-                                                    {val === 'done' && <CheckCircle size={12} />}
-                                                  </button>
-                                                )}
-                                                <div style={{ minWidth: 0 }}>
-                                                  <span style={{ fontSize: '13px', color: subDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: subDone ? 'line-through' : 'none', lineHeight: 1.5 }}>{sub.label}</span>
-                                                  {sub.note && <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', margin: '2px 0 0', lineHeight: 1.4 }}>{sub.note}</p>}
-                                                  {sub.warning && <p style={{ fontSize: '11px', color: '#E67E22', margin: '2px 0 0', lineHeight: 1.4 }}>{sub.warning}</p>}
-                                                </div>
-                                              </div>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                      {parent.warning && (
-                                        <div style={{ marginLeft: '26px', marginTop: '8px', padding: '8px 12px', background: '#FFF8F0', border: '1px solid #FAD7A0', borderRadius: 'var(--radius-sm)', fontSize: '12px', color: '#C0392B', lineHeight: 1.5 }}>
-                                          {parent.warning}
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        </>
       </div>
     );
   }
