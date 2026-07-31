@@ -2076,17 +2076,17 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                           )}
                           {isLiveCellGroup && lcParentResp === 'no' && (
                             <div style={{ padding: '10px 14px', background: '#EAF7F0', borderRadius: 'var(--radius-md)', border: '1px solid #A9DFBF', fontSize: '13px', color: '#27AE60', fontWeight: 500, marginTop: '4px' }}>
-                              ✓ No new live cell material this week — protocol steps not required.
+                              ✓ Not applicable this period — follow-up steps not required.
                             </div>
                           )}
                           {isLiveCellGroup && lcParentResp === 'yes' && !lcAllChecked && (
                             <div style={{ padding: '8px 14px', fontSize: '12px', color: 'var(--danger)', fontWeight: 500, marginTop: '2px' }}>
-                              All protocol steps must be confirmed to complete this task.
+                              All follow-up steps must be confirmed to complete this task.
                             </div>
                           )}
                           {isLiveCellGroup && lcParentResp === 'yes' && lcAllChecked && (
                             <div style={{ padding: '10px 14px', background: '#EAF7F0', borderRadius: 'var(--radius-md)', border: '1px solid #A9DFBF', fontSize: '13px', color: '#27AE60', fontWeight: 500, marginTop: '4px' }}>
-                              ✓ All quarantine protocol steps confirmed.
+                              ✓ All follow-up steps confirmed.
                             </div>
                           )}
                         </div>
@@ -3028,13 +3028,13 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                       <div style={{ padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '4px' }}>Select Yes or No above to continue.</div>
                     )}
                     {isLiveCellGroup && lcParentResp === 'no' && (
-                      <div style={{ padding: '10px 14px', background: '#EAF7F0', borderRadius: 'var(--radius-md)', border: '1px solid #A9DFBF', fontSize: '13px', color: '#27AE60', fontWeight: 500, marginTop: '4px' }}>✓ No new live cell material this week — protocol steps not required.</div>
+                      <div style={{ padding: '10px 14px', background: '#EAF7F0', borderRadius: 'var(--radius-md)', border: '1px solid #A9DFBF', fontSize: '13px', color: '#27AE60', fontWeight: 500, marginTop: '4px' }}>✓ Not applicable this period — follow-up steps not required.</div>
                     )}
                     {isLiveCellGroup && lcParentResp === 'yes' && !lcAllChecked && (
-                      <div style={{ padding: '8px 14px', fontSize: '12px', color: 'var(--danger)', fontWeight: 500, marginTop: '2px' }}>All protocol steps must be confirmed to complete this task.</div>
+                      <div style={{ padding: '8px 14px', fontSize: '12px', color: 'var(--danger)', fontWeight: 500, marginTop: '2px' }}>All follow-up steps must be confirmed to complete this task.</div>
                     )}
                     {isLiveCellGroup && lcParentResp === 'yes' && lcAllChecked && (
-                      <div style={{ padding: '10px 14px', background: '#EAF7F0', borderRadius: 'var(--radius-md)', border: '1px solid #A9DFBF', fontSize: '13px', color: '#27AE60', fontWeight: 500, marginTop: '4px' }}>✓ All quarantine protocol steps confirmed.</div>
+                      <div style={{ padding: '10px 14px', background: '#EAF7F0', borderRadius: 'var(--radius-md)', border: '1px solid #A9DFBF', fontSize: '13px', color: '#27AE60', fontWeight: 500, marginTop: '4px' }}>✓ All follow-up steps confirmed.</div>
                     )}
                     </div>}
                   </div>

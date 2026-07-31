@@ -20,7 +20,6 @@ SET group_name = 'Lab Aliquots'
 WHERE group_name = 'Reagents and Orders';
 
 -- 4. Enable generic conditional display for PM weekly Live Cell parent task
---    (questions 2–6 only appear when question 1 is answered Yes)
 UPDATE tasks_definitions
 SET conditional_text = 'on_yes'
 WHERE group_name = 'Lab SOP for Live Cell Materials'
@@ -33,3 +32,12 @@ UPDATE tasks_definitions
 SET conditional_text = 'on_yes'
 WHERE group_name = 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time'
   AND response_type = 'yes_no';
+
+-- 6. Add gate question to PM biweekly "Moving Cells to Liquid Nitrogen"
+--    (existing questions only appear when this is answered Yes)
+INSERT INTO tasks_definitions (category, frequency, group_name, title, sort_order, response_type, sop_trigger, conditional_text, status)
+SELECT 'PM', 'biweekly', 'Moving Cells to Liquid Nitrogen', 'Cells were moved to LN this week.', 0, 'yes_no', false, 'on_yes', 'published'
+WHERE NOT EXISTS (
+  SELECT 1 FROM tasks_definitions
+  WHERE group_name = 'Moving Cells to Liquid Nitrogen' AND conditional_text = 'on_yes'
+);

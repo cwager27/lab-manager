@@ -145,6 +145,7 @@ export const SEED_TASKS = [
   { category: 'PM', frequency: 'weekly', group_name: 'Lab SOP for Live Cell Materials', sort_order: 6, response_type: 'checkbox', sop_trigger: false, conditional_text: '', title: 'If so — Released working splits immediately after negative mycoplasma test obtained and culture stability verified.' },
 
   // ── PM BIWEEKLY ──────────────────────────────────────────────────────
+  { category: 'PM', frequency: 'biweekly', group_name: 'Moving Cells to Liquid Nitrogen', sort_order: 0, response_type: 'yes_no', sop_trigger: false, conditional_text: 'on_yes', title: 'Cells were moved to LN this week.' },
   { category: 'PM', frequency: 'biweekly', group_name: 'Moving Cells to Liquid Nitrogen', sort_order: 1, response_type: 'yes_no', sop_trigger: false, conditional_text: '', title: 'Reviewed raw mycoplasma test data before any cells were frozen (if raw data not available → do not freeze).' },
   { category: 'PM', frequency: 'biweekly', group_name: 'Moving Cells to Liquid Nitrogen', sort_order: 2, response_type: 'yes_no', sop_trigger: false, conditional_text: '', title: 'Freezing decision based strictly on verified raw data showing a negative mycoplasma result (if not raw → do not freeze).' },
   { category: 'PM', frequency: 'biweekly', group_name: 'Moving Cells to Liquid Nitrogen', sort_order: 3, response_type: 'yes_no', sop_trigger: false, conditional_text: '', title: 'Each distinct flask (unique sample name) had its own negative test result (no shared tests across samples).' },
