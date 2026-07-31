@@ -173,6 +173,72 @@ function ReagentTab() {
   );
 }
 
+// ── Sample Naming SOPs ────────────────────────────────────────────────────────
+const SAMPLE_NAMING_SUBS = [
+  { id: 'guidelines', label: 'Sample Naming Guidelines' },
+  { id: 'cell_line',  label: 'Cell Line Naming Examples' },
+];
+
+function SampleNamingSOPs() {
+  const [sub, setSub] = useState('guidelines');
+  const src = sub === 'guidelines'
+    ? 'https://docs.google.com/document/d/1y8EYDUC-imv0h41PQU4egtgmcmjtOJLX/preview'
+    : 'https://docs.google.com/spreadsheets/d/1KNmP7BkC8_yju727lssgNxkXkEnHZ4kjWZD7gm1IS88/preview';
+  const openUrl = sub === 'guidelines'
+    ? 'https://docs.google.com/document/d/1y8EYDUC-imv0h41PQU4egtgmcmjtOJLX/edit'
+    : 'https://docs.google.com/spreadsheets/d/1KNmP7BkC8_yju727lssgNxkXkEnHZ4kjWZD7gm1IS88/edit?gid=0#gid=0';
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border)' }}>
+          {SAMPLE_NAMING_SUBS.map(t => (
+            <button key={t.id} onClick={() => setSub(t.id)} style={{
+              padding: '8px 20px', border: 'none', background: 'transparent',
+              fontSize: 13, fontWeight: sub === t.id ? 700 : 400,
+              color: sub === t.id ? 'var(--purple-primary)' : 'var(--text-secondary)',
+              borderBottom: sub === t.id ? '2px solid var(--purple-primary)' : '2px solid transparent',
+              marginBottom: -2, cursor: 'pointer',
+            }}>{t.label}</button>
+          ))}
+        </div>
+        <a href={openUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: 'var(--purple-primary)', fontWeight: 600, textDecoration: 'none', background: 'var(--purple-faint)', padding: '5px 12px', borderRadius: 6, whiteSpace: 'nowrap' }}>
+          Open in Google ↗
+        </a>
+      </div>
+      <iframe
+        key={sub}
+        src={src}
+        title={sub === 'guidelines' ? 'Sample Naming Guidelines' : 'Cell Line Naming Examples'}
+        style={{ width: '100%', height: 720, border: '1px solid var(--border)', borderRadius: 8 }}
+        allowFullScreen
+      />
+    </div>
+  );
+}
+
+// ── Mutational Data Presentation SOP ─────────────────────────────────────────
+function MutationalDataSOP() {
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div>
+          <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>Mutational Data Presentation SOP</h2>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Standards for presenting mutation data in figures and reports</p>
+        </div>
+        <a href="https://docs.google.com/document/d/1_7toTQ_Obm37o-LSfRZoVP5JZE8DOvn-Os529bw-zg4/edit?tab=t.0#heading=h.dsjfo2kvjh6p" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: 'var(--purple-primary)', fontWeight: 600, textDecoration: 'none', background: 'var(--purple-faint)', padding: '5px 12px', borderRadius: 6, whiteSpace: 'nowrap' }}>
+          Open in Google Docs ↗
+        </a>
+      </div>
+      <iframe
+        src="https://docs.google.com/document/d/1_7toTQ_Obm37o-LSfRZoVP5JZE8DOvn-Os529bw-zg4/preview"
+        title="Mutational Data Presentation SOP"
+        style={{ width: '100%', height: 720, border: '1px solid var(--border)', borderRadius: 8 }}
+        allowFullScreen
+      />
+    </div>
+  );
+}
+
 // ── Placeholder for tabs with no content yet ──────────────────────────────────
 function PlaceholderContent({ tab }) {
   return (
@@ -224,7 +290,9 @@ export default function LabPoliciesSOPs({ userRole, userId }) {
     if (tab === 'benchling')      return <BenchlingPolicy />;
     if (tab === 'tissue_culture') return <TissueCultureSOP />;
     if (tab === 'ordering')       return <OrderingSOP />;
-    if (tab === 'reagent')        return <ReagentTab />;
+    if (tab === 'reagent')         return <ReagentTab />;
+    if (tab === 'sample_naming')   return <SampleNamingSOPs />;
+    if (tab === 'mutational_data') return <MutationalDataSOP />;
     return <PlaceholderContent tab={activeTab} />;
   }
 
