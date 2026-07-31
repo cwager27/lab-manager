@@ -2361,7 +2361,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         <div style={{ display: 'flex', marginBottom: 24, borderBottom: '2px solid var(--border)' }}>
           {[
             { id: 'todo',        label: 'To Do Tasks' },
-            { id: 'completed',   label: 'Completed', badge: doneGroups.length + doneOneOffs.length || null },
+            { id: 'completed',   label: 'Completed' },
             { id: 'productivity', label: 'My Productivity' },
           ].map(({ id, label, badge }) => (
             <button key={id} onClick={() => setMyTaskSubTab(id)}
