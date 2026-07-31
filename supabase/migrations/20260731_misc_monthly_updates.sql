@@ -18,3 +18,18 @@ WHERE NOT EXISTS (
 UPDATE tasks_definitions
 SET group_name = 'Lab Aliquots'
 WHERE group_name = 'Reagents and Orders';
+
+-- 4. Enable generic conditional display for PM weekly Live Cell parent task
+--    (questions 2–6 only appear when question 1 is answered Yes)
+UPDATE tasks_definitions
+SET conditional_text = 'on_yes'
+WHERE group_name = 'Lab SOP for Live Cell Materials'
+  AND response_type = 'yes_no'
+  AND frequency = 'weekly'
+  AND category = 'PM';
+
+-- 5. Same for the longer-named Live Cell group if it exists in the DB
+UPDATE tasks_definitions
+SET conditional_text = 'on_yes'
+WHERE group_name = 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time'
+  AND response_type = 'yes_no';

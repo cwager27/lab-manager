@@ -1833,13 +1833,13 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       return !triggered || task.sub_tasks.every(st => vatResponses[`${task.id}_sub_${st.id}::${dueDate}`]?.response === 'checked');
     };
     const isGroupComplete = (groupTasks, groupName, dueDate) => {
-      const isLiveCell = groupName === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time';
-      if (isLiveCell) {
-        const lcParent = groupTasks.find(t => t.response_type === 'yes_no');
-        const lcResp = lcParent ? vatResponses[vKey(lcParent.id, dueDate)]?.response : null;
-        if (!lcResp) return false;
-        if (lcResp === 'no') return true;
-        return groupTasks.filter(t => t.response_type === 'checkbox').every(t => vatResponses[vKey(t.id, dueDate)]?.response === 'checked');
+      const gateTask = groupTasks.find(t => t.conditional_text === 'on_yes');
+      if (gateTask) {
+        const gateResp = vatResponses[vKey(gateTask.id, dueDate)]?.response;
+        if (!gateResp) return false;
+        if (gateResp === 'no') return true;
+        const gateIdx = groupTasks.indexOf(gateTask);
+        return groupTasks.slice(gateIdx + 1).filter(t => t.response_type === 'checkbox').every(t => vatResponses[vKey(t.id, dueDate)]?.response === 'checked');
       }
       const myAssigned = groupTasks.filter(t => myDefIds.has(t.id));
       if (myAssigned.length === 0) return false;
@@ -1926,7 +1926,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                       const gateTask = groupTasks.find(t => t.conditional_text === 'on_yes');
                       const gateIdx = gateTask ? groupTasks.indexOf(gateTask) : -1;
                       const gateResp = gateTask ? vatResponses[vKey(gateTask.id, dueDate)]?.response : null;
-                      const isLiveCellGroup = groupName === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time';
+                      const isLiveCellGroup = !!gateTask;
                       const lcParentResp = isLiveCellGroup ? gateResp : null;
                       const lcSubTasks = isLiveCellGroup ? groupTasks.filter(t => t.response_type === 'checkbox') : [];
                       const lcAllChecked = lcSubTasks.length > 0 && lcSubTasks.every(t => vatResponses[vKey(t.id, dueDate)]?.response === 'checked');
@@ -2804,15 +2804,21 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       return [...aaMap.entries()];
     })();
 
-    // Live Cell group: checkbox sub-tasks only count when parent answered "yes"
-    const liveCellParent = visibleTasks.find(t => t.group_name === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time' && t.response_type === 'yes_no');
-    const liveCellParentResp = liveCellParent ? vatResponses[liveCellParent.id]?.response : null;
-    const adjustedVisibleTasks = visibleTasks.filter(t =>
-      !(t.group_name === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time' && t.response_type === 'checkbox' && liveCellParentResp !== 'yes')
-    );
+    // For groups with a gated yes_no parent (conditional_text === 'on_yes'), hide checkboxes until parent is 'yes'
+    const gatedGroupParents = {};
+    for (const t of visibleTasks) {
+      if (t.conditional_text === 'on_yes') gatedGroupParents[t.group_name || ''] = vatResponses[t.id]?.response || null;
+    }
+    const adjustedVisibleTasks = visibleTasks.filter(t => {
+      if (t.response_type !== 'checkbox') return true;
+      const gn = t.group_name || '';
+      if (gn in gatedGroupParents) return gatedGroupParents[gn] === 'yes';
+      return true;
+    });
     const completedCount = adjustedVisibleTasks.filter(t => {
       const r = vatResponses[t.id]?.response;
-      if (t.group_name === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time' && t.response_type === 'yes_no' && r === 'no') return true;
+      const gn = t.group_name || '';
+      if ((gn in gatedGroupParents) && t.response_type === 'yes_no' && r === 'no') return true;
       return !!r;
     }).length;
 
@@ -2871,7 +2877,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                 const gateTask = groupTasks.find(t => t.conditional_text === 'on_yes');
                 const gateIdx = gateTask ? groupTasks.indexOf(gateTask) : -1;
                 const gateResp = gateTask ? vatResponses[gateTask.id]?.response : null;
-                const isLiveCellGroup = groupName === 'Lab SOP for Live Cell Materials Entering Tissue Culture for the First Time';
+                const isLiveCellGroup = !!gateTask;
                 const lcParentResp = isLiveCellGroup ? gateResp : null;
                 const lcSubTasks = isLiveCellGroup ? groupTasks.filter(t => t.response_type === 'checkbox') : [];
                 const groupKey = groupName || '__ungrouped__';
