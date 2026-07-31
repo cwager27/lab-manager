@@ -1207,7 +1207,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     setAssignedLoading(true);
     const { data } = await supabase
       .from('task_occurrences')
-      .select('id, due_date, status, assigned_to, completed_at, notes, task_def:tasks_definitions(id, title, category, frequency, audit_area, group_name), assignee:profiles!assigned_to(id, full_name)')
+      .select('id, due_date, status, assigned_to, completed_at, notes, task_def:tasks_definitions(id, title, category, frequency, group_name), assignee:profiles!assigned_to(id, full_name)')
       .gte('due_date', from)
       .lte('due_date', to)
       .order('due_date');
@@ -1221,7 +1221,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     const endOfYear = `${new Date().getFullYear()}-12-31`;
     const { data } = await supabase
       .from('task_occurrences')
-      .select('id, due_date, task_def:tasks_definitions(id, title, category, frequency, audit_area, group_name)')
+      .select('id, due_date, task_def:tasks_definitions(id, title, category, frequency, group_name)')
       .is('assigned_to', null)
       .gte('due_date', todayStr)
       .lte('due_date', endOfYear)

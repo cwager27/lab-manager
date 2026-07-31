@@ -52,18 +52,28 @@ router.post('/tasks/generate-occurrences', async (req, res) => {
 
 router.get('/tasks2/data', async (req, res) => {
   try {
-    const [tasksRes, profilesRes, vacsRes] = await Promise.all([
-      supabaseAdmin
-        .from('tasks_definitions')
-        .select('id, title, category, frequency, group_name, audit_area, sort_order, recurrence_rule')
-        .eq('status', 'published')
-        .order('sort_order'),
+    const [profilesRes, vacsRes] = await Promise.all([
       supabaseAdmin.from('profiles').select('id, full_name, email, role'),
       supabaseAdmin
         .from('vacation_requests')
         .select('requested_by, start_date, end_date, leave_type, status')
         .eq('status', 'approved'),
     ]);
+
+    // Try with audit_area first; fall back if the column doesn't exist in this DB.
+    let tasksRes = await supabaseAdmin
+      .from('tasks_definitions')
+      .select('id, title, category, frequency, group_name, audit_area, sort_order, recurrence_rule')
+      .eq('status', 'published')
+      .order('sort_order');
+    if (tasksRes.error) {
+      tasksRes = await supabaseAdmin
+        .from('tasks_definitions')
+        .select('id, title, category, frequency, group_name, sort_order, recurrence_rule')
+        .eq('status', 'published')
+        .order('sort_order');
+    }
+
     res.json({
       tasks: tasksRes.data || [],
       profiles: profilesRes.data || [],
