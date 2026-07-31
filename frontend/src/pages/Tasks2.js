@@ -4344,8 +4344,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         </div>
       </div>
 
-      {/* Tab content — calendar expands to full width, all others stay at 900 */}
-      <div style={{ maxWidth: tab === 'calendar' ? '100%' : 900, margin: '0 auto' }}>
+      {/* Tab content — expands to fill available width */}
+      <div>
       {canManage && tab === 'view-all' && (
         <>
           <div style={card}>
