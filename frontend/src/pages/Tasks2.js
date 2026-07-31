@@ -930,11 +930,12 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
   async function handleSopSubmit(task) {
     const exc = sopExceptions[task.id] || {};
-    if (!exc.note?.trim() && !exc.photo) return;
+    const crossCat = task.title?.startsWith('No cross-category items');
+    if (crossCat ? (!exc.corrected || !exc.photoPosted) : (!exc.note?.trim() && !exc.photo)) return;
     setSopExceptions(p => ({ ...p, [task.id]: { ...p[task.id], submitting: true } }));
 
     let photoUrl = null;
-    if (exc.photo) {
+    if (!crossCat && exc.photo) {
       const ext = exc.photo.name?.split('.').pop() || 'jpg';
       const path = `sop-exceptions/${task.id}_${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from('lab-files').upload(path, exc.photo, { contentType: exc.photo.type, upsert: false });
@@ -944,11 +945,15 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       }
     }
 
+    const noteForDB = crossCat
+      ? "1) Misplacement was corrected. 2) Photo taken and posted on Slack 'Experimental' thread reminding users items are to be allocated to correct boxes."
+      : (exc.note?.trim() || null);
+
     await supabase.from('task_responses').insert([{
       task_definition_id: task.id,
       submitted_by: userId,
       response: 'no',
-      notes: exc.note?.trim() || null,
+      notes: noteForDB,
       sop_photo_url: photoUrl,
     }]);
 
@@ -957,7 +962,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         taskTitle: task.title,
-        note: exc.note?.trim() || null,
+        note: noteForDB,
         photoUrl,
         submittedByName: myProfile?.full_name || 'Lab member',
         submittedByEmail: myProfile?.email || '',
@@ -1983,6 +1988,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                                     )}
                                     {task.sop_trigger && resp?.response === 'no' && (() => {
                                       const exc = sopExceptions[task.id] || {};
+                                      const crossCat = task.title?.startsWith('No cross-category items');
                                       return exc.submitted ? (
                                         <div style={{ marginTop: 8, padding: '8px 12px', background: '#EAF7F0', border: '1px solid #A9DFBF', borderRadius: 'var(--radius-sm)', fontSize: '12px', color: '#27AE60', fontWeight: 500 }}>
                                           ✓ Exception documented and PM notified.
@@ -1990,29 +1996,49 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                                       ) : (
                                         <div style={{ marginTop: 8, padding: '10px 12px', background: '#FFF8F0', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)' }}>
                                           <div style={{ fontSize: '11px', fontWeight: 700, color: '#E67E22', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>⚠ SOP Exception — Action Required</div>
-                                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: 6 }}>Document the exception, corrective action taken, and upload a photo. This will be sent to PM.</div>
-                                          <textarea
-                                            value={exc.note || ''}
-                                            onChange={e => handleSopNote(task.id, e.target.value)}
-                                            placeholder="Describe the exception and corrective action taken…"
-                                            rows={2}
-                                            style={{ width: '100%', padding: '5px 8px', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', background: 'white', marginBottom: 6 }}
-                                          />
-                                          {exc.photoPreview && (
-                                            <img src={exc.photoPreview} alt="SOP correction" style={{ width: '100%', maxHeight: 120, objectFit: 'cover', borderRadius: 4, marginBottom: 6 }} />
+                                          {crossCat ? (
+                                            <>
+                                              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: 8 }}>Confirm both corrective actions were taken:</div>
+                                              <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8, cursor: 'pointer' }}>
+                                                <input type="checkbox" checked={!!exc.corrected} onChange={e => setSopExceptions(p => ({ ...p, [task.id]: { ...(p[task.id] || {}), corrected: e.target.checked } }))} style={{ accentColor: '#E67E22', marginTop: 2 }} />
+                                                <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>Misplacement was corrected</span>
+                                              </label>
+                                              <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 10, cursor: 'pointer' }}>
+                                                <input type="checkbox" checked={!!exc.photoPosted} onChange={e => setSopExceptions(p => ({ ...p, [task.id]: { ...(p[task.id] || {}), photoPosted: e.target.checked } }))} style={{ accentColor: '#E67E22', marginTop: 2 }} />
+                                                <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>Photo taken and posted on Slack 'Experimental' thread reminding users items are to be allocated to correct boxes</span>
+                                              </label>
+                                              <button onClick={() => handleSopSubmit(task)} disabled={!exc.corrected || !exc.photoPosted || exc.submitting}
+                                                style={{ padding: '5px 14px', background: (!exc.corrected || !exc.photoPosted || exc.submitting) ? 'var(--border)' : '#E67E22', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: '12px', fontWeight: 600, cursor: (!exc.corrected || !exc.photoPosted || exc.submitting) ? 'default' : 'pointer' }}>
+                                                {exc.submitting ? 'Submitting…' : 'Confirm'}
+                                              </button>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: 6 }}>Document the exception, corrective action taken, and upload a photo. This will be sent to PM.</div>
+                                              <textarea
+                                                value={exc.note || ''}
+                                                onChange={e => handleSopNote(task.id, e.target.value)}
+                                                placeholder="Describe the exception and corrective action taken…"
+                                                rows={2}
+                                                style={{ width: '100%', padding: '5px 8px', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', background: 'white', marginBottom: 6 }}
+                                              />
+                                              {exc.photoPreview && (
+                                                <img src={exc.photoPreview} alt="SOP correction" style={{ width: '100%', maxHeight: 120, objectFit: 'cover', borderRadius: 4, marginBottom: 6 }} />
+                                              )}
+                                              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'white', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)', fontSize: '12px', cursor: 'pointer', color: '#E67E22', fontWeight: 500 }}>
+                                                  <Upload size={12} /> {exc.photo ? 'Change photo' : 'Upload photo *'}
+                                                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleSopPhotoSelect(task.id, e.target.files[0])} />
+                                                </label>
+                                                <button
+                                                  onClick={() => handleSopSubmit(task)}
+                                                  disabled={!exc.note?.trim() || !exc.photo || exc.submitting}
+                                                  style={{ padding: '5px 14px', background: (!exc.note?.trim() || !exc.photo || exc.submitting) ? 'var(--border)' : '#E67E22', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: '12px', fontWeight: 600, cursor: (!exc.note?.trim() || !exc.photo || exc.submitting) ? 'default' : 'pointer' }}>
+                                                  {exc.submitting ? 'Submitting…' : 'Submit to PM'}
+                                                </button>
+                                              </div>
+                                            </>
                                           )}
-                                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                                            <label style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'white', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)', fontSize: '12px', cursor: 'pointer', color: '#E67E22', fontWeight: 500 }}>
-                                              <Upload size={12} /> {exc.photo ? 'Change photo' : 'Upload photo *'}
-                                              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleSopPhotoSelect(task.id, e.target.files[0])} />
-                                            </label>
-                                            <button
-                                              onClick={() => handleSopSubmit(task)}
-                                              disabled={!exc.note?.trim() || !exc.photo || exc.submitting}
-                                              style={{ padding: '5px 14px', background: (!exc.note?.trim() || !exc.photo || exc.submitting) ? 'var(--border)' : '#E67E22', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: '12px', fontWeight: 600, cursor: (!exc.note?.trim() || !exc.photo || exc.submitting) ? 'default' : 'pointer' }}>
-                                              {exc.submitting ? 'Submitting…' : 'Submit to PM'}
-                                            </button>
-                                          </div>
                                         </div>
                                       );
                                     })()}
@@ -2920,6 +2946,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                               )}
                               {task.sop_trigger && resp?.response === 'no' && (() => {
                                 const exc = sopExceptions[task.id] || {};
+                                const crossCat = task.title?.startsWith('No cross-category items');
                                 return exc.submitted ? (
                                   <div style={{ marginTop: 8, padding: '8px 12px', background: '#EAF7F0', border: '1px solid #A9DFBF', borderRadius: 'var(--radius-sm)', fontSize: '12px', color: '#27AE60', fontWeight: 500 }}>
                                     ✓ Exception documented and PM notified.
@@ -2927,22 +2954,42 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                                 ) : (
                                   <div style={{ marginTop: 8, padding: '10px 12px', background: '#FFF8F0', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)' }}>
                                     <div style={{ fontSize: '11px', fontWeight: 700, color: '#E67E22', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>⚠ SOP Exception — Action Required</div>
-                                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: 6 }}>Document the exception, corrective action taken, and upload a photo. This will be sent to PM.</div>
-                                    <textarea value={exc.note || ''} onChange={e => handleSopNote(task.id, e.target.value)} placeholder="Describe the exception and corrective action taken…" rows={2}
-                                      style={{ width: '100%', padding: '5px 8px', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', background: 'white', marginBottom: 6 }} />
-                                    {exc.photoPreview && (
-                                      <img src={exc.photoPreview} alt="SOP correction" style={{ width: '100%', maxHeight: 120, objectFit: 'cover', borderRadius: 4, marginBottom: 6 }} />
+                                    {crossCat ? (
+                                      <>
+                                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: 8 }}>Confirm both corrective actions were taken:</div>
+                                        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8, cursor: 'pointer' }}>
+                                          <input type="checkbox" checked={!!exc.corrected} onChange={e => setSopExceptions(p => ({ ...p, [task.id]: { ...(p[task.id] || {}), corrected: e.target.checked } }))} style={{ accentColor: '#E67E22', marginTop: 2 }} />
+                                          <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>Misplacement was corrected</span>
+                                        </label>
+                                        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 10, cursor: 'pointer' }}>
+                                          <input type="checkbox" checked={!!exc.photoPosted} onChange={e => setSopExceptions(p => ({ ...p, [task.id]: { ...(p[task.id] || {}), photoPosted: e.target.checked } }))} style={{ accentColor: '#E67E22', marginTop: 2 }} />
+                                          <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>Photo taken and posted on Slack 'Experimental' thread reminding users items are to be allocated to correct boxes</span>
+                                        </label>
+                                        <button onClick={() => handleSopSubmit(task)} disabled={!exc.corrected || !exc.photoPosted || exc.submitting}
+                                          style={{ padding: '5px 14px', background: (!exc.corrected || !exc.photoPosted || exc.submitting) ? 'var(--border)' : '#E67E22', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: '12px', fontWeight: 600, cursor: (!exc.corrected || !exc.photoPosted || exc.submitting) ? 'default' : 'pointer' }}>
+                                          {exc.submitting ? 'Submitting…' : 'Confirm'}
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: 6 }}>Document the exception, corrective action taken, and upload a photo. This will be sent to PM.</div>
+                                        <textarea value={exc.note || ''} onChange={e => handleSopNote(task.id, e.target.value)} placeholder="Describe the exception and corrective action taken…" rows={2}
+                                          style={{ width: '100%', padding: '5px 8px', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', background: 'white', marginBottom: 6 }} />
+                                        {exc.photoPreview && (
+                                          <img src={exc.photoPreview} alt="SOP correction" style={{ width: '100%', maxHeight: 120, objectFit: 'cover', borderRadius: 4, marginBottom: 6 }} />
+                                        )}
+                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                          <label style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'white', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)', fontSize: '12px', cursor: 'pointer', color: '#E67E22', fontWeight: 500 }}>
+                                            <Upload size={12} /> {exc.photo ? 'Change photo' : 'Upload photo *'}
+                                            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleSopPhotoSelect(task.id, e.target.files[0])} />
+                                          </label>
+                                          <button onClick={() => handleSopSubmit(task)} disabled={!exc.note?.trim() || !exc.photo || exc.submitting}
+                                            style={{ padding: '5px 14px', background: (!exc.note?.trim() || !exc.photo || exc.submitting) ? 'var(--border)' : '#E67E22', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: '12px', fontWeight: 600, cursor: (!exc.note?.trim() || !exc.photo || exc.submitting) ? 'default' : 'pointer' }}>
+                                            {exc.submitting ? 'Submitting…' : 'Submit to PM'}
+                                          </button>
+                                        </div>
+                                      </>
                                     )}
-                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                                      <label style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'white', border: '1px solid #F5CBA7', borderRadius: 'var(--radius-sm)', fontSize: '12px', cursor: 'pointer', color: '#E67E22', fontWeight: 500 }}>
-                                        <Upload size={12} /> {exc.photo ? 'Change photo' : 'Upload photo *'}
-                                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleSopPhotoSelect(task.id, e.target.files[0])} />
-                                      </label>
-                                      <button onClick={() => handleSopSubmit(task)} disabled={!exc.note?.trim() || !exc.photo || exc.submitting}
-                                        style={{ padding: '5px 14px', background: (!exc.note?.trim() || !exc.photo || exc.submitting) ? 'var(--border)' : '#E67E22', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: '12px', fontWeight: 600, cursor: (!exc.note?.trim() || !exc.photo || exc.submitting) ? 'default' : 'pointer' }}>
-                                        {exc.submitting ? 'Submitting…' : 'Submit to PM'}
-                                      </button>
-                                    </div>
                                   </div>
                                 );
                               })()}
