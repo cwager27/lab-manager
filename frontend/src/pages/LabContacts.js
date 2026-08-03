@@ -451,7 +451,7 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
         </td>
         <td style={{ padding: '10px 14px', fontSize: '12px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            {member.email ? <a href={`mailto:${member.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{member.email}</a> : '—'}
+            {(extraData?.email || member.email) ? <a href={`mailto:${extraData?.email || member.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{extraData?.email || member.email}</a> : '—'}
             {extraData?.personal_email && <a href={`mailto:${extraData.personal_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}><Mail size={10} />{extraData.personal_email}</a>}
           </div>
         </td>
@@ -1216,7 +1216,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredLabMembers.length === 0 && pendingLabContacts.length === 0 ? (
+                  {filteredLabMembers.length === 0 && (!canManage || pendingLabContacts.length === 0) ? (
                     <tr><td colSpan={99} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No lab contacts found.</td></tr>
                   ) : filteredLabMembers.map((member, i) => (
                     <LabMemberRow
@@ -1235,7 +1235,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                       initialExtraData={memberExtraMap[(member.full_name || '').toLowerCase().trim()] || null}
                     />
                   ))}
-                  {pendingLabContacts.map((c, i) => (
+                  {canManage && pendingLabContacts.map((c, i) => (
                     <AdminContactRow
                       key={c.id}
                       contact={c}
