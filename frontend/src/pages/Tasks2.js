@@ -4418,7 +4418,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
         <div style={{ marginBottom: 24 }}>
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>Task assignment</h1>
-          <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: 14 }}>Recurrent tasks · admin view</p>
+          <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: 14 }}>Recurrent tasks</p>
         </div>
 
         <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border)', marginBottom: 28 }}>
