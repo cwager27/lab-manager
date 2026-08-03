@@ -24,6 +24,7 @@ const { router: financeRoutes, checkGrantAlerts } = require('./routes/finance');
 const memberRoutes = require('./routes/members');
 const authRoutes = require('./routes/auth');
 const taskRoutes = require('./routes/tasks');
+const benchlingRoutes = require('./routes/benchling');
 const { generateOccurrences } = require('./lib/occurrenceGenerator');
 const { supabaseAdmin } = require('./lib/supabaseAdmin');
 
@@ -38,6 +39,7 @@ app.use('/api', financeRoutes);
 app.use('/api', memberRoutes);
 app.use('/api', authRoutes);
 app.use('/api', taskRoutes);
+app.use('/api', benchlingRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Lab Manager API is running' });

@@ -322,13 +322,6 @@ export default function ComputationalTips({ userRole, userId, profile }) {
 
   return (
     <div>
-      {/* Coming soon banner */}
-      <div style={{ marginBottom: 20, padding: '12px 16px', background: '#F5EEF8', border: '1px solid #D7BDE2', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#7B3FA0' }}>Coming Soon</span>
-        <span style={{ fontSize: 13, color: '#7B3FA0' }}>—</span>
-        <span style={{ fontSize: 13, color: '#5B2C6F' }}>This system is currently being implemented. Check back soon for code snippets, workflows, and computational biology tips.</span>
-      </div>
-
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, gap: 16 }}>
         <div>
@@ -408,6 +401,25 @@ export default function ComputationalTips({ userRole, userId, profile }) {
           style={{ border: 'none', outline: 'none', flex: 1, fontSize: 13, background: 'transparent', color: 'var(--text-primary)' }} />
         {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2 }}><X size={13} /></button>}
       </div>
+
+
+      {/* HPC Reference PDF */}
+      {activeCategory === 'All' && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>BigPurple HPC — Tips &amp; Tricks</h2>
+            <a href="/BigPurple_HPC_Tips_and_Tricks.pdf" target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 12, fontWeight: 600, color: 'var(--purple-primary)', textDecoration: 'none' }}>
+              Open PDF ↗
+            </a>
+          </div>
+          <iframe
+            src="/BigPurple_HPC_Tips_and_Tricks.pdf"
+            title="BigPurple HPC Tips and Tricks"
+            style={{ width: '100%', height: 720, border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}
+          />
+        </div>
+      )}
 
       {/* Content */}
       {loading ? (

@@ -45,6 +45,7 @@ function orderDateToMonth(dateStr) {
 }
 function fyLabel(fy) { return `FY'${fy.slice(2)}`; }
 const VENDOR_PALETTE = ['#4472C4','#E46C0A','#7030A0','#538135','#CC4125','#1F3864','#9DC3E6','#C00000','#00B0F0','#4BACC6','#92D050','#FAC090','#CCCC00','#FF00FF','#A9D18E','#C4A265','#FF6B6B','#4ECDC4'];
+const FY_PALETTE = ['#4472C4','#E46C0A','#538135','#7030A0','#CC4125','#1F3864','#9DC3E6','#C55A11'];
 
 
 const STATUS_STYLES = {
@@ -134,6 +135,9 @@ export default function Finance({ userRole }) {
   const [vcCategoryOpen, setVcCategoryOpen] = useState(false);
   const [vcDraftCategories, setVcDraftCategories] = useState([]);
   const [vcCategorySearch, setVcCategorySearch] = useState('');
+  const [annualSummaryYears, setAnnualSummaryYears] = useState([]);
+  const [annualSummaryYearOpen, setAnnualSummaryYearOpen] = useState(false);
+  const [annualSummaryDraftYears, setAnnualSummaryDraftYears] = useState([]);
   const chartData = useMemo(() => {
     const real = orders.filter(o => {
       if (!o.item || o.item.trim() === '' || o.status === 'deleted') return false;
@@ -447,6 +451,62 @@ export default function Finance({ userRole }) {
     );
     return { data: months.map(m => byMonth[m]), months, vendorYearSpend, activeV: sortedV, activeYrs };
   }, [orders, vcSelectedVendors, vcSelectedYears, vcSelectedCategories, allVendorNames, allFYs]);
+
+  const multiYearData = useMemo(() => {
+    const activeYears = (annualSummaryYears.length > 0 ? annualSummaryYears : allFYs).slice().sort();
+
+    const fyTotals = {};
+    activeYears.forEach(fy => { fyTotals[fy] = { total: 0, complete: 0, processing: 0, pending: 0, count: 0 }; });
+
+    const monthlyByFY = {};
+    activeYears.forEach(fy => { monthlyByFY[fy] = Array(12).fill(0); });
+
+    const catByFY = {};
+    activeYears.forEach(fy => { catByFY[fy] = {}; });
+
+    orders.forEach(o => {
+      if (!o.item || o.item.trim() === '' || o.status === 'deleted' || !o.order_date || o.total_price == null) return;
+      const fy = getFiscalYear(o.order_date);
+      if (!activeYears.includes(fy)) return;
+      const price = Number(o.total_price);
+      if (!price || isNaN(price)) return;
+
+      fyTotals[fy].total += price;
+      fyTotals[fy].count += 1;
+      const s = (o.status || '').toLowerCase();
+      if (s === 'complete') fyTotals[fy].complete += price;
+      else if (s === 'processing') fyTotals[fy].processing += price;
+      else fyTotals[fy].pending += price;
+
+      const d = new Date(o.order_date + 'T00:00:00Z');
+      monthlyByFY[fy][d.getUTCMonth()] += price;
+
+      if (o.category) catByFY[fy][o.category] = (catByFY[fy][o.category] || 0) + price;
+    });
+
+    const monthlyData = MON_ABBR.map((m, mi) => {
+      const row = { month: m };
+      activeYears.forEach(fy => { row[fy] = monthlyByFY[fy][mi] || 0; });
+      return row;
+    });
+
+    const catData = CATEGORIES.map(cat => {
+      const row = { name: cat };
+      activeYears.forEach(fy => { row[fy] = catByFY[fy]?.[cat] || 0; });
+      return row;
+    }).filter(row => activeYears.some(fy => (row[fy] || 0) > 0));
+
+    const fyTotalsData = activeYears.map(fy => ({
+      fy: fy.toUpperCase(),
+      complete: fyTotals[fy]?.complete || 0,
+      processing: fyTotals[fy]?.processing || 0,
+      pending: fyTotals[fy]?.pending || 0,
+      total: fyTotals[fy]?.total || 0,
+      count: fyTotals[fy]?.count || 0,
+    }));
+
+    return { fyTotals, monthlyData, catData, fyTotalsData, activeYears };
+  }, [orders, annualSummaryYears, allFYs]);
 
   async function commitOrderSelectEdit(id, col, value) {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, [col]: value } : o));
@@ -895,9 +955,9 @@ export default function Finance({ userRole }) {
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
         <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content' }}>
-          {['orders', 'charts', 'smart-summary', 'vendors', 'grants', 'reagents'].map(tab => (
+          {['orders', 'charts', 'annual-summary', 'smart-summary', 'vendors', 'grants', 'reagents'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', background: activeTab === tab ? 'var(--purple-primary)' : 'transparent', color: activeTab === tab ? 'white' : 'var(--text-secondary)', border: 'none', fontWeight: activeTab === tab ? 600 : 400, fontSize: '13px', textTransform: 'capitalize', whiteSpace: 'nowrap' }}>
-              {tab === 'reagents' ? 'Standardized Reagents' : tab === 'charts' ? 'Spending Summaries' : tab === 'smart-summary' ? 'Smart Summary' : tab}
+              {tab === 'reagents' ? 'Standardized Reagents' : tab === 'charts' ? 'Spending Summaries' : tab === 'smart-summary' ? 'Smart Summary' : tab === 'annual-summary' ? 'Annual Summary' : tab}
             </button>
           ))}
         </div>
@@ -1706,6 +1766,222 @@ export default function Finance({ userRole }) {
 
             </div>
           )}
+
+          {activeTab === 'annual-summary' && (() => {
+            const { fyTotalsData, monthlyData, catData, activeYears } = multiYearData;
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+
+                {/* Year selector */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Years included:</span>
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      onClick={() => { setAnnualSummaryDraftYears(annualSummaryYears); setAnnualSummaryYearOpen(v => !v); }}
+                      style={{ padding: '7px 14px', borderRadius: 'var(--radius-md)', border: `1px solid ${annualSummaryYears.length > 0 ? 'var(--purple-primary)' : 'var(--border)'}`, background: annualSummaryYears.length > 0 ? '#F5EEF8' : 'var(--bg-primary)', color: annualSummaryYears.length > 0 ? 'var(--purple-primary)' : 'var(--text-primary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      {annualSummaryYears.length === 0 ? 'All Years' : annualSummaryYears.map(fy => fy.toUpperCase()).join(', ')}
+                      <span style={{ fontSize: '10px' }}>▼</span>
+                    </button>
+                    {annualSummaryYearOpen && (
+                      <div style={{ position: 'absolute', zIndex: 200, top: 'calc(100% + 4px)', left: 0, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px', width: '180px', boxShadow: 'var(--shadow-lg)' }}>
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                          <button onClick={() => setAnnualSummaryDraftYears([...allFYs])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>All</button>
+                          <button onClick={() => setAnnualSummaryDraftYears([])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Clear</button>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          {allFYs.map(fy => (
+                            <label key={fy} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 4px', cursor: 'pointer', borderRadius: '4px' }}>
+                              <input type="checkbox" checked={annualSummaryDraftYears.includes(fy)} onChange={e => setAnnualSummaryDraftYears(prev => e.target.checked ? [...prev, fy] : prev.filter(x => x !== fy))} />
+                              <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>{fy.toUpperCase()}</span>
+                            </label>
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                          <button onClick={() => setAnnualSummaryYearOpen(false)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                          <button onClick={() => { setAnnualSummaryYears(annualSummaryDraftYears); setAnnualSummaryYearOpen(false); }} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>OK</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {annualSummaryYears.length > 0 && (
+                    <button onClick={() => setAnnualSummaryYears([])} style={{ fontSize: '12px', color: 'var(--purple-primary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Clear filter</button>
+                  )}
+                </div>
+
+                {/* KPI cards per FY */}
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  {fyTotalsData.map((d, i) => (
+                    <div key={d.fy} style={{ flex: '1 1 160px', background: 'var(--bg-primary)', border: `2px solid ${FY_PALETTE[i % FY_PALETTE.length]}22`, borderRadius: 'var(--radius-md)', padding: '16px 20px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: FY_PALETTE[i % FY_PALETTE.length], textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>{d.fy}</div>
+                      <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>${Math.round(d.total).toLocaleString()}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px' }}>{d.count} orders</div>
+                      <div style={{ display: 'flex', gap: '8px', fontSize: '11px' }}>
+                        <span style={{ color: CHART_BLUE }}>✓ ${Math.round(d.complete).toLocaleString()}</span>
+                        <span style={{ color: CHART_RED }}>⟳ ${Math.round(d.processing).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Chart 1: Total spend per fiscal year */}
+                <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 20px' }}>Total spend per fiscal year</h3>
+                  <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={fyTotalsData} margin={{ top: 16, right: 16, left: 8, bottom: 16 }} barCategoryGap="40%">
+                          <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" vertical={false} />
+                          <XAxis dataKey="fy" tick={{ fontSize: 13, fill: '#555', fontWeight: 600 }} />
+                          <YAxis tickFormatter={v => v >= 1000000 ? `$${(v/1000000).toFixed(1)}M` : v >= 1000 ? `$${(v/1000).toFixed(0)}K` : `$${v}`} tick={{ fontSize: 10, fill: '#555' }} width={70} />
+                          <Tooltip formatter={(v, name) => [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name === 'complete' ? 'Complete' : name === 'processing' ? 'Processing' : 'Pending']} />
+                          <Legend verticalAlign="top" height={32} />
+                          <Bar dataKey="complete" name="complete" stackId="a" fill={CHART_BLUE} />
+                          <Bar dataKey="processing" name="processing" stackId="a" fill={CHART_RED} />
+                          <Bar dataKey="pending" name="pending" stackId="a" fill="#F39C12" radius={[2,2,0,0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div style={{ flex: '0 0 auto', minWidth: '260px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', fontSize: '12px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: '#9DA9C7' }}>
+                            <th style={{ padding: '7px 12px', textAlign: 'left', color: 'white', fontWeight: 600 }}>FY</th>
+                            <th style={{ padding: '7px 12px', textAlign: 'right', color: '#FFE066', fontWeight: 600 }}>Total spend</th>
+                            <th style={{ padding: '7px 12px', textAlign: 'right', color: '#FFE066', fontWeight: 600 }}>Orders</th>
+                            <th style={{ padding: '7px 12px', textAlign: 'right', color: '#FFE066', fontWeight: 600 }}>Avg/order</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {fyTotalsData.map((d, i) => (
+                            <tr key={d.fy} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white', borderTop: '1px solid var(--border)' }}>
+                              <td style={{ padding: '6px 12px', fontWeight: 700, color: FY_PALETTE[i % FY_PALETTE.length] }}>{d.fy}</td>
+                              <td style={{ padding: '6px 12px', textAlign: 'right', color: '#1A1A2E', fontWeight: 600 }}>${Math.round(d.total).toLocaleString()}</td>
+                              <td style={{ padding: '6px 12px', textAlign: 'right', color: '#1A1A2E' }}>{d.count}</td>
+                              <td style={{ padding: '6px 12px', textAlign: 'right', color: '#1A1A2E' }}>{d.count > 0 ? `$${Math.round(d.total / d.count).toLocaleString()}` : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        {fyTotalsData.length > 1 && (
+                          <tfoot>
+                            <tr style={{ background: '#9DA9C7', borderTop: '2px solid #7A8AB5', fontWeight: 700 }}>
+                              <td style={{ padding: '7px 12px', color: 'white' }}>Total</td>
+                              <td style={{ padding: '7px 12px', textAlign: 'right', color: '#FFE066' }}>${Math.round(fyTotalsData.reduce((s, d) => s + d.total, 0)).toLocaleString()}</td>
+                              <td style={{ padding: '7px 12px', textAlign: 'right', color: '#FFE066' }}>{fyTotalsData.reduce((s, d) => s + d.count, 0)}</td>
+                              <td style={{ padding: '7px 12px', textAlign: 'right', color: '#FFE066' }}>—</td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Chart 2: Monthly spend overlay — same calendar months, one line per FY */}
+                <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px' }}>Monthly spend by year</h3>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 20px' }}>Calendar months overlaid — compare seasonal patterns across fiscal years</p>
+                  <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <LineChart data={monthlyData} margin={{ top: 16, right: 16, left: 8, bottom: 16 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
+                          <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#555' }} />
+                          <YAxis tickFormatter={v => v >= 1000000 ? `$${(v/1000000).toFixed(1)}M` : v >= 1000 ? `$${(v/1000).toFixed(0)}K` : `$${v}`} tick={{ fontSize: 10, fill: '#555' }} width={70} />
+                          <Tooltip formatter={(v, name) => v > 0 ? [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name.toUpperCase()] : ['-', name.toUpperCase()]} />
+                          <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '12px' }} formatter={v => v.toUpperCase()} />
+                          {activeYears.map((fy, i) => (
+                            <Line key={fy} type="linear" dataKey={fy} stroke={FY_PALETTE[i % FY_PALETTE.length]}
+                              dot={{ r: 3, fill: FY_PALETTE[i % FY_PALETTE.length], strokeWidth: 0 }}
+                              strokeWidth={2} connectNulls={false} />
+                          ))}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div style={{ flex: '0 0 auto', minWidth: '260px', maxHeight: '340px', overflowX: 'auto', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '11px' }}>
+                      <table style={{ borderCollapse: 'collapse', minWidth: '200px' }}>
+                        <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                          <tr style={{ background: '#9DA9C7' }}>
+                            <th style={{ padding: '7px 10px', textAlign: 'left', color: 'white', fontWeight: 600, whiteSpace: 'nowrap' }}>Month</th>
+                            {activeYears.map((fy, i) => <th key={fy} style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>{fy.toUpperCase()}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {monthlyData.map((row, i) => (
+                            <tr key={row.month} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white', borderTop: '1px solid var(--border)' }}>
+                              <td style={{ padding: '5px 10px', color: '#1A1A2E', whiteSpace: 'nowrap', fontWeight: 600 }}>{row.month}</td>
+                              {activeYears.map(fy => <td key={fy} style={{ padding: '5px 10px', textAlign: 'right', color: row[fy] > 0 ? '#1A1A2E' : 'var(--text-muted)', whiteSpace: 'nowrap' }}>{row[fy] > 0 ? `$${Math.round(row[fy]).toLocaleString()}` : '—'}</td>)}
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr style={{ background: '#9DA9C7', borderTop: '2px solid #7A8AB5', fontWeight: 700 }}>
+                            <td style={{ padding: '7px 10px', color: 'white' }}>Total</td>
+                            {activeYears.map((fy, i) => (
+                              <td key={fy} style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', whiteSpace: 'nowrap' }}>
+                                ${Math.round(monthlyData.reduce((s, row) => s + (row[fy] || 0), 0)).toLocaleString()}
+                              </td>
+                            ))}
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Chart 3: Spend by category — year comparison */}
+                <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 20px' }}>Spend by expense type — year comparison</h3>
+                  <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                      <ResponsiveContainer width="100%" height={400}>
+                        <BarChart data={catData} margin={{ top: 16, right: 16, left: 8, bottom: 100 }} barCategoryGap="25%" barGap={2}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" vertical={false} />
+                          <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#555' }} angle={-45} textAnchor="end" interval={0} />
+                          <YAxis tickFormatter={v => v >= 1000000 ? `$${(v/1000000).toFixed(1)}M` : v >= 1000 ? `$${(v/1000).toFixed(0)}K` : `$${v}`} tick={{ fontSize: 10, fill: '#555' }} width={70} />
+                          <Tooltip formatter={(v, name) => [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name.toUpperCase()]} />
+                          <Legend verticalAlign="top" height={32} formatter={v => v.toUpperCase()} />
+                          {activeYears.map((fy, i) => (
+                            <Bar key={fy} dataKey={fy} name={fy} fill={FY_PALETTE[i % FY_PALETTE.length]} radius={[2,2,0,0]} />
+                          ))}
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div style={{ flex: '0 0 auto', minWidth: '260px', maxHeight: '440px', overflowX: 'auto', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '11px' }}>
+                      <table style={{ borderCollapse: 'collapse', minWidth: '220px' }}>
+                        <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                          <tr style={{ background: '#9DA9C7' }}>
+                            <th style={{ padding: '7px 10px', textAlign: 'left', color: 'white', fontWeight: 600, whiteSpace: 'nowrap' }}>Category</th>
+                            {activeYears.map(fy => <th key={fy} style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', fontWeight: 600, whiteSpace: 'nowrap' }}>{fy.toUpperCase()}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {catData.map((row, i) => (
+                            <tr key={row.name} style={{ background: i % 2 === 0 ? '#F0F3FA' : 'white', borderTop: '1px solid var(--border)' }}>
+                              <td style={{ padding: '5px 10px', color: '#1A1A2E', whiteSpace: 'nowrap' }}>{row.name}</td>
+                              {activeYears.map(fy => <td key={fy} style={{ padding: '5px 10px', textAlign: 'right', color: row[fy] > 0 ? '#1A1A2E' : 'var(--text-muted)', whiteSpace: 'nowrap' }}>{row[fy] > 0 ? `$${Math.round(row[fy]).toLocaleString()}` : '—'}</td>)}
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr style={{ background: '#9DA9C7', borderTop: '2px solid #7A8AB5', fontWeight: 700 }}>
+                            <td style={{ padding: '7px 10px', color: 'white' }}>Grand Total</td>
+                            {activeYears.map(fy => (
+                              <td key={fy} style={{ padding: '7px 10px', textAlign: 'right', color: '#FFE066', whiteSpace: 'nowrap' }}>
+                                ${Math.round(catData.reduce((s, row) => s + (row[fy] || 0), 0)).toLocaleString()}
+                              </td>
+                            ))}
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            );
+          })()}
 
           {activeTab === 'smart-summary' && (() => {
             const thStyle = (key) => ({ padding: '8px 10px', textAlign: ['unit_price','units','total','is_standardized'].includes(key) || key.startsWith('fy') ? 'center' : 'left', fontSize: '11px', color: catalogSortCol === key ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', fontWeight: 600 });

@@ -11,28 +11,28 @@ import {
 const CATEGORY_CONFIG = {
   'Research Agreements': {
     color: { bg: '#EBF5FB', text: '#2471A3', border: '#AED6F1' },
-    defaultFileTypes: ['MTA', 'DUA', 'CDA', 'NDA', 'Collaboration Agreement', 'Sponsored Research Agreement', 'Consortium Agreement'],
+    defaultFileTypes: ['MTA', 'DUA', 'CDA', 'NDA', 'Collaboration agreements', 'Sponsored Research Agreements', 'Consortium agreements'],
     extraFields: ['agreement_counterparty', 'agreement_date', 'agreement_expiry'],
   },
   'Vendor & Procurement': {
     color: { bg: '#FEF9E7', text: '#B7770D', border: '#FAD7A0' },
-    defaultFileTypes: ['Master Service Agreement (MSA)', 'Statement of Work (SOW)', 'Contract', 'Service Agreement', 'Software License'],
+    defaultFileTypes: ['Master Service Agreements (MSAs)', 'Statements of Work (SOWs)', 'Contracts', 'Service agreements', 'Software licenses'],
     extraFields: ['agreement_counterparty', 'service_description', 'agreement_date', 'agreement_expiry'],
   },
   'Funding': {
     color: { bg: '#EAF7F0', text: '#1E8449', border: '#A9DFBF' },
-    defaultFileTypes: ['Award Notice', 'Grant Agreement', 'Subaward', 'Budget Approval', 'Carry Forward Approval', 'No-Cost Extension', 'Prior Approval Letter'],
+    defaultFileTypes: ['Award notice', 'Grant agreement', 'Subaward', 'Budget approval', 'Carry forward approval', 'No-cost extension', 'Prior approval letter'],
     extraFields: ['grant_name'],
     groupBy: 'grant_name',
   },
   'Intellectual Property': {
     color: { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
-    defaultFileTypes: ['Patent Filing', 'Invention Disclosure', 'Licensing Agreement', 'Material Ownership Agreement'],
+    defaultFileTypes: ['Patent filings', 'Invention disclosures', 'Licensing agreements', 'Material ownership agreements'],
     extraFields: ['project_name'],
   },
   'Equipment': {
     color: { bg: '#FDEDEC', text: '#C0392B', border: '#F1948A' },
-    defaultFileTypes: ['Purchase Agreement', 'Service Contract', 'Warranty', 'Equipment Insurance', 'Installation Certificate', 'Calibration Certificate'],
+    defaultFileTypes: ['Purchase agreements', 'Service contracts', 'Warranties', 'Equipment insurance', 'Installation certificates', 'Calibration certificates'],
     extraFields: ['equipment_name'],
     groupBy: 'equipment_name',
   },
@@ -264,7 +264,7 @@ function PreviewPanel({ doc, onClose, onDelete, canManage }) {
 
 // ── Add Document Form ─────────────────────────────────────────────────────────
 
-function DocForm({ category: defaultCategory, pendingFile, allCategories, customFileTypes, grants, docs, userId, profile, onSave, onClose }) {
+function DocForm({ category: defaultCategory, pendingFile, allCategories, customFileTypes, grants, docs, userId, profile, onSave, onClose, onRefresh }) {
   const [form, setForm] = useState({
     name: pendingFile?.name?.replace(/\.[^.]+$/, '') || '',
     category: defaultCategory || Object.keys(CATEGORY_CONFIG)[0],
@@ -288,6 +288,7 @@ function DocForm({ category: defaultCategory, pendingFile, allCategories, custom
   const [newCategoryName, setNewCategoryName] = useState('');
   const [addingFileType, setAddingFileType] = useState(false);
   const [newFileTypeName, setNewFileTypeName] = useState('');
+  const [managingFileTypes, setManagingFileTypes] = useState(false);
   const fileInputRef = useRef();
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -378,6 +379,13 @@ function DocForm({ category: defaultCategory, pendingFile, allCategories, custom
     set('file_type', name);
     setAddingFileType(false);
     setNewFileTypeName('');
+    onRefresh?.();
+  }
+
+  async function handleDeleteFileType(ft) {
+    await supabase.from('legal_file_types').delete().eq('category', form.category).eq('name', ft.name);
+    if (form.file_type === ft.name) set('file_type', '');
+    onRefresh?.();
   }
 
   const inp = { width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, outline: 'none', boxSizing: 'border-box', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontFamily: 'inherit' };
@@ -450,8 +458,32 @@ function DocForm({ category: defaultCategory, pendingFile, allCategories, custom
 
         {/* File Type */}
         <div style={{ marginBottom: 14 }}>
-          <label style={lbl}>File Type *</label>
-          {addingFileType ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <label style={{ ...lbl, marginBottom: 0 }}>File Type *</label>
+            {customFileTypes.filter(ft => ft.category === form.category).length > 0 && (
+              <button onClick={() => { setManagingFileTypes(m => !m); setAddingFileType(false); }}
+                style={{ fontSize: 11, color: managingFileTypes ? 'var(--danger)' : 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                {managingFileTypes ? 'Done managing' : 'Manage types'}
+              </button>
+            )}
+          </div>
+
+          {managingFileTypes ? (
+            <div style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '8px 10px', background: 'var(--bg-secondary)' }}>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 8px' }}>Custom file types for this category — built-in types cannot be deleted.</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {customFileTypes.filter(ft => ft.category === form.category).map(ft => (
+                  <div key={ft.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 8px', background: 'var(--bg-primary)', borderRadius: 4, border: '1px solid var(--border)' }}>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{ft.name}</span>
+                    <button onClick={() => handleDeleteFileType(ft)}
+                      style={{ padding: 3, border: '1px solid #FADBD8', borderRadius: 4, background: '#FEF0F0', color: 'var(--danger)', cursor: 'pointer', display: 'flex' }}>
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : addingFileType ? (
             <div style={{ display: 'flex', gap: 6 }}>
               <input value={newFileTypeName} onChange={e => setNewFileTypeName(e.target.value)} style={inp} placeholder="New file type name" autoFocus />
               <button onClick={handleAddFileType} style={{ padding: '8px 12px', borderRadius: 6, border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>Add</button>
@@ -568,10 +600,27 @@ function FileRow({ doc, onPreview, onDelete, canManage, odd }) {
         <span style={{ padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 600, background: cc.bg, color: cc.text, border: `1px solid ${cc.border}`, whiteSpace: 'nowrap' }}>{doc.file_type}</span>
       </td>
       <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDate(doc.date_added)}</td>
-      <td style={{ padding: '10px 14px', fontSize: 12, whiteSpace: 'nowrap' }}>
-        {doc.agreement_counterparty || doc.grant_name || doc.project_name || doc.equipment_name
-          ? <span style={{ color: 'var(--text-secondary)' }}>{doc.agreement_counterparty || doc.grant_name || doc.project_name || doc.equipment_name}</span>
-          : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+      <td style={{ padding: '10px 14px', fontSize: 12 }}>
+        {(() => {
+          const lines = [
+            doc.agreement_counterparty && { label: 'Counterparty', value: doc.agreement_counterparty },
+            doc.service_description    && { label: 'Service', value: doc.service_description },
+            doc.agreement_date         && { label: 'Agreement date', value: formatDate(doc.agreement_date) },
+            doc.grant_name             && { label: 'Grant', value: doc.grant_name },
+            doc.project_name           && { label: 'Project', value: doc.project_name },
+            doc.equipment_name         && { label: 'Equipment', value: doc.equipment_name },
+          ].filter(Boolean);
+          return lines.length ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {lines.map(({ label, value }) => (
+                <div key={label}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}: </span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{value}</span>
+                </div>
+              ))}
+            </div>
+          ) : <span style={{ color: 'var(--text-muted)' }}>—</span>;
+        })()}
       </td>
       <td style={{ padding: '10px 14px', fontSize: 12, whiteSpace: 'nowrap' }}>
         {doc.agreement_expiry ? (
@@ -959,6 +1008,7 @@ export default function LegalDocuments({ userRole, userId, profile }) {
           profile={profile}
           onSave={handleSave}
           onClose={() => { setShowForm(false); setPendingFile(null); }}
+          onRefresh={fetchAll}
         />
       )}
 

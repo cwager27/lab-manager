@@ -3,8 +3,10 @@ import { useResizableColumns, ColResizer } from '../lib/useResizableColumns';
 import { supabase } from '../lib/supabase';
 import {
   Plus, Search,
-  AlertTriangle, Edit2, Trash2
+  AlertTriangle, Edit2, Trash2, RefreshCw, ExternalLink
 } from 'lucide-react';
+
+const API = process.env.REACT_APP_BACKEND_URL;
 
 const STATUS_STYLES = {
   present: { bg: '#EAF7F0', text: '#27AE60', label: 'Present' },
@@ -79,6 +81,224 @@ function SampleForm({ title, fields, form, setForm, onSubmit, onCancel }) {
     </div>
   );
 }
+
+// ─── Benchling Tab ───────────────────────────────────────────────────────────
+
+const SEQUENCING_KEYS = ['sequencing_status', 'sequencing_date', 'sequencing_method',
+  'library_preparation', 'failure_reason', 'date_sequenced', 'seq_status', 'library'];
+
+function getFieldVal(fields, key) {
+  if (!fields) return null;
+  const entry = fields[key];
+  if (!entry) return null;
+  return entry.displayValue ?? entry.value ?? null;
+}
+
+function findSeqFields(fields) {
+  if (!fields) return {};
+  return Object.fromEntries(
+    Object.entries(fields).filter(([k]) =>
+      SEQUENCING_KEYS.some(sk => k.toLowerCase().includes(sk.replace(/_/g, '')))
+    ).map(([k, v]) => [k, v.displayValue ?? v.value ?? ''])
+  );
+}
+
+function BenchlingEntityCard({ entity }) {
+  const [expanded, setExpanded] = useState(false);
+  const allFields = entity.fields || {};
+  const seqFields = findSeqFields(allFields);
+  const tissue = getFieldVal(allFields, 'tissue_type') || getFieldVal(allFields, 'tissue');
+  const hasSeq = Object.keys(seqFields).length > 0;
+
+  const fieldLabel = (k) => k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+  return (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '14px 16px', marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{entity.name}</span>
+            {entity.registry_id && (
+              <span style={{ fontSize: 11, fontWeight: 600, background: 'var(--purple-faint)', color: 'var(--purple-primary)', padding: '1px 7px', borderRadius: 8 }}>{entity.registry_id}</span>
+            )}
+            {entity.schema_name && (
+              <span style={{ fontSize: 11, background: 'var(--bg-secondary)', color: 'var(--text-muted)', padding: '1px 7px', borderRadius: 8, border: '1px solid var(--border)' }}>{entity.schema_name}</span>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)' }}>
+            {tissue && <span>Tissue: <strong style={{ color: 'var(--text-secondary)' }}>{tissue}</strong></span>}
+            {hasSeq && Object.entries(seqFields).map(([k, v]) => (
+              <span key={k}>{fieldLabel(k)}: <strong style={{ color: 'var(--text-secondary)' }}>{v || '—'}</strong></span>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
+          {entity.web_url && (
+            <a href={entity.web_url} target="_blank" rel="noopener noreferrer"
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: '#27AE60', textDecoration: 'none', padding: '4px 8px', border: '1px solid #A9DFBF', borderRadius: 6, background: '#EAF7F0' }}>
+              <ExternalLink size={11} /> Benchling
+            </a>
+          )}
+          <button onClick={() => setExpanded(e => !e)}
+            style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}>
+            {expanded ? 'Hide fields' : 'All fields'}
+          </button>
+        </div>
+      </div>
+      {expanded && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '6px 16px' }}>
+          {Object.entries(allFields).map(([k, v]) => {
+            const val = v.displayValue ?? v.value ?? '';
+            return (
+              <div key={k} style={{ fontSize: 12 }}>
+                <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{fieldLabel(k)}:</span>{' '}
+                <span style={{ color: 'var(--text-secondary)' }}>{val !== null && val !== '' ? String(val) : '—'}</span>
+              </div>
+            );
+          })}
+          {Object.keys(allFields).length === 0 && (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No custom fields</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BenchlingTab() {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
+  const [syncError, setSyncError] = useState(null);
+  const [schemaFilter, setSchemaFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('registry_entity');
+  const [search, setSearch] = useState('');
+  const [lastSynced, setLastSynced] = useState(null);
+
+  useEffect(() => { loadCache(); }, []);
+
+  async function loadCache() {
+    setLoading(true);
+    const res = await fetch(`${API}/api/benchling/cache`);
+    const json = await res.json();
+    setData(json.data || []);
+    const newest = (json.data || []).reduce((acc, d) => (!acc || d.synced_at > acc) ? d.synced_at : acc, null);
+    setLastSynced(newest);
+    setLoading(false);
+  }
+
+  async function handleSync() {
+    setSyncing(true);
+    setSyncResult(null);
+    setSyncError(null);
+    try {
+      const res = await fetch(`${API}/api/benchling/sync`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Sync failed');
+      setSyncResult(json);
+      await loadCache();
+    } catch (err) {
+      setSyncError(err.message);
+    }
+    setSyncing(false);
+  }
+
+  const schemas = ['all', ...Array.from(new Set(data.filter(d => d.entity_type === typeFilter).map(d => d.schema_name).filter(Boolean))).sort()];
+
+  const filtered = data.filter(d => {
+    if (d.entity_type !== typeFilter) return false;
+    if (schemaFilter !== 'all' && d.schema_name !== schemaFilter) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      return (d.name || '').toLowerCase().includes(q) ||
+        (d.registry_id || '').toLowerCase().includes(q) ||
+        JSON.stringify(d.fields || {}).toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  return (
+    <div>
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
+            Data synced from Benchling Registries and ELN. Click Refresh to pull the latest.
+          </p>
+          {lastSynced && (
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0' }}>
+              Last synced: {new Date(lastSynced).toLocaleString()}
+            </p>
+          )}
+        </div>
+        <button onClick={handleSync} disabled={syncing}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', background: syncing ? 'var(--border)' : 'var(--purple-primary)', color: syncing ? 'var(--text-muted)' : 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: 13, cursor: syncing ? 'default' : 'pointer', flexShrink: 0 }}>
+          <RefreshCw size={14} style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
+          {syncing ? 'Refreshing…' : 'Refresh from Benchling'}
+        </button>
+      </div>
+
+      {syncResult && (
+        <div style={{ marginBottom: 14, padding: '10px 14px', background: '#EAF7F0', border: '1px solid #A9DFBF', borderRadius: 'var(--radius-md)', fontSize: 13, color: '#1E8449' }}>
+          Synced {syncResult.entities} registry entities and {syncResult.entries} ELN entries.
+        </div>
+      )}
+      {syncError && (
+        <div style={{ marginBottom: 14, padding: '10px 14px', background: '#FDEDEC', border: '1px solid #F1948A', borderRadius: 'var(--radius-md)', fontSize: 13, color: '#C0392B' }}>
+          {syncError}
+        </div>
+      )}
+
+      {/* Type toggle */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+        {[{ id: 'registry_entity', label: 'Registry Entities' }, { id: 'eln_entry', label: 'ELN Entries' }].map(t => (
+          <button key={t.id} onClick={() => { setTypeFilter(t.id); setSchemaFilter('all'); }}
+            style={{ padding: '7px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', fontSize: 12, fontWeight: typeFilter === t.id ? 700 : 400, background: typeFilter === t.id ? 'var(--purple-primary)' : 'var(--bg-primary)', color: typeFilter === t.id ? 'white' : 'var(--text-secondary)', cursor: 'pointer' }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Schema filter pills */}
+      {schemas.length > 1 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+          {schemas.map(s => (
+            <button key={s} onClick={() => setSchemaFilter(s)}
+              style={{ padding: '5px 12px', borderRadius: 20, border: '1px solid var(--border)', fontSize: 12, fontWeight: schemaFilter === s ? 700 : 400, background: schemaFilter === s ? 'var(--purple-faint)' : 'var(--bg-primary)', color: schemaFilter === s ? 'var(--purple-primary)' : 'var(--text-secondary)', cursor: 'pointer' }}>
+              {s === 'all' ? 'All schemas' : s}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Search */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px', marginBottom: 16 }}>
+        <Search size={14} color="var(--text-muted)" />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, registry ID, or any field…"
+          style={{ border: 'none', outline: 'none', flex: 1, fontSize: 13, background: 'transparent', color: 'var(--text-primary)' }} />
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading cached data…</div>
+      ) : data.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 48, background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
+          No Benchling data cached yet. Click <strong>Refresh from Benchling</strong> to sync.
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No results match your filters.</div>
+      ) : (
+        <div>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>{filtered.length} {typeFilter === 'registry_entity' ? 'entities' : 'entries'}</p>
+          {filtered.map(entity => <BenchlingEntityCard key={entity.id} entity={entity} />)}
+        </div>
+      )}
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function SampleInventory({ userRole, userId, profile }) {
   const [activeTab, setActiveTab] = useState('cell_lines');
@@ -307,11 +527,13 @@ export default function SampleInventory({ userRole, userId, profile }) {
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Sample Inventory</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>Cell lines, mouse and human sample tracking</p>
         </div>
-        <button onClick={() => { setForm(currentEmpty); setShowForm(true); }} style={{
-          display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
-          background: 'var(--purple-primary)', color: 'white', border: 'none',
-          borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px'
-        }}><Plus size={16} /> Add Sample</button>
+        {activeTab !== 'benchling' && (
+          <button onClick={() => { setForm(currentEmpty); setShowForm(true); }} style={{
+            display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
+            background: 'var(--purple-primary)', color: 'white', border: 'none',
+            borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px'
+          }}><Plus size={16} /> Add Sample</button>
+        )}
       </div>
 
       {/* Stats */}
@@ -349,6 +571,7 @@ export default function SampleInventory({ userRole, userId, profile }) {
           { id: 'human', label: 'Human Samples' },
           { id: 'shared_reagents', label: 'Shared Reagents' },
           { id: 'audit', label: 'Audit Log' },
+          { id: 'benchling', label: 'Benchling Sync' },
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
             padding: '10px 20px',
@@ -359,7 +582,9 @@ export default function SampleInventory({ userRole, userId, profile }) {
         ))}
       </div>
 
-      {activeTab !== 'audit' && activeTab !== 'shared_reagents' && (
+      {activeTab === 'benchling' && <BenchlingTab />}
+
+      {activeTab !== 'audit' && activeTab !== 'shared_reagents' && activeTab !== 'benchling' && (
         <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
             <Search size={14} color="var(--text-muted)" />
@@ -379,9 +604,9 @@ export default function SampleInventory({ userRole, userId, profile }) {
         </div>
       )}
 
-      {loading ? (
+      {activeTab !== 'benchling' && loading ? (
         <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading...</div>
-      ) : (
+      ) : activeTab !== 'benchling' ? (
         <>
           {activeTab === 'cell_lines' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -559,7 +784,7 @@ export default function SampleInventory({ userRole, userId, profile }) {
             </div>
           )}
         </>
-      )}
+      ) : null}
 
       {activeTab === 'shared_reagents' && (
         <div>
