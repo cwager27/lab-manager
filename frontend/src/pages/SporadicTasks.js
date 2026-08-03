@@ -158,7 +158,6 @@ export default function SporadicTasks({ userRole, userId, profile }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Sporadic Tasks</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>One-off assignments tracked per lab member</p>
         </div>
         <button onClick={() => setShowNewTaskForm(true)} style={{
           display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',

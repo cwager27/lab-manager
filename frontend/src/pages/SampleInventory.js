@@ -525,7 +525,6 @@ export default function SampleInventory({ userRole, userId, profile }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Sample Inventory</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>Cell lines, mouse and human sample tracking</p>
         </div>
         {activeTab !== 'benchling' && (
           <button onClick={() => { setForm(currentEmpty); setShowForm(true); }} style={{

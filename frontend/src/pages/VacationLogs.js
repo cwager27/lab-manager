@@ -283,7 +283,6 @@ export default function VacationLogs({ userRole, userId, profile }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Time Off</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>Submit and track time away from the lab</p>
         </div>
         <button onClick={() => setShowForm(true)} style={{
           display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',

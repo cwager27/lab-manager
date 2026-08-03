@@ -329,7 +329,6 @@ export default function ComputationalTips({ userRole, userId, profile }) {
             <Terminal size={20} color="var(--purple-primary)" />
             <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Computational Tips & Tricks</h1>
           </div>
-          <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>Code snippets, workflows, and techniques for computational biology</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           {canManage && pendingCount > 0 && (

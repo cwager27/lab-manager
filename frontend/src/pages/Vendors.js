@@ -83,7 +83,6 @@ export default function Vendors({ userRole }) {
     <div>
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Vendor List</h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>Manage approved vendors for lab orders</p>
       </div>
 
       {canManage && (

@@ -351,7 +351,6 @@ export default function Compliance({ userRole, userId, profile }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Compliance</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>IBC, IRB, IACUC and lab materials compliance tracking</p>
         </div>
         {activeTab === 'checklist' && canManage && (
           <button onClick={() => setShowAssignForm(true)} style={{
