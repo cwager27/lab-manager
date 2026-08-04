@@ -381,8 +381,7 @@ export default function TissueCultureSOP() {
           </ul>
         </div>
         <div style={{ marginTop: 12 }}>
-          <img src="/tc-images/fig_2.jpg" alt="Figure 1: Correct focus and exposure settings" style={{ maxWidth: 220, borderRadius: 4, border: '1px solid var(--border)', display: 'block', marginBottom: 4 }} />
-          <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0, textAlign: 'center', maxWidth: 220 }}>Figure 1: Correct focus and exposure settings.</p>
+          <img src="/tc-images/fig_2.jpg" alt="Figure 1: Correct focus and exposure settings" style={{ maxWidth: 220, borderRadius: 4, border: '1px solid var(--border)', display: 'block' }} />
         </div>
       </div>
 
