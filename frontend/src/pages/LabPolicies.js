@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 
-const purple = '#7030a0';
+const purple = '#5a1e82';
 
 const s = {
   card: { marginBottom: 24, padding: '20px 24px', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' },
