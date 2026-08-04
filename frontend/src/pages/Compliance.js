@@ -449,7 +449,6 @@ export default function Compliance({ userRole, userId, profile }) {
         }}>All</button>
         {sections.map(section => {
           const colors = SECTION_COLORS[section] || {};
-          const count = tasks.filter(t => t.section === section).length;
           return (
             <button key={section} onClick={() => setActiveSection(section)} style={{
               padding: '7px 14px', borderRadius: 'var(--radius-md)',
@@ -457,14 +456,8 @@ export default function Compliance({ userRole, userId, profile }) {
               background: activeSection === section ? colors.bg : 'var(--bg-primary)',
               color: activeSection === section ? colors.text : 'var(--text-secondary)',
               fontWeight: activeSection === section ? 600 : 400, fontSize: '12px',
-              display: 'flex', alignItems: 'center', gap: '6px'
             }}>
               {section}
-              <span style={{
-                background: activeSection === section ? colors.text : 'var(--border)',
-                color: activeSection === section ? 'white' : 'var(--text-muted)',
-                borderRadius: '10px', padding: '0 6px', fontSize: '10px'
-              }}>{count}</span>
             </button>
           );
         })}
