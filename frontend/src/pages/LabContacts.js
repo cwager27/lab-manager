@@ -145,9 +145,11 @@ function AdminContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, o
         <td style={{ padding: '10px 14px', fontSize: '12px' }}>
           {contact.email ? <a href={`mailto:${contact.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{contact.email}</a> : <span style={{ color: 'var(--text-secondary)' }}>—</span>}
         </td>
-        <td style={{ padding: '10px 14px', fontSize: '12px' }}>
-          {contact.personal_email ? <a href={`mailto:${contact.personal_email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{contact.personal_email}</a> : <span style={{ color: 'var(--text-secondary)' }}>—</span>}
-        </td>
+        {canViewPersonalPhone && (
+          <td style={{ padding: '10px 14px', fontSize: '12px' }}>
+            {contact.personal_email ? <a href={`mailto:${contact.personal_email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{contact.personal_email}</a> : <span style={{ color: 'var(--text-secondary)' }}>—</span>}
+          </td>
+        )}
         {canViewPersonalPhone && (
           <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
             {contact.phone ? <a href={`tel:${contact.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.phone}</a> : '—'}
@@ -1160,7 +1162,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                 <thead>
                   <tr style={{ background: 'var(--bg-secondary)' }}>
                     {[
-                      'Name', 'Work Email', 'Personal Email', ...(canViewPersonalPhone ? ['Personal Phone'] : []),
+                      'Name', 'Work Email', ...(canViewPersonalPhone ? ['Personal Email', 'Personal Phone'] : []),
                       'Work Phone', 'Office / Dept', 'Responsibilities',
                       ...(canManage ? [''] : [])
                     ].map(h => (
