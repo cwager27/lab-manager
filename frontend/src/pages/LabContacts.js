@@ -1004,7 +1004,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
 
   // Pre-compute extraData for each member so LabMemberRow doesn't need per-row async fetches
   const memberExtraMap = {};
-  contacts.filter(c => c.role !== 'external' && c.role !== 'member').forEach(c => {
+  contacts.filter(c => c.role !== 'external').forEach(c => {
     if (c.full_name) memberExtraMap[c.full_name.toLowerCase().trim()] = c;
   });
 
