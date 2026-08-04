@@ -371,21 +371,20 @@ export default function ComputationalTips({ userRole, userId, profile }) {
       )}
 
       {/* Category tabs */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: 20, width: 'fit-content' }}>
         {CATEGORIES.map(cat => {
-          const cc = cat === 'All' ? null : CAT_COLORS[cat];
           const count = catCounts[cat] || 0;
           const active = activeCategory === cat;
           return (
             <button key={cat} onClick={() => setActiveCategory(cat)} style={{
-              padding: '6px 13px', borderRadius: 'var(--radius-md)', fontSize: 12, fontWeight: active ? 700 : 400, cursor: 'pointer',
-              border: `1px solid ${active && cc ? cc.border : active ? 'var(--purple-primary)' : 'var(--border)'}`,
-              background: active ? (cc ? cc.bg : 'var(--purple-primary)') : 'var(--bg-primary)',
-              color: active ? (cc ? cc.text : 'white') : 'var(--text-secondary)',
+              padding: '10px 18px', border: 'none', cursor: 'pointer',
+              fontSize: 13, fontWeight: active ? 600 : 400,
+              background: active ? 'var(--purple-primary)' : 'transparent',
+              color: active ? 'white' : 'var(--text-secondary)',
               display: 'flex', alignItems: 'center', gap: 5,
             }}>
               {cat}
-              <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 8, background: active ? (cc ? cc.text : 'rgba(255,255,255,0.25)') : 'var(--border)', color: active ? 'white' : 'var(--text-muted)' }}>
+              <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 8, background: active ? 'rgba(255,255,255,0.25)' : 'var(--border)', color: active ? 'white' : 'var(--text-muted)' }}>
                 {count}
               </span>
             </button>
