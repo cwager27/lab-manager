@@ -159,7 +159,7 @@ function AdminContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, o
           {contact.alternative_email ? <a href={`tel:${contact.alternative_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.alternative_email}</a> : '—'}
         </td>
         <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>{contact.address || '—'}</td>
-        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: 220 }}>{contact.notes || '—'}</td>
+        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', width: '100%' }}>{contact.notes || '—'}</td>
         {canManage && (
           <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
             <div style={{ display: 'flex', gap: '4px' }}>
