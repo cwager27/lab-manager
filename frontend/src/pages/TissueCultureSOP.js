@@ -405,9 +405,9 @@ export default function TissueCultureSOP() {
 
         {/* MycoStrip protocol sheets */}
         <p style={{ ...s.p, fontWeight: 700, color: 'var(--text-primary)', marginTop: 20 }}>MycoStrip™ Manufacturer Protocol</p>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 8 }}>
-          <img src="/tc-images/fig_1.jpg" alt="MycoStrip protocol page 1" style={{ maxWidth: '48%', minWidth: 280, borderRadius: 4, border: '1px solid var(--border)' }} />
-          <img src="/tc-images/fig_4.jpg" alt="MycoStrip protocol page 2" style={{ maxWidth: '48%', minWidth: 280, borderRadius: 4, border: '1px solid var(--border)' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 8 }}>
+          <img src="/tc-images/fig_1.jpg" alt="MycoStrip protocol page 1" style={{ width: '100%', borderRadius: 4, border: '1px solid var(--border)' }} />
+          <img src="/tc-images/fig_4.jpg" alt="MycoStrip protocol page 2" style={{ width: '100%', borderRadius: 4, border: '1px solid var(--border)' }} />
         </div>
       </div>
     </div>
