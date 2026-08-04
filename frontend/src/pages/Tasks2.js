@@ -4417,25 +4417,27 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       {/* Header + tab bar always fixed-width so they look identical on every tab */}
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
         <div style={{ marginBottom: 24 }}>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>Task assignment</h1>
+          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>Tasks</h1>
         </div>
 
-        <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border)', marginBottom: 28 }}>
-          {tabs.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              padding: '10px 20px', background: 'none', border: 'none', cursor: 'pointer',
-              fontSize: 14, fontWeight: 600,
-              color: tab === t.id ? 'var(--purple-primary)' : 'var(--text-muted)',
-              borderBottom: `2px solid ${tab === t.id ? 'var(--purple-primary)' : 'transparent'}`,
-              marginBottom: -2, display: 'flex', alignItems: 'center', gap: 6,
-            }}>
-              {t.label}
-              {t.badge ? (
-                <span style={{ fontSize: 11, background: '#ef4444', color: '#fff', borderRadius: 10, padding: '1px 6px', fontWeight: 700 }}>{t.badge}</span>
-              ) : null}
-            </button>
-          ))}
-        </div>
+        {tabs.length > 1 && (
+          <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border)', marginBottom: 28 }}>
+            {tabs.map(t => (
+              <button key={t.id} onClick={() => setTab(t.id)} style={{
+                padding: '10px 20px', background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: 14, fontWeight: 600,
+                color: tab === t.id ? 'var(--purple-primary)' : 'var(--text-muted)',
+                borderBottom: `2px solid ${tab === t.id ? 'var(--purple-primary)' : 'transparent'}`,
+                marginBottom: -2, display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+                {t.label}
+                {t.badge ? (
+                  <span style={{ fontSize: 11, background: '#ef4444', color: '#fff', borderRadius: 10, padding: '1px 6px', fontWeight: 700 }}>{t.badge}</span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Tab content — expands to fill available width */}

@@ -301,8 +301,7 @@ export default function LabPoliciesSOPs({ userRole, userId }) {
       {/* Left sidebar */}
       <div style={{ width: 220, flexShrink: 0 }}>
         <div style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 4px' }}>Lab Policies & SOPs</h1>
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Central repository</p>
+          <h1 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Lab Policies & SOPs</h1>
         </div>
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {TABS.map(t => (
