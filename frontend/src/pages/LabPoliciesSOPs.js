@@ -52,10 +52,12 @@ const STORAGE_BOXES = [
   },
 ];
 
-const thCell = { padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#ffffff', borderBottom: '1px solid #5a1e82', position: 'relative' };
-const tdName = { padding: '10px 16px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', verticalAlign: 'top', borderBottom: '1px solid var(--border)', height: 86, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'unset' };
-const tdBody = { padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, verticalAlign: 'top', borderBottom: '1px solid var(--border)', height: 86, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'unset' };
-const sectionRow = { background: 'var(--bg-secondary)' };
+const thCell    = { padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#ffffff', borderBottom: '1px solid #5a1e82', position: 'relative' };
+const tdName    = { padding: '10px 16px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', verticalAlign: 'top', borderBottom: '1px solid var(--border)', height: 86, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'unset' };
+const tdBody    = { padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, verticalAlign: 'top', borderBottom: '1px solid var(--border)', height: 86, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'unset' };
+const tdCompact = { padding: '5px 16px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', verticalAlign: 'middle', borderBottom: '1px solid var(--border)', whiteSpace: 'normal', overflow: 'visible', textOverflow: 'unset' };
+const tdCompactEmpty = { padding: '5px 16px', borderBottom: '1px solid var(--border)' };
+const sectionRow  = { background: 'var(--bg-secondary)' };
 const sectionCell = { padding: '8px 16px', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.04em' };
 
 function ReagentCategorizationSOP() {
@@ -91,9 +93,9 @@ function ReagentCategorizationSOP() {
             </tr>
             {OTHER_CATEGORIES.map((name, i) => (
               <tr key={name} style={{ background: i % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-secondary)' }}>
-                <td style={tdName}>{name}</td>
-                <td style={tdBody}></td>
-                <td style={tdBody}></td>
+                <td style={tdCompact}>{name}</td>
+                <td style={tdCompactEmpty}></td>
+                <td style={tdCompactEmpty}></td>
               </tr>
             ))}
 
@@ -103,9 +105,9 @@ function ReagentCategorizationSOP() {
             </tr>
             {REMOVED_CATEGORIES.map((name, i) => (
               <tr key={name} style={{ background: i % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-secondary)' }}>
-                <td style={tdName}>{name}</td>
-                <td style={tdBody}></td>
-                <td style={tdBody}></td>
+                <td style={tdCompact}>{name}</td>
+                <td style={tdCompactEmpty}></td>
+                <td style={tdCompactEmpty}></td>
               </tr>
             ))}
           </tbody>
