@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useResizableColumns, ColResizer } from '../lib/useResizableColumns';
 import { FileText, Clock } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import PoliciesTab from './PoliciesTab';
+import LabPolicies from './LabPolicies';
 import MeetingStandards from './MeetingStandards';
 import BenchlingPolicy from './BenchlingPolicy';
 import TissueCultureSOP from './TissueCultureSOP';
@@ -22,54 +21,91 @@ const TABS = [
 ];
 
 // ── Reagent Categorization SOP ────────────────────────────────────────────────
-const REAGENT_CATEGORIES = [
-  { name: 'Proteins and Enzymes', desc: 'Individual purified biological macromolecules, including proteins and enzymes, that are themselves the material being used (e.g. catalytic, binding, or structural activity). Not small-molecule inhibitors, buffers, or chemical modifiers. Includes recombinant, purified, or native proteins supplied as discrete entities.' },
-  { name: 'Antibodies', desc: 'Antibodies.' },
-  { name: 'Cell Line', desc: 'Human or mouse cell lines purchased via repositories.' },
-  { name: 'Biological Materials / Specimens', desc: 'All purchased non-cell-line biological specimens. E.g. bacterial/yeast cultures, cord blood DNA, tissues, samples, RNA, non-live cell pellets, protein extracts (but not specific, purified or recombinant proteins).' },
-  { name: 'Tissue Culture Reagents', desc: 'Chemical or liquid reagents added to cell culture media or used for maintenance/passaging; things that are tissue culture specific (i.e. used in tissue culture room). E.g. DMEM, RPMI, IMDM, FBS, trypsin, PBS, GlutaMAX, Matrigel, antibiotics.' },
-  { name: 'Disposable Supplies', desc: 'Physical consumables or plasticware that are used and discarded; not chemicals or reagents. E.g. flasks, plates, tubes, tips, filters, gloves, wipes, serological pipettes, Parafilm, racks.' },
-  { name: 'Sequence-Based Reagents', desc: 'Reagents defined by sequence. Nomenclature requires specification per examples (not other categories and specificity — e.g. not "3A/A3B-1" but "3A/3B substrate OLIGO", PANELS for nanoseq). E.g. primers (FWD/REV), oligos, plasmids, cloning vectors, gBlocks.' },
-  { name: 'General Lab Chemicals', desc: 'Reagents used broadly across many different laboratory processes, including chemistry, molecular biology, protein work, and general lab operations. Not restricted to a single workflow class.' },
-  { name: 'Specialized Reagents, Kits, Supplies', desc: 'Reagents, buffers, enzymatic modules, or kits used exclusively for a specific biological process or analytical workflow, not repurposed outside that context. Includes DNA/RNA extraction kits, library-prep reagents, assay-specific buffers, stains, controls, and detection systems. Also kit/assay-specific supplies (e.g. Qbit tubes). Also includes drugs, specific signaling inhibitors/modulators, and cellular state modifiers & biochemical assay reagents, small molecule inhibitors.' },
+const QUARTZY_CATEGORIES = [
+  { name: 'Proteins and enzymes',         def: '',                                                                                                                                                                                                                                                                                                                                                                                                                  examples: 'Individual purified biological macromolecules, including proteins and enzymes, that are themselves the material being used (e.g. catalytic, binding, or structural activity), not small-molecule inhibitors, buffers, or chemical modifiers. This category includes recombinant, purified, or native proteins supplied as discrete entities.' },
+  { name: 'Antibodies',                   def: 'Antibodies',                                                                                                                                                                                                                                                                                                                                                                                                       examples: '' },
+  { name: 'Cell Line',                    def: 'Human or mouse cell lines purchased via repositories',                                                                                                                                                                                                                                                                                                                                                              examples: '' },
+  { name: 'Biological materials/specimens', def: 'All purchased non-cell line biological specimens',                                                                                                                                                                                                                                                                                                                                                               examples: 'eg bacterial / yeast cultures, cord blood DNA, tissues, samples, RNA, non-live cell pellets, protein extracts (but not specific, purified or recombinant proteins)' },
+  { name: 'Tissue Culture Reagents',      def: 'Chemical or liquid reagents added to cell culture media or used for maintenance/passaging; things that are tissue culture specific i.e. used in tissue culture room',                                                                                                                                                                                                                                               examples: 'DMEM, RPMI, IMDM, FBS, trypsin, PBS, GlutaMAX, Matrigel, antibiotics.' },
+  { name: 'Disposable Supplies',          def: 'Physical consumables or plasticware that are used and discarded; not chemicals or reagents.',                                                                                                                                                                                                                                                                                                                       examples: 'Flasks, plates, tubes, tips, filters, gloves, wipes, serological pipettes, Parafilm, racks.' },
+  { name: 'Sequence-Based Reagents',      def: 'Reagents defined by sequence, nomenclature requires specification per examples (not other categories and specificity eg not 3A/A3B-1 but 3A/3B substrate OLIGO, PANELS for nanoseq',                                                                                                                                                                                                                               examples: 'Primers (FWD/REV), oligos, plasmids, cloning vectors, gBlocks.' },
+  { name: 'General Lab Chemicals',        def: 'Reagents used broadly across many different laboratory processes, including chemistry, molecular biology, protein work, and general lab operations. Not restricted to a single workflow class.',                                                                                                                                                                                                                     examples: '' },
+  { name: 'Specialized Reagents,  Kits, Supplies', def: 'Reagents, buffers, enzymatic modules, or kits that are used exclusively for a specific biological process or analytical workflow, and are not repurposed outside that context. Includes DNA/RNA extraction kits, library-prep reagents, assay-specific buffers, stains, controls, and detection systems. Also kit/assay-specific supplies eg Qbit tubes. Also includes drugs, Specific Signaling Inhibitors / Modulators and Cellular State Modifiers & Biochemical Assay Reagents, small molecule inhibitors', examples: '' },
 ];
+
+const OTHER_CATEGORIES = ['Shipping', 'Cores', 'Subcapital', 'Capital', 'Travel & Conferences', 'Meals & Fun', 'CR/CO', 'Subscriptions'];
+
+const REMOVED_CATEGORIES = ['Office supplies- becomes disposable supplies', 'CR and CO - becoming CR/CO', 'Computer hardware -becomes subcaptal'];
 
 const STORAGE_BOXES = [
   {
-    box: 'Box 1 — Chemotherapies',
+    box: '📦 BOX 1 — Chemotherapies',
     desc: 'Chemotherapy agents.',
   },
   {
-    box: 'Box 2 — Targeted Signaling Inhibitors / Modulators',
-    desc: 'Includes: Targeted inhibitors/modulators of a defined signaling node, i.e. acts on a specific, named target or pathway. Includes clinical drugs and research inhibitors.\n\nExcludes: Broad stressors, metabolic poisons, mimetics, or buffering agents; chemotherapy agents (those go into Box 1).\n\nYou can answer: "This inhibits X" (e.g. ER, BTK, JAK, EZH2, HIF-2α).',
+    box: '📦 BOX 2 — Targeted Signaling Inhibitors / Modulators',
+    desc: 'Includes: Targeted inhibitors/modulators of a defined signaling node ie Acts on a specific, named target or pathway; ie If it cleanly inhibits or modulates a specific signaling component → Box 2\nIncludes clinical drugs and research inhibitors\n\nExcludes: Broad stressors, metabolic poisons, mimetics, or buffering agents; chemotherapy agents (those go into chemotherapies box)\n\nYou can answer: "This inhibits X" (e.g. ER, BTK, JAK, EZH2, HIF-2α)',
   },
   {
-    box: 'Box 3 — Cellular State Modifiers & Biochemical Assay Reagents',
-    desc: 'Reagents that alter, buffer, or report global cellular states, or that are generic biochemical reagents used across assays, without targeting a specific signaling node.\n\nThese reagents: act broadly or pleiotropically; are not chemotherapies; are not pathway-specific inhibitors; are not DNA/RNA-based reagents.',
+    box: '📦 BOX 3 — Cellular State Modifiers & Biochemical Assay Reagents',
+    desc: 'Reagents that alter, buffer, or report global cellular states, or that are generic biochemical reagents used across assays, without targeting a specific signaling node.\n\nThese reagents:\nAct broadly or pleiotropically\nAre not chemotherapies\nAre not pathway-specific inhibitors\nAre not DNA/RNA-based reagents',
   },
 ];
 
+const thCell = { padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#ffffff', borderBottom: '1px solid #5a1e82', position: 'relative' };
+const tdName = { padding: '10px 16px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', verticalAlign: 'top', borderBottom: '1px solid var(--border)' };
+const tdBody = { padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, verticalAlign: 'top', borderBottom: '1px solid var(--border)' };
+const sectionRow = { background: 'var(--bg-secondary)' };
+const sectionCell = { padding: '8px 16px', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.04em' };
+
 function ReagentCategorizationSOP() {
-  const { widths: reagentCatWidths, onColMouseDown: reagentCatResize } = useResizableColumns(2);
+  const { widths: reagentCatWidths, onColMouseDown: reagentCatResize } = useResizableColumns(3);
   return (
     <div>
-      <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 6px' }}>Reagent Categorization SOP</h2>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 20px' }}>Quartzy categories with definitions and scope</p>
-
       <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: 28 }}>
         <table className="resizable-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <colgroup>{reagentCatWidths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
           <thead>
-            <tr style={{ background: 'var(--bg-secondary)' }}>
-              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid var(--border)', position: 'relative' }}>Category<ColResizer colIdx={0} totalCols={2} onColMouseDown={reagentCatResize} /></th>
-              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid var(--border)', position: 'relative' }}>Definition / Scope<ColResizer colIdx={1} totalCols={2} onColMouseDown={reagentCatResize} /></th>
+            <tr style={{ background: '#7030a0' }}>
+              <th style={thCell}>Category<ColResizer colIdx={0} totalCols={3} onColMouseDown={reagentCatResize} /></th>
+              <th style={thCell}>Definition / Scope<ColResizer colIdx={1} totalCols={3} onColMouseDown={reagentCatResize} /></th>
+              <th style={thCell}>Examples<ColResizer colIdx={2} totalCols={3} onColMouseDown={reagentCatResize} /></th>
             </tr>
           </thead>
           <tbody>
-            {REAGENT_CATEGORIES.map((cat, i) => (
+            {/* QUARTZY CATEGORIES section */}
+            <tr style={sectionRow}>
+              <td colSpan={3} style={sectionCell}>Quartzy Categories</td>
+            </tr>
+            {QUARTZY_CATEGORIES.map((cat, i) => (
               <tr key={cat.name} style={{ background: i % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-secondary)' }}>
-                <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', verticalAlign: 'top', borderBottom: '1px solid var(--border)' }}>{cat.name}</td>
-                <td style={{ padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, verticalAlign: 'top', borderBottom: '1px solid var(--border)' }}>{cat.desc}</td>
+                <td style={tdName}>{cat.name}</td>
+                <td style={tdBody}>{cat.def}</td>
+                <td style={tdBody}>{cat.examples}</td>
+              </tr>
+            ))}
+
+            {/* OTHER CATEGORIES section */}
+            <tr style={sectionRow}>
+              <td colSpan={3} style={sectionCell}>Other Categories Not Recorded in Quartzy</td>
+            </tr>
+            {OTHER_CATEGORIES.map((name, i) => (
+              <tr key={name} style={{ background: i % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-secondary)' }}>
+                <td style={tdName}>{name}</td>
+                <td style={tdBody}></td>
+                <td style={tdBody}></td>
+              </tr>
+            ))}
+
+            {/* REMOVED CATEGORIES section */}
+            <tr style={sectionRow}>
+              <td colSpan={3} style={sectionCell}>Removed Categories</td>
+            </tr>
+            {REMOVED_CATEGORIES.map((name, i) => (
+              <tr key={name} style={{ background: i % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-secondary)' }}>
+                <td style={tdName}>{name}</td>
+                <td style={tdBody}></td>
+                <td style={tdBody}></td>
               </tr>
             ))}
           </tbody>
@@ -255,29 +291,15 @@ function PlaceholderContent({ tab }) {
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
-export default function LabPoliciesSOPs({ userRole, userId }) {
+export default function LabPoliciesSOPs({ userRole }) {
   const [tab, setTab] = useState(() => localStorage.getItem('sops_tab') || 'policies');
-  const [policies, setPolicies] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  async function fetchPolicies() {
-    const { data } = await supabase.from('lab_policies').select('*').order('category').order('title');
-    setPolicies(data || []);
-  }
-
-  useEffect(() => { localStorage.setItem('sops_tab', tab); }, [tab]);
-  useEffect(() => {
-    setLoading(true);
-    fetchPolicies().finally(() => setLoading(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const setTabAndSave = (id) => { localStorage.setItem('sops_tab', id); setTab(id); };
 
   const activeTab = TABS.find(t => t.id === tab);
 
   function renderContent() {
-    if (tab === 'policies') {
-      if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>;
-      return <PoliciesTab policies={policies} userId={userId} fetchPolicies={fetchPolicies} />;
-    }
+    if (tab === 'policies') return <LabPolicies />;
     if (tab === 'meetings')       return <MeetingStandards />;
     if (tab === 'benchling')      return <BenchlingPolicy />;
     if (tab === 'tissue_culture') return <TissueCultureSOP />;
@@ -297,7 +319,7 @@ export default function LabPoliciesSOPs({ userRole, userId }) {
         </div>
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
+            <button key={t.id} onClick={() => setTabAndSave(t.id)} style={{
               width: '100%', textAlign: 'left', padding: '8px 12px',
               background: tab === t.id ? 'var(--purple-faint)' : 'transparent',
               border: 'none',
