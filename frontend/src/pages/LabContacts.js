@@ -966,7 +966,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
 
   const filteredAdminContacts = Object.values(
     contacts
-      .filter(c => c.role === 'external' && c.status !== 'alumni')
+      .filter(c => (c.role === 'external' || c.role === 'member') && c.status !== 'alumni')
       .reduce((acc, c) => {
         const key = `${(c.last_name || '').toLowerCase().trim()}__${(c.first_name || '').toLowerCase().trim()}`;
         if (!acc[key] || countFields(c) > countFields(acc[key])) acc[key] = c;
@@ -1004,7 +1004,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
 
   // Pre-compute extraData for each member so LabMemberRow doesn't need per-row async fetches
   const memberExtraMap = {};
-  contacts.filter(c => c.role !== 'external').forEach(c => {
+  contacts.filter(c => c.role !== 'external' && c.role !== 'member').forEach(c => {
     if (c.full_name) memberExtraMap[c.full_name.toLowerCase().trim()] = c;
   });
 
@@ -1232,17 +1232,6 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
                       initialExtraData={memberExtraMap[(member.full_name || '').toLowerCase().trim()] || null}
                     />
                   ))}
-                  {canManage && pendingLabContacts.map((c, i) => (
-                    <AdminContactRow
-                      key={c.id}
-                      contact={c}
-                      canManage={canManage}
-                      canViewPersonalPhone={canViewPersonalPhone}
-                      onUpdate={updateAdminContact}
-                      onDelete={handleDeleteContact}
-                      rowIndex={filteredLabMembers.length + i}
-                    />
-                  ))}
                 </tbody>
               </table>
             </div>
@@ -1345,7 +1334,8 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
       {showContactForm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '480px', maxHeight: '85vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>Add Contact</h2>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '4px' }}>Add Admin Contact</h2>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '20px' }}>For lab members with login accounts, use Add Member on the Lab Contacts tab.</p>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               {[{ key: 'first_name', label: 'First Name' }, { key: 'last_name', label: 'Last Name' }].map(field => (
