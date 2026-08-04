@@ -152,9 +152,9 @@ function ReagentCategoryLocations() {
         <table className="resizable-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <colgroup>{reagentLocWidths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
           <thead>
-            <tr style={{ background: 'var(--bg-secondary)' }}>
-              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid var(--border)', position: 'relative' }}>Inventory Type<ColResizer colIdx={0} totalCols={2} onColMouseDown={reagentLocResize} /></th>
-              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid var(--border)', position: 'relative' }}>Locations<ColResizer colIdx={1} totalCols={2} onColMouseDown={reagentLocResize} /></th>
+            <tr style={{ background: '#7030a0' }}>
+              <th style={thCell}>Inventory Type<ColResizer colIdx={0} totalCols={2} onColMouseDown={reagentLocResize} /></th>
+              <th style={thCell}>Locations<ColResizer colIdx={1} totalCols={2} onColMouseDown={reagentLocResize} /></th>
             </tr>
           </thead>
           <tbody>
