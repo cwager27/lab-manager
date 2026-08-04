@@ -148,8 +148,6 @@ function ReagentCategoryLocations() {
   const { widths: reagentLocWidths, onColMouseDown: reagentLocResize } = useResizableColumns(2);
   return (
     <div>
-      <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 6px' }}>Reagent Category Locations</h2>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 20px' }}>Storage locations by inventory type</p>
       <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
         <table className="resizable-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <colgroup>{reagentLocWidths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
