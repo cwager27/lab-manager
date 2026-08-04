@@ -384,9 +384,6 @@ export default function ComputationalTips({ userRole, userId, profile }) {
               display: 'flex', alignItems: 'center', gap: 5,
             }}>
               {cat}
-              <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 8, background: active ? 'rgba(255,255,255,0.25)' : 'var(--border)', color: active ? 'white' : 'var(--text-muted)' }}>
-                {count}
-              </span>
             </button>
           );
         })}
