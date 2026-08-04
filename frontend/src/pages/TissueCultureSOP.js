@@ -108,8 +108,6 @@ export default function TissueCultureSOP() {
         <p style={{ fontSize: 13, fontWeight: 700, color: '#3d1f1f', background: '#f2d0cc', borderRadius: 6, padding: '14px 18px', textAlign: 'center', lineHeight: 1.7, margin: '0 0 16px' }}>
           These rules were put together to minimize the risk of contamination as well as health risks. Deviation from these rules can result in access ban. If you notice any non-compliance, please email Mia directly.
         </p>
-        <p style={{ ...s.p, color: 'var(--text-primary)' }}>Rules applicable whenever working in the TC room:</p>
-
         <p style={{ fontSize: 13, fontWeight: 700, color: red, margin: '12px 0 4px' }}>DISPOSABLE LAB COATS</p>
         <ul style={s.ul}>
           <li style={s.li}>Should be put on immediately when entering the TC room and worn at all times.</li>
