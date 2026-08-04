@@ -11,7 +11,7 @@ export default function BenchlingPolicy() {
   return (
     <div>
       <p style={{ ...s.p, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>Guidelines for Experimental Tracking and Reporting</p>
-      <p style={{ ...s.p, fontWeight: 700, margin: '0 0 4px' }}>The lab has put together guidelines on how to structure Benchling and notebook entries to make sure we are fully compliant with NYU institutional requirements.</p>
+      <p style={{ ...s.p, fontWeight: 700, color: '#FF0000', margin: '0 0 4px' }}>The lab has put together guidelines on how to structure Benchling and notebook entries to make sure we are fully compliant with NYU institutional requirements.</p>
       <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 24px' }}>Updated February 2025</p>
 
       {/* Section I */}
