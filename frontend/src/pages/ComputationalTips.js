@@ -252,6 +252,14 @@ export default function ComputationalTips({ userRole, userId, profile }) {
   useEffect(() => { localStorage.setItem('tips_category', activeCategory); }, [activeCategory]);
   useEffect(() => { fetchTips(); }, []);
 
+  const catCounts = useMemo(() => {
+    const base = canManage ? tips : tips.filter(t => t.status === 'published' || t.submitted_by === userId);
+    const map = {};
+    base.forEach(t => { map[t.category] = (map[t.category] || 0) + 1; });
+    map['All'] = base.length;
+    return map;
+  }, [tips, canManage, userId]);
+
   const filtered = useMemo(() => {
     let list = tips;
     if (!canManage) list = list.filter(t => t.status === 'published' || t.submitted_by === userId);
@@ -317,9 +325,30 @@ export default function ComputationalTips({ userRole, userId, profile }) {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, gap: 16 }}>
-        <div>
+      {/* Header row: category tabs + action buttons */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          {CATEGORIES.map(cat => {
+            const active = activeCategory === cat;
+            const count = catCounts[cat] || 0;
+            return (
+              <button key={cat} onClick={() => setActiveCategory(cat)} style={{
+                padding: '7px 14px', borderRadius: 'var(--radius-md)', cursor: 'pointer',
+                border: `1px solid ${active ? 'var(--purple-border)' : 'var(--border)'}`,
+                background: active ? 'var(--purple-primary)' : 'var(--bg-primary)',
+                color: active ? 'white' : 'var(--text-secondary)',
+                fontWeight: active ? 600 : 400, fontSize: 12,
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+                {cat}
+                <span style={{
+                  background: active ? 'rgba(255,255,255,0.25)' : 'var(--border)',
+                  color: active ? 'white' : 'var(--text-muted)',
+                  borderRadius: 10, padding: '0 6px', fontSize: 10,
+                }}>{count}</span>
+              </button>
+            );
+          })}
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           {canManage && pendingCount > 0 && (
@@ -361,23 +390,7 @@ export default function ComputationalTips({ userRole, userId, profile }) {
         </div>
       )}
 
-      {/* Category tabs */}
-      <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: 20, width: 'fit-content' }}>
-        {CATEGORIES.map(cat => {
-          const active = activeCategory === cat;
-          return (
-            <button key={cat} onClick={() => setActiveCategory(cat)} style={{
-              padding: '10px 18px', border: 'none', cursor: 'pointer',
-              fontSize: 13, fontWeight: active ? 600 : 400,
-              background: active ? 'var(--purple-primary)' : 'transparent',
-              color: active ? 'white' : 'var(--text-secondary)',
-              display: 'flex', alignItems: 'center', gap: 5,
-            }}>
-              {cat}
-            </button>
-          );
-        })}
-      </div>
+
 
       {/* Search */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px', marginBottom: 20 }}>
