@@ -314,12 +314,6 @@ const SEQ_COLS = [
   { key: 'notes',           label: 'Notes' },
 ];
 
-const SEQ_STATUS_COLORS = {
-  Completed: { bg: '#EAF7F0', text: '#27AE60' },
-  Failed:    { bg: '#FDEDEC', text: '#E74C3C' },
-  Pending:   { bg: '#FEF9E7', text: '#F39C12' },
-};
-
 function SequencingTab() {
   return (
     <div>
