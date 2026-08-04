@@ -265,14 +265,14 @@ function AlumniContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, 
             {contact.emergency_contact_name ? (
               <div>
                 <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{contact.emergency_contact_name}{contact.emergency_contact_relationship ? ` (${contact.emergency_contact_relationship})` : ''}</div>
-                {contact.emergency_contact_phone && <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}><Phone size={10} />{contact.emergency_contact_phone}</div>}
-                {contact.emergency_contact_email && <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><Mail size={10} />{contact.emergency_contact_email}</div>}
+                {contact.emergency_contact_phone && <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}><Phone size={11} />{contact.emergency_contact_phone}</div>}
+                {contact.emergency_contact_email && <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><Mail size={11} />{contact.emergency_contact_email}</div>}
               </div>
             ) : '—'}
           </td>
         )}
         {canViewPersonalPhone && (
-          <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+          <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '180px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={contact.address || ''}>
             {contact.address || '—'}
           </td>
         )}
@@ -469,14 +469,14 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
             {extraData?.emergency_contact_name ? (
               <div>
                 <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{extraData.emergency_contact_name}{extraData.emergency_contact_relationship ? ` (${extraData.emergency_contact_relationship})` : ''}</div>
-                {extraData.emergency_contact_phone && <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}><Phone size={10} />{extraData.emergency_contact_phone}</div>}
-                {extraData.emergency_contact_email && <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><Mail size={10} />{extraData.emergency_contact_email}</div>}
+                {extraData.emergency_contact_phone && <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}><Phone size={11} />{extraData.emergency_contact_phone}</div>}
+                {extraData.emergency_contact_email && <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><Mail size={11} />{extraData.emergency_contact_email}</div>}
               </div>
             ) : '—'}
           </td>
         )}
         {canViewPersonalPhone && (
-          <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+          <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '180px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={extraData?.address || ''}>
             {extraData?.address || '—'}
           </td>
         )}
