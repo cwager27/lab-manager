@@ -37,20 +37,6 @@ const OTHER_CATEGORIES = ['Shipping', 'Cores', 'Subcapital', 'Capital', 'Travel 
 
 const REMOVED_CATEGORIES = ['Office supplies- becomes disposable supplies', 'CR and CO - becoming CR/CO', 'Computer hardware -becomes subcaptal'];
 
-const STORAGE_BOXES = [
-  {
-    box: '📦 BOX 1 — Chemotherapies',
-    desc: 'Chemotherapy agents.',
-  },
-  {
-    box: '📦 BOX 2 — Targeted Signaling Inhibitors / Modulators',
-    desc: 'Includes: Targeted inhibitors/modulators of a defined signaling node ie Acts on a specific, named target or pathway; ie If it cleanly inhibits or modulates a specific signaling component → Box 2\nIncludes clinical drugs and research inhibitors\n\nExcludes: Broad stressors, metabolic poisons, mimetics, or buffering agents; chemotherapy agents (those go into chemotherapies box)\n\nYou can answer: "This inhibits X" (e.g. ER, BTK, JAK, EZH2, HIF-2α)',
-  },
-  {
-    box: '📦 BOX 3 — Cellular State Modifiers & Biochemical Assay Reagents',
-    desc: 'Reagents that alter, buffer, or report global cellular states, or that are generic biochemical reagents used across assays, without targeting a specific signaling node.\n\nThese reagents:\nAct broadly or pleiotropically\nAre not chemotherapies\nAre not pathway-specific inhibitors\nAre not DNA/RNA-based reagents',
-  },
-];
 
 const thCell    = { padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#ffffff', borderBottom: '1px solid #5a1e82', position: 'relative' };
 const tdName    = { padding: '10px 16px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', verticalAlign: 'top', borderBottom: '1px solid var(--border)', height: 86, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'unset' };
@@ -116,12 +102,30 @@ function ReagentCategorizationSOP() {
 
       <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 12px' }}>Specialized Reagents Storage Box Clarification</h3>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {STORAGE_BOXES.map(b => (
-          <div key={b.box} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 16px' }}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 6px' }}>{b.box}</p>
-            <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-line' }}>{b.desc}</p>
-          </div>
-        ))}
+        {/* BOX 1 */}
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 16px' }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>📦 BOX 1 — Chemotherapies</p>
+        </div>
+
+        {/* BOX 2 */}
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 16px' }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 8px' }}>📦 BOX 2 — Targeted Signaling Inhibitors / Modulators</p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, margin: '0 0 4px' }}><strong>Includes :</strong> Targeted inhibitors/modulators of a defined signaling node ie Acts on a specific, named target or pathwa; ie If it cleanly inhibits or modulates a specific signaling component → Box 2</p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, margin: '0 0 4px' }}><strong>Includes</strong> clinical drugs and research inhibitors</p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, margin: '0 0 4px' }}><strong>Excludes:</strong> Excludes broad stressors, metabolic poisons, mimetics, or buffering agents, chemotherapy agents (those go into chemotherapies box)</p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>You can answer: "This inhibits X" (e.g., ER, BTK, JAK, EZH2, HIF-2α)</p>
+        </div>
+
+        {/* BOX 3 */}
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 16px' }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 8px' }}>📦 BOX 3 — Cellular State Modifiers &amp; Biochemical Assay Reagents</p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, margin: '0 0 8px' }}>Reagents that alter, buffer, or report global cellular states, or that are generic biochemical reagents used across assays, without targeting a specific signaling node.</p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, margin: '0 0 4px' }}>These reagents:</p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, margin: '0 0 2px' }}>Act broadly or pleiotropically</p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, margin: '0 0 2px' }}>Are not chemotherapies</p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, margin: '0 0 2px' }}>Are not pathway-specific inhibitors</p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>Are not DNA/RNA-based reagents</p>
+        </div>
       </div>
     </div>
   );
