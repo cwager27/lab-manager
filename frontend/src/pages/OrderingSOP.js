@@ -2,14 +2,16 @@ import { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 
 const s = {
-  card:  { marginBottom: 24, padding: '20px 24px', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' },
-  h1:    { fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', margin: '0 0 16px', paddingBottom: 8, borderBottom: '1px solid var(--border)' },
-  li:    { fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75, marginBottom: 6 },
-  p:     { fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75, margin: '4px 0 0', fontStyle: 'italic' },
-  ol:    { paddingLeft: 24, margin: '0 0 8px' },
-  roman: { paddingLeft: 28, margin: '4px 0 4px', listStyleType: 'lower-roman' },
-  circle:{ paddingLeft: 28, margin: '4px 0 4px', listStyleType: 'circle' },
-  num:   { paddingLeft: 28, margin: '4px 0 4px', listStyleType: 'decimal' },
+  card:   { marginBottom: 24, padding: '20px 24px', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' },
+  h1:     { fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', margin: '0 0 16px', paddingBottom: 8, borderBottom: '1px solid var(--border)' },
+  li:     { fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75, marginBottom: 6 },
+  italic: { fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75, fontStyle: 'italic', margin: '4px 0 0' },
+  plain:  { fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75, margin: '4px 0 0' },
+  ol:     { paddingLeft: 24, margin: '0 0 8px' },
+  alpha:  { paddingLeft: 28, margin: '4px 0 4px', listStyleType: 'lower-alpha' },
+  roman:  { paddingLeft: 28, margin: '4px 0 4px', listStyleType: 'lower-roman' },
+  circle: { paddingLeft: 28, margin: '4px 0 4px', listStyleType: 'circle' },
+  num:    { paddingLeft: 28, margin: '4px 0 4px', listStyleType: 'decimal' },
 };
 
 const SOP_TEXT = `REQUESTOR FORM
@@ -20,14 +22,14 @@ const SOP_TEXT = `REQUESTOR FORM
 4. Likelihood of needing additional quantities in next 3-6 months (High / Low / Not sure):
 5. I checked alternative vendors and confirm my request is most cost-effective: YES
 6. Requested vendor still required if cheaper alternatives exist (YES / NO):
-7. If YES, explanation:
-8. For orders >$400, I obtained at least 3 vendor quotes to identify the best price and shared them for approval: YES / NA
-9. Will this reagent be used to introduce, modify, express, or propagate genetic material in cells or organisms (including bacteria, yeast, or other microorganisms)? (YES / NO)
-   E.g. plasmids, cloning or expression vectors, bacteria cultures used for cloning, CRISPR reagents (Cas proteins, guide RNAs, donor templates), base editors, prime editors, viral delivery systems (lentivirus, AAV, retrovirus, adenovirus), non-viral delivery methods (transfection reagents, electroporation or nucleofection systems), and reporters, tags, or regulatory elements (e.g., GFP, luciferase, FLAG, promoters, enhancers).
-10. Does this request introduce NEW biological material into the lab that was not previously present? (YES/NO)
-    E.g., new cell lines of any species, organoids or stem-cell-derived models, primary cells, tissues or tissue-derived material, live or replication-competent biological agents, and engineered or modified biological materials received from collaborators.
-11. All slides from 1:1 and lab/SOF meetings are updated in the shared folder with Mia (YES/NO)
-12. All slides from 1:1 and lab/SOF meetings are updated with the correct format (yy-mm-dd) (YES/NO)
+   a. If YES, explanation:
+7. For orders >$400, I obtained at least 3 vendor quotes to identify the best price and shared them for approval: YES / NA
+8. Will this reagent be used to introduce, modify, express, or propagate genetic material in cells or organisms (including bacteria, yeast, or other microorganisms)? (YES / NO)
+   E.g. plasmids, cloning or expression vectors bacteria cultures used for cloning, CRISPR reagents (Cas proteins, guide RNAs, donor templates), base editors, prime editors, viral delivery systems (lentivirus, AAV, retrovirus, adenovirus), non-viral delivery methods (transfection reagents, electroporation or nucleofection systems), and reporters, tags, or regulatory elements (e.g., GFP, luciferase, FLAG, promoters, enhancers).
+9. Does this request introduce NEW biological material into the lab that was not previously present? (YES/NO)
+   E.g., new cell lines of any species, organoids or stem-cell-derived models, primary cells, tissues or tissue-derived material, live or replication-competent biological agents, and engineered or modified biological materials received from collaborators.
+10. All slides from 1:1 and lab/SOF meetings are updated in the shared folder with Mia (YES/NO)
+11. All slides from 1:1 and lab/SOF meetings are updated with the correct format (yy-mm-dd) (YES/NO)
 
 LAB MANAGER FORM
 
@@ -35,14 +37,14 @@ LAB MANAGER FORM
 2. Last slide deck from the requestor in lab meetings folder: [yy/mm/dd]
 3. Requestor form entered in correct format and is complete: YES
 4. For orders <$400 where specific vendor is not required, I checked alternative products and pricing in (YES = I checked; NO = I didn't check; NA = requested vendor is required, therefore check is not applicable):
-   - Google:
-   - People Soft / eMarketPlace:
-   - People Soft / RUSH eMarketPlace:
-   - People Soft / Fisher Healthcare:
-   - People Soft / Life Technologies:
-   - People Soft / Sigma Aldrich:
-   - People Soft / Other punchouts if applicable:
-5. If a cheaper vendor was identified, applicability is confirmed by the end user; without assuming suitability: YES / NO / NA
+   (i)    Google:
+   (ii)   People Soft/eMarketPlace:
+   (iii)  People Soft/ RUSH eMarketPlace:
+   (iv)   People Soft/ Fisher Healthcare:
+   (v)    People Soft/ Life Technologies:
+   (vi)   People Soft/ Sigma Aldrich:
+   (vii)  People Soft/ Other punchouts if applicable:
+5. If a cheaper vendor was identified, applicability is confirmed by the end user; without assuming suitability: YES / NO / NA (cheaper vendor not identified or requested vendor was required thus search not performed)
 6. For orders >$400 I verified that at least 3 vendor quotes were obtained: YES (verified) / NO (not verified) / NA (order<$400)
 7. Itinerary search (existence & prior usage)
    (i)   Itinerary searched by catalog number to assess both reagent existence and prior usage: YES/NO
@@ -51,8 +53,8 @@ LAB MANAGER FORM
    (iv)  The same or functionally equivalent reagent already in lab: YES / NO
    (v)   Prior users identified who have used this in the past (including requestor prior usage): n = ___
 8. User need validation
-   (i)   All identified users contacted: YES/NO/NA (no other prior users)
-   (ii)  Expected total need over 3 or 6 (select) months is _______
+   (i)  All identified users contacted: YES/NO/NA (no other prior users)
+   (ii) Expected total need over 3 or 6 (select) months is _______
 9. Vendor and package size selection if an original order was changed
    (i)   Order is original or changed (delete as appropriate)
    (ii)  If changed:
@@ -96,16 +98,20 @@ export default function OrderingSOP() {
           <li style={s.li}>Units for stated needs (e.g., uL, mL, mg, g, rxn, box of 1000 tips, case of 10×1000 tips, 96-tip rack):</li>
           <li style={s.li}>Likelihood of needing additional quantities in next 3–6 months (High / Low / Not sure):</li>
           <li style={s.li}>I checked alternative vendors and confirm my request is most cost-effective: <strong>YES</strong></li>
-          <li style={s.li}>Requested vendor still required if cheaper alternatives exist (YES / NO):</li>
-          <li style={s.li}>If YES, explanation:</li>
+          <li style={s.li}>
+            Requested vendor still required if cheaper alternatives exist (YES / NO):
+            <ol style={s.alpha}>
+              <li style={s.li}>If YES, explanation:</li>
+            </ol>
+          </li>
           <li style={s.li}>For orders &gt;$400, I obtained at least 3 vendor quotes to identify the best price and shared them for approval: <strong>YES / NA</strong></li>
           <li style={s.li}>
             Will this reagent be used to introduce, modify, express, or propagate genetic material in cells or organisms (including bacteria, yeast, or other microorganisms)? (YES / NO)
-            <p style={s.p}>E.g. plasmids, cloning or expression vectors, bacteria cultures used for cloning, CRISPR reagents (Cas proteins, guide RNAs, donor templates), base editors, prime editors, viral delivery systems (lentivirus, AAV, retrovirus, adenovirus), non-viral delivery methods (transfection reagents, electroporation or nucleofection systems), and reporters, tags, or regulatory elements (e.g., GFP, luciferase, FLAG, promoters, enhancers).</p>
+            <p style={s.italic}>E.g. plasmids, cloning or expression vectors bacteria cultures used for cloning, CRISPR reagents (Cas proteins, guide RNAs, donor templates), base editors, prime editors, viral delivery systems (lentivirus, AAV, retrovirus, adenovirus), non-viral delivery methods (transfection reagents, electroporation or nucleofection systems), and reporters, tags, or regulatory elements (e.g., GFP, luciferase, FLAG, promoters, enhancers).</p>
           </li>
           <li style={s.li}>
             Does this request introduce NEW biological material into the lab that was not previously present? (YES/NO)
-            <p style={s.p}>E.g., new cell lines of any species, organoids or stem-cell–derived models, primary cells, tissues or tissue-derived material, live or replication-competent biological agents, and engineered or modified biological materials received from collaborators.</p>
+            <p style={s.plain}>E.g., new cell lines of any species, organoids or stem-cell–derived models, primary cells, tissues or tissue-derived material, live or replication-competent biological agents, and engineered or modified biological materials received from collaborators.</p>
           </li>
           <li style={s.li}>All slides from 1:1 and lab/SOF meetings are updated in the shared folder with Mia (YES/NO)</li>
           <li style={s.li}>All slides from 1:1 and lab/SOF meetings are updated with the correct format (yy-mm-dd) (YES/NO)</li>
@@ -121,20 +127,19 @@ export default function OrderingSOP() {
           <li style={s.li}>Requestor form entered in correct format and is complete: <strong>YES</strong></li>
           <li style={s.li}>
             For orders &lt;$400 where specific vendor is not required, I checked alternative products and pricing in (YES = I checked; NO = I didn't check; NA = requested vendor is required, therefore check is not applicable):
-            <ul style={s.circle}>
+            <ol style={s.roman}>
               <li style={s.li}>Google:</li>
-              <li style={s.li}>People Soft / eMarketPlace:</li>
-              <li style={s.li}>People Soft / RUSH eMarketPlace:</li>
-              <li style={s.li}>People Soft / Fisher Healthcare:</li>
-              <li style={s.li}>People Soft / Life Technologies:</li>
-              <li style={s.li}>People Soft / Sigma Aldrich:</li>
-              <li style={s.li}>People Soft / Other punchouts if applicable:</li>
-            </ul>
+              <li style={s.li}>People Soft/eMarketPlace:</li>
+              <li style={s.li}>People Soft/ RUSH eMarketPlace:</li>
+              <li style={s.li}>People Soft/ Fisher Healthcare:</li>
+              <li style={s.li}>People Soft/ Life Technologies:</li>
+              <li style={s.li}>People Soft/ Sigma Aldrich:</li>
+              <li style={s.li}>People Soft/ Other punchouts if applicable:</li>
+            </ol>
           </li>
           <li style={s.li}>If a cheaper vendor was identified, applicability is confirmed by the end user; without assuming suitability: YES / NO / NA (cheaper vendor not identified or requested vendor was required thus search not performed)</li>
           <li style={s.li}>For orders &gt;$400 I verified that at least 3 vendor quotes were obtained: YES (verified) / NO (not verified) / NA (order&lt;$400)</li>
 
-          {/* 7. Itinerary search */}
           <li style={s.li}>
             Itinerary search (existence &amp; prior usage)
             <ol style={s.roman}>
@@ -146,7 +151,6 @@ export default function OrderingSOP() {
             </ol>
           </li>
 
-          {/* 8. User need validation */}
           <li style={s.li}>
             User need validation
             <ol style={s.roman}>
@@ -155,7 +159,6 @@ export default function OrderingSOP() {
             </ol>
           </li>
 
-          {/* 9. Vendor and package size */}
           <li style={s.li}>
             Vendor and package size selection if an original order was changed
             <ol style={s.roman}>
@@ -178,7 +181,7 @@ export default function OrderingSOP() {
               </li>
               <li style={s.li}>
                 Reason for selection (select all that apply):
-                <ul style={{ ...s.circle, listStyleType: 'none', paddingLeft: 4 }}>
+                <ul style={{ ...s.circle, listStyleType: 'none', paddingLeft: 8 }}>
                   <li style={s.li}>☐ Matches expected total need</li>
                   <li style={s.li}>☐ Lowest price per unit</li>
                   <li style={s.li}>☐ Shelf-life / storage constraints</li>
