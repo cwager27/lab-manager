@@ -269,13 +269,7 @@ export default function ComputationalTips({ userRole, userId, profile }) {
     return list;
   }, [tips, activeCategory, search, canManage, userId]);
 
-  const catCounts = useMemo(() => {
-    const base = canManage ? tips : tips.filter(t => t.status === 'published' || t.submitted_by === userId);
-    const map = {};
-    base.forEach(t => { map[t.category] = (map[t.category] || 0) + 1; });
-    map['All'] = base.length;
-    return map;
-  }, [tips, canManage, userId]);
+
 
   const pendingCount = tips.filter(t => t.status === 'pending').length;
 
