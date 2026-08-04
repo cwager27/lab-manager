@@ -298,6 +298,75 @@ function BenchlingTab() {
   );
 }
 
+// ─── Sequencing Records Tab ──────────────────────────────────────────────────
+
+const SEQ_COLS = [
+  { key: 'linked_sample',   label: 'Linked Sample' },
+  { key: 'date_sequenced',  label: 'Date Sequenced' },
+  { key: 'method',          label: 'Method' },
+  { key: 'library_id',      label: 'Library ID' },
+  { key: 'library_prep',    label: 'Library Prep' },
+  { key: 'status',          label: 'Status' },
+  { key: 'failure_reason',  label: 'Failure Reason' },
+  { key: 'facility',        label: 'Facility / Platform' },
+  { key: 'requested_by',    label: 'Requested By' },
+  { key: 'benchling_entry', label: 'Benchling ELN' },
+  { key: 'notes',           label: 'Notes' },
+];
+
+const SEQ_STATUS_COLORS = {
+  Completed: { bg: '#EAF7F0', text: '#27AE60' },
+  Failed:    { bg: '#FDEDEC', text: '#E74C3C' },
+  Pending:   { bg: '#FEF9E7', text: '#F39C12' },
+};
+
+function SequencingTab() {
+  return (
+    <div>
+      <div style={{ marginBottom: 20, padding: '12px 16px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Pending Benchling access</p>
+        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          Sequencing records will be pulled automatically from Benchling ELN once access is configured. No manual entry — this table will populate once the integration is live.
+        </p>
+      </div>
+
+      <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
+          <thead>
+            <tr style={{ background: 'var(--bg-secondary)' }}>
+              {SEQ_COLS.map(col => (
+                <th key={col.key} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                  {col.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {[1, 2, 3].map(i => (
+              <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+                <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>—</td>
+                <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>—</td>
+                <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>—</td>
+                <td style={{ padding: '10px 12px', fontSize: '11px', fontFamily: 'monospace', color: 'var(--text-muted)' }}>—</td>
+                <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>—</td>
+                <td style={{ padding: '10px 12px' }}>
+                  <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>—</span>
+                </td>
+                <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>—</td>
+                <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>—</td>
+                <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>—</td>
+                <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>—</td>
+                <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>—</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p style={{ marginTop: 10, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>0 sequencing records · awaiting Benchling sync</p>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function SampleInventory({ userRole, userId, profile }) {
@@ -526,7 +595,7 @@ export default function SampleInventory({ userRole, userId, profile }) {
         <div>
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Sample Inventory</h1>
         </div>
-        {activeTab !== 'benchling' && (
+        {activeTab !== 'benchling' && activeTab !== 'sequencing' && (
           <button onClick={() => { setForm(currentEmpty); setShowForm(true); }} style={{
             display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
             background: 'var(--purple-primary)', color: 'white', border: 'none',
@@ -568,6 +637,7 @@ export default function SampleInventory({ userRole, userId, profile }) {
           { id: 'cell_lines', label: 'Cell Lines' },
           { id: 'mouse', label: 'Mouse Samples' },
           { id: 'human', label: 'Human Samples' },
+          { id: 'sequencing', label: 'Sequencing Records' },
           { id: 'shared_reagents', label: 'Shared Reagents' },
           { id: 'audit', label: 'Audit Log' },
           { id: 'benchling', label: 'Benchling Sync' },
@@ -582,8 +652,9 @@ export default function SampleInventory({ userRole, userId, profile }) {
       </div>
 
       {activeTab === 'benchling' && <BenchlingTab />}
+      {activeTab === 'sequencing' && <SequencingTab />}
 
-      {activeTab !== 'audit' && activeTab !== 'shared_reagents' && activeTab !== 'benchling' && (
+      {activeTab !== 'audit' && activeTab !== 'shared_reagents' && activeTab !== 'benchling' && activeTab !== 'sequencing' && (
         <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
             <Search size={14} color="var(--text-muted)" />
@@ -603,9 +674,9 @@ export default function SampleInventory({ userRole, userId, profile }) {
         </div>
       )}
 
-      {activeTab !== 'benchling' && loading ? (
+      {activeTab !== 'benchling' && activeTab !== 'sequencing' && loading ? (
         <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading...</div>
-      ) : activeTab !== 'benchling' ? (
+      ) : activeTab !== 'benchling' && activeTab !== 'sequencing' ? (
         <>
           {activeTab === 'cell_lines' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
