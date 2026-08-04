@@ -265,7 +265,7 @@ function PlaceholderContent({ tab }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function LabPoliciesSOPs({ userRole, userId }) {
-  const [tab, setTab] = useState('policies');
+  const [tab, setTab] = useState(() => localStorage.getItem('sops_tab') || 'policies');
   const [policies, setPolicies] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -274,6 +274,7 @@ export default function LabPoliciesSOPs({ userRole, userId }) {
     setPolicies(data || []);
   }
 
+  useEffect(() => { localStorage.setItem('sops_tab', tab); }, [tab]);
   useEffect(() => {
     setLoading(true);
     fetchPolicies().finally(() => setLoading(false));

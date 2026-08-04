@@ -126,7 +126,7 @@ export default function Compliance({ userRole, userId, profile }) {
   const [members, setMembers] = useState([]);
   const [responses, setResponses] = useState({});
   const [activeSection, setActiveSection] = useState('all');
-  const [activeTab, setActiveTab] = useState('checklist');
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('compliance_tab') || 'checklist');
   const [studies, setStudies] = useState([]);
   const [policies, setPolicies] = useState([]);
   const [showStudyForm, setShowStudyForm] = useState(false);
@@ -149,6 +149,7 @@ export default function Compliance({ userRole, userId, profile }) {
   const canManage = userRole === 'admin' || userRole === 'pm';
   const sections = ['Human and Animal Materials', 'IBC Compliance', 'IBC', 'IRB', 'IACUC'];
 
+  useEffect(() => { localStorage.setItem('compliance_tab', activeTab); }, [activeTab]);
   useEffect(() => { fetchData(); }, [userId]);
 
   async function fetchData() {
@@ -349,9 +350,6 @@ export default function Compliance({ userRole, userId, profile }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Compliance</h1>
-        </div>
         {activeTab === 'checklist' && canManage && (
           <button onClick={() => setShowAssignForm(true)} style={{
             display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',

@@ -354,9 +354,6 @@ export default function Responsibilities({ userRole, userId, profile }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Lab Responsibilities</h1>
-        </div>
         {canManage && (
           <button onClick={() => setShowNewTaskForm(true)} style={{
             display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',

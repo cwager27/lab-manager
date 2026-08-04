@@ -86,7 +86,7 @@ export default function Finance({ userRole }) {
   const [reagents, setReagents] = useState([]);
   const [nanoseq, setNanoseq] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('grants');
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('finance_tab') || 'grants');
   const [reagentTab, setReagentTab] = useState('misc');
   const [reagentSearch, setReagentSearch] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -242,6 +242,7 @@ export default function Finance({ userRole }) {
 
   const canManage = userRole === 'admin' || userRole === 'pm';
 
+  useEffect(() => { localStorage.setItem('finance_tab', activeTab); }, [activeTab]);
   useEffect(() => { fetchData(); }, []);
 
   async function fetchData() {
@@ -925,9 +926,6 @@ export default function Finance({ userRole }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Finance</h1>
-        </div>
         <div />
       </div>
 

@@ -812,10 +812,6 @@ export default function LegalDocuments({ userRole, userId, profile }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 16 }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <Scale size={20} color="var(--purple-primary)" />
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Legal Documents</h1>
-          </div>
           <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>Drag & drop files anywhere, or click "Add Document"</p>
         </div>
         {canManage && (

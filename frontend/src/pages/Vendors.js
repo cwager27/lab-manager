@@ -81,9 +81,6 @@ export default function Vendors({ userRole }) {
 
   return (
     <div>
-      <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Vendor List</h1>
-      </div>
 
       {canManage && (
         <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '20px', marginBottom: '20px' }}>

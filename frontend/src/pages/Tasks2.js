@@ -218,7 +218,10 @@ function pickerFor(freq, value, onChange) {
 
 export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const canManage = userRole === 'admin' || userRole === 'pm';
-  const [tab, setTab] = useState(canManage ? 'view-all' : 'my-tasks');
+  const [tab, setTab] = useState(() => {
+    if (!canManage) return 'my-tasks';
+    return localStorage.getItem('tasks2_tab') || 'view-all';
+  });
 
   // Shared data
   const [tasks, setTasks] = useState([]);
@@ -349,6 +352,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const [confirmDeleteOneOff, setConfirmDeleteOneOff] = useState(null);
   const [oneOffPersonTab, setOneOffPersonTab] = useState('all');
   const [oneOffSearch, setOneOffSearch] = useState('');
+
+  useEffect(() => { if (canManage) localStorage.setItem('tasks2_tab', tab); }, [tab, canManage]);
 
   // ── Load initial data ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -4416,10 +4421,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     <div>
       {/* Header + tab bar always fixed-width so they look identical on every tab */}
       <div>
-        <div style={{ marginBottom: 24 }}>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>Tasks</h1>
-        </div>
-
         {tabs.length > 1 && (
           <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: 28, width: 'fit-content' }}>
             {tabs.map(t => (

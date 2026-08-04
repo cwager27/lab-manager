@@ -374,10 +374,9 @@ export default function Dashboard({ profile, userRole, userId }) {
   return (
     <div>
       <div style={{ marginBottom: '20px' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Dashboard</h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>
+        <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>
           Welcome back, {profile?.full_name?.split(' ')[0] || 'there'}
-        </p>
+        </h1>
       </div>
 
       {loading ? (

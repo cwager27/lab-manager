@@ -364,7 +364,7 @@ function SequencingTab() {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function SampleInventory({ userRole, userId, profile }) {
-  const [activeTab, setActiveTab] = useState('cell_lines');
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('inventory_tab') || 'cell_lines');
   const [cellLines, setCellLines] = useState([]);
   const [mouseSamples, setMouseSamples] = useState([]);
   const [humanSamples, setHumanSamples] = useState([]);
@@ -383,6 +383,7 @@ export default function SampleInventory({ userRole, userId, profile }) {
   const [takingCellLine, setTakingCellLine] = useState(null);
   const [vialsTaken, setVialsTaken] = useState(1);
 
+  useEffect(() => { localStorage.setItem('inventory_tab', activeTab); }, [activeTab]);
   useEffect(() => { fetchData(); }, []);
 
   async function fetchData() {
@@ -586,9 +587,6 @@ export default function SampleInventory({ userRole, userId, profile }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Sample Inventory</h1>
-        </div>
         {activeTab !== 'benchling' && activeTab !== 'sequencing' && (
           <button onClick={() => { setForm(currentEmpty); setShowForm(true); }} style={{
             display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',

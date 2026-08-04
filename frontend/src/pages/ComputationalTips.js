@@ -224,7 +224,7 @@ export default function ComputationalTips({ userRole, userId, profile }) {
   const [tips, setTips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tableError, setTableError] = useState(false);
-  const [activeCategory, setActiveCategory] = useState('All');
+  const [activeCategory, setActiveCategory] = useState(() => localStorage.getItem('tips_category') || 'All');
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingTip, setEditingTip] = useState(null);
@@ -249,6 +249,7 @@ export default function ComputationalTips({ userRole, userId, profile }) {
     setLoading(false);
   }
 
+  useEffect(() => { localStorage.setItem('tips_category', activeCategory); }, [activeCategory]);
   useEffect(() => { fetchTips(); }, []);
 
   const filtered = useMemo(() => {
@@ -325,10 +326,6 @@ export default function ComputationalTips({ userRole, userId, profile }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, gap: 16 }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <Terminal size={20} color="var(--purple-primary)" />
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Computational Tips & Tricks</h1>
-          </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           {canManage && pendingCount > 0 && (

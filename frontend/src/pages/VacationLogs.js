@@ -60,7 +60,7 @@ export default function VacationLogs({ userRole, userId, profile }) {
   const [reviewingId, setReviewingId] = useState(null);
   const [reviewerComment, setReviewerComment] = useState('');
   const [form, setForm] = useState(EMPTY_FORM);
-  const [activeTab, setActiveTab] = useState('requests');
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('vacation_tab') || 'requests');
   const [summaryData, setSummaryData] = useState(null);
   const [sortCol, setSortCol] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
@@ -74,6 +74,7 @@ export default function VacationLogs({ userRole, userId, profile }) {
   const canSeeAll = isAdmin || userRole === 'pm';
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { localStorage.setItem('vacation_tab', activeTab); }, [activeTab]);
   useEffect(() => { fetchRequests(); }, [userId]);
 
   async function fetchRequests() {
@@ -281,9 +282,6 @@ export default function VacationLogs({ userRole, userId, profile }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Time Off</h1>
-        </div>
         <button onClick={() => setShowForm(true)} style={{
           display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
           background: 'var(--purple-primary)', color: 'white', border: 'none',

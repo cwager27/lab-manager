@@ -684,7 +684,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   const [adminSearch, setAdminSearch] = useState('');
   const [labSearch, setLabSearch] = useState('');
   const [alumniSearch, setAlumniSearch] = useState('');
-  const [activeTab, setActiveTab] = useState('admin');
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('contacts_tab') || 'admin');
   const [showContactForm, setShowContactForm] = useState(false);
   const [showMemberForm, setShowMemberForm] = useState(false);
   const [contactForm, setContactForm] = useState(EMPTY_CONTACT);
@@ -711,6 +711,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
     }).catch(() => {});
   }
 
+  useEffect(() => { localStorage.setItem('contacts_tab', activeTab); }, [activeTab]);
   useEffect(() => { fetchData(); }, []);
 
   async function fetchData(silent = false) {
@@ -1110,9 +1111,6 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
     <div>
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Contacts</h1>
-        </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <button onClick={handleExport} title="Export all contacts to Excel" style={{
             display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
