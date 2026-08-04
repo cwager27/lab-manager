@@ -380,12 +380,12 @@ export default function ComputationalTips({ userRole, userId, profile }) {
             <button key={cat} onClick={() => setActiveCategory(cat)} style={{
               padding: '6px 13px', borderRadius: 'var(--radius-md)', fontSize: 12, fontWeight: active ? 700 : 400, cursor: 'pointer',
               border: `1px solid ${active && cc ? cc.border : active ? 'var(--purple-primary)' : 'var(--border)'}`,
-              background: active ? (cc ? cc.bg : 'var(--purple-faint)') : 'var(--bg-primary)',
-              color: active ? (cc ? cc.text : 'var(--purple-primary)') : 'var(--text-secondary)',
+              background: active ? (cc ? cc.bg : 'var(--purple-primary)') : 'var(--bg-primary)',
+              color: active ? (cc ? cc.text : 'white') : 'var(--text-secondary)',
               display: 'flex', alignItems: 'center', gap: 5,
             }}>
               {cat}
-              <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 8, background: active ? (cc ? cc.text : 'var(--purple-primary)') : 'var(--border)', color: active ? 'white' : 'var(--text-muted)' }}>
+              <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 8, background: active ? (cc ? cc.text : 'rgba(255,255,255,0.25)') : 'var(--border)', color: active ? 'white' : 'var(--text-muted)' }}>
                 {count}
               </span>
             </button>
