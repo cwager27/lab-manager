@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useResizableColumns, ColResizer } from '../lib/useResizableColumns';
 import { supabase } from '../lib/supabase';
 import {
-  Scale, Plus, Search, X, Trash2, Download, Eye, ChevronRight,
+  Plus, Search, X, Trash2, Download, Eye, ChevronRight,
   AlertCircle, Copy, Check, ChevronDown, AlertTriangle,
 } from 'lucide-react';
 

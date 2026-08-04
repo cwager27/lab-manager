@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import {
-  Plus, Search, Copy, Check, Edit2, Trash2, X, ChevronDown, Terminal,
+  Plus, Search, Copy, Check, Edit2, Trash2, X, ChevronDown,
 } from 'lucide-react';
 
 const CATEGORIES = ['All', 'R', 'Python', 'Shell', 'Bioinformatics', 'HPC', 'Software', 'General'];
@@ -370,7 +370,6 @@ export default function ComputationalTips({ userRole, userId, profile }) {
       {/* Category tabs */}
       <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: 20, width: 'fit-content' }}>
         {CATEGORIES.map(cat => {
-          const count = catCounts[cat] || 0;
           const active = activeCategory === cat;
           return (
             <button key={cat} onClick={() => setActiveCategory(cat)} style={{

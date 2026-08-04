@@ -75,6 +75,7 @@ export default function VacationLogs({ userRole, userId, profile }) {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { localStorage.setItem('vacation_tab', activeTab); }, [activeTab]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchRequests(); }, [userId]);
 
   async function fetchRequests() {
