@@ -53,8 +53,8 @@ const STORAGE_BOXES = [
 ];
 
 const thCell = { padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#ffffff', borderBottom: '1px solid #5a1e82', position: 'relative' };
-const tdName = { padding: '10px 16px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', verticalAlign: 'top', borderBottom: '1px solid var(--border)', height: 86 };
-const tdBody = { padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, verticalAlign: 'top', borderBottom: '1px solid var(--border)', height: 86 };
+const tdName = { padding: '10px 16px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', verticalAlign: 'top', borderBottom: '1px solid var(--border)', height: 86, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'unset' };
+const tdBody = { padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, verticalAlign: 'top', borderBottom: '1px solid var(--border)', height: 86, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'unset' };
 const sectionRow = { background: 'var(--bg-secondary)' };
 const sectionCell = { padding: '8px 16px', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.04em' };
 
@@ -156,8 +156,8 @@ function ReagentCategoryLocations() {
           <tbody>
             {REAGENT_LOCATIONS.map((row, i) => (
               <tr key={row.type} style={{ background: i % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-secondary)' }}>
-                <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', verticalAlign: 'top', borderBottom: '1px solid var(--border)', height: 86 }}>{row.type}</td>
-                <td style={{ padding: '10px 16px', verticalAlign: 'top', borderBottom: '1px solid var(--border)', height: 86 }}>
+                <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', verticalAlign: 'top', borderBottom: '1px solid var(--border)', height: 86, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'unset' }}>{row.type}</td>
+                <td style={{ padding: '10px 16px', verticalAlign: 'top', borderBottom: '1px solid var(--border)', height: 86, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'unset' }}>
                   <ul style={{ margin: 0, paddingLeft: 18 }}>
                     {row.locations.map(loc => (
                       <li key={loc} style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, marginBottom: 2 }}>{loc}</li>
