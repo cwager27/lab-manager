@@ -93,18 +93,18 @@ export default function OrderingSOP() {
       <div style={s.card}>
         <div style={s.h1}>Requestor Form</div>
         <ol style={s.ol}>
-          <li style={s.li}>I verified that an equivalent reagent that can be used does not exist in the lab: <strong>YES</strong></li>
+          <li style={s.li}>I verified that an equivalent reagent that can be used does not exist in the lab: YES</li>
           <li style={s.li}>Best estimate of amount needed now (numeric value only):</li>
           <li style={s.li}>Units for stated needs (e.g., uL, mL, mg, g, rxn, box of 1000 tips, case of 10×1000 tips, 96-tip rack):</li>
           <li style={s.li}>Likelihood of needing additional quantities in next 3–6 months (High / Low / Not sure):</li>
-          <li style={s.li}>I checked alternative vendors and confirm my request is most cost-effective: <strong>YES</strong></li>
+          <li style={s.li}>I checked alternative vendors and confirm my request is most cost-effective: YES</li>
           <li style={s.li}>
             Requested vendor still required if cheaper alternatives exist (YES / NO):
             <ol style={s.alpha}>
               <li style={s.li}>If YES, explanation:</li>
             </ol>
           </li>
-          <li style={s.li}>For orders &gt;$400, I obtained at least 3 vendor quotes to identify the best price and shared them for approval: <strong>YES / NA</strong></li>
+          <li style={s.li}>For orders &gt;$400, I obtained at least 3 vendor quotes to identify the best price and shared them for approval: YES / NA</li>
           <li style={s.li}>
             Will this reagent be used to introduce, modify, express, or propagate genetic material in cells or organisms (including bacteria, yeast, or other microorganisms)? (YES / NO)
             <p style={s.italic}>E.g. plasmids, cloning or expression vectors bacteria cultures used for cloning, CRISPR reagents (Cas proteins, guide RNAs, donor templates), base editors, prime editors, viral delivery systems (lentivirus, AAV, retrovirus, adenovirus), non-viral delivery methods (transfection reagents, electroporation or nucleofection systems), and reporters, tags, or regulatory elements (e.g., GFP, luciferase, FLAG, promoters, enhancers).</p>
@@ -124,7 +124,7 @@ export default function OrderingSOP() {
         <ol style={s.ol}>
           <li style={s.li}>Last slide deck from the requestor in 1:1 folder: [yy/mm/dd]</li>
           <li style={s.li}>Last slide deck from the requestor in lab meetings folder: [yy/mm/dd]</li>
-          <li style={s.li}>Requestor form entered in correct format and is complete: <strong>YES</strong></li>
+          <li style={s.li}>Requestor form entered in correct format and is complete: YES</li>
           <li style={s.li}>
             For orders &lt;$400 where specific vendor is not required, I checked alternative products and pricing in (YES = I checked; NO = I didn't check; NA = requested vendor is required, therefore check is not applicable):
             <ol style={s.roman}>
