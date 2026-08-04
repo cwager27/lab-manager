@@ -34,17 +34,17 @@ function ALI({ children }) {
 }
 
 const TOC_ITEMS = [
-  { id: 'general_rules',     label: '1. General Rules' },
-  { id: 'bsc',               label: '2. BioSafety Cabinet (BSC) Use' },
-  { id: 'media_prep',        label: '3. Media Preparation — Cancer Lines' },
-  { id: 'freezing_media',    label: '4. Freezing Media Recipe — Cancer Lines' },
-  { id: 'conditioned_media', label: '5. Conditioned Media Preparation' },
-  { id: 'thawing',           label: '6. Thawing Cells — Cancer Lines' },
-  { id: 'adherent',          label: '7. Maintaining Adherent Cells' },
-  { id: 'suspension',        label: '8. Subculturing Suspension Cells' },
-  { id: 'freezing_cells',    label: '9. Freezing Cells — Cancer Lines' },
-  { id: 'counting',          label: '10. Counting Cells (Demovix Cell Drop)' },
-  { id: 'mycoplasma',        label: '11. Mycoplasma Testing' },
+  { id: 'general_rules',     label: 'General Rules' },
+  { id: 'bsc',               label: 'BioSafety Cabinet (BSC) Use' },
+  { id: 'media_prep',        label: 'Media Preparation — Cancer Lines' },
+  { id: 'freezing_media',    label: 'Freezing Media Recipe — Cancer Lines' },
+  { id: 'conditioned_media', label: 'Conditioned Media Preparation' },
+  { id: 'thawing',           label: 'Thawing Cells — Cancer Lines' },
+  { id: 'adherent',          label: 'Maintaining Adherent Cells' },
+  { id: 'suspension',        label: 'Subculturing Suspension Cells' },
+  { id: 'freezing_cells',    label: 'Freezing Cells — Cancer Lines' },
+  { id: 'counting',          label: 'Counting Cells (Demovix Cell Drop)' },
+  { id: 'mycoplasma',        label: 'Mycoplasma Testing' },
 ];
 
 export default function TissueCultureSOP() {
