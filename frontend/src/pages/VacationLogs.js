@@ -281,13 +281,6 @@ export default function VacationLogs({ userRole, userId, profile }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <button onClick={() => setShowForm(true)} style={{
-          display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
-          background: 'var(--purple-primary)', color: 'white', border: 'none',
-          borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px',
-        }}><Plus size={16} /> Request Time Away</button>
-      </div>
 
       {currentlyOut.length > 0 && (
         <div style={{
@@ -318,33 +311,43 @@ export default function VacationLogs({ userRole, userId, profile }) {
         ))}
       </div>
 
-      {canSeeAll && (
-        <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', borderBottom: '1px solid var(--border)', paddingBottom: '0' }}>
-          {[
-            { id: 'requests', label: 'All Requests' },
-            { id: 'summaries', label: `Summaries — ${new Date().getFullYear()}` },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setActiveTab(tab.id);
-                if (tab.id === 'summaries' && !summaryData) fetchSummaries();
-              }}
-              style={{
-                padding: '8px 16px',
-                border: 'none',
-                background: 'none',
-                fontSize: '13px',
-                fontWeight: activeTab === tab.id ? 700 : 500,
-                color: activeTab === tab.id ? 'var(--purple-primary)' : 'var(--text-muted)',
-                borderBottom: activeTab === tab.id ? '2px solid var(--purple-primary)' : '2px solid transparent',
-                cursor: 'pointer',
-                marginBottom: '-1px',
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
+      {canSeeAll ? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content' }}>
+            {[
+              { id: 'requests', label: 'All Requests' },
+              { id: 'summaries', label: `Summaries — ${new Date().getFullYear()}` },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  if (tab.id === 'summaries' && !summaryData) fetchSummaries();
+                }}
+                style={{
+                  padding: '10px 20px', border: 'none',
+                  background: activeTab === tab.id ? 'var(--purple-primary)' : 'transparent',
+                  fontSize: '13px', fontWeight: activeTab === tab.id ? 600 : 400,
+                  color: activeTab === tab.id ? 'white' : 'var(--text-secondary)', cursor: 'pointer',
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => setShowForm(true)} style={{
+            display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px',
+            background: 'var(--purple-primary)', color: 'white', border: 'none',
+            borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer',
+          }}><Plus size={16} /> Request Time Away</button>
+        </div>
+      ) : (
+        <div style={{ marginBottom: '20px' }}>
+          <button onClick={() => setShowForm(true)} style={{
+            display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px',
+            background: 'var(--purple-primary)', color: 'white', border: 'none',
+            borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer',
+          }}><Plus size={16} /> Request Time Away</button>
         </div>
       )}
 

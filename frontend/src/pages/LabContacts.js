@@ -1109,39 +1109,37 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
 
   return (
     <div>
-      {/* Page header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+      {/* Tab switcher + actions inline */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content' }}>
+          {[{ id: 'admin', label: 'Admin Contacts' }, { id: 'lab', label: 'Lab Contacts' }, { id: 'alumni', label: 'Alumni' }].map(tab => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              style={{ padding: '10px 20px', background: activeTab === tab.id ? 'var(--purple-primary)' : 'transparent', color: activeTab === tab.id ? 'white' : 'var(--text-secondary)', border: 'none', fontWeight: activeTab === tab.id ? 600 : 400, fontSize: '13px', cursor: 'pointer' }}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <button onClick={handleExport} title="Export all contacts to Excel" style={{
-            display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
+            display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px',
             background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)',
             borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: 'pointer'
           }}><Download size={15} /> Export</button>
           {canManage && activeTab === 'admin' && (
             <button onClick={() => { setContactForm(EMPTY_CONTACT); setShowContactForm(true); }} style={{
-              display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px',
               background: 'var(--purple-primary)', color: 'white', border: 'none',
               borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer'
             }}><Plus size={16} /> Add Contact</button>
           )}
           {canManage && (activeTab === 'lab' || activeTab === 'alumni') && (
             <button onClick={() => { setMemberForm(EMPTY_MEMBER); setShowMemberForm(true); }} style={{
-              display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px',
               background: 'var(--purple-primary)', color: 'white', border: 'none',
               borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer'
             }}><Plus size={16} /> Add Member</button>
           )}
         </div>
-      </div>
-
-      {/* Tab switcher */}
-      <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content', marginBottom: '20px' }}>
-        {[{ id: 'admin', label: 'Admin Contacts' }, { id: 'lab', label: 'Lab Contacts' }, { id: 'alumni', label: 'Alumni' }].map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-            style={{ padding: '10px 20px', background: activeTab === tab.id ? 'var(--purple-primary)' : 'transparent', color: activeTab === tab.id ? 'white' : 'var(--text-secondary)', border: 'none', fontWeight: activeTab === tab.id ? 600 : 400, fontSize: '13px', cursor: 'pointer' }}>
-            {tab.label}
-          </button>
-        ))}
       </div>
 
       {/* Admin Contacts tab */}

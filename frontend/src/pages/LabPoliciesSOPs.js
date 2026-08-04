@@ -38,23 +38,14 @@ const STORAGE_BOXES = [
   {
     box: 'Box 1 — Chemotherapies',
     desc: 'Chemotherapy agents.',
-    color: '#FDEDEC',
-    border: '#F5B7B1',
-    text: '#C0392B',
   },
   {
     box: 'Box 2 — Targeted Signaling Inhibitors / Modulators',
     desc: 'Includes: Targeted inhibitors/modulators of a defined signaling node, i.e. acts on a specific, named target or pathway. Includes clinical drugs and research inhibitors.\n\nExcludes: Broad stressors, metabolic poisons, mimetics, or buffering agents; chemotherapy agents (those go into Box 1).\n\nYou can answer: "This inhibits X" (e.g. ER, BTK, JAK, EZH2, HIF-2α).',
-    color: '#EAF7F0',
-    border: '#A9DFBF',
-    text: '#1E8449',
   },
   {
     box: 'Box 3 — Cellular State Modifiers & Biochemical Assay Reagents',
     desc: 'Reagents that alter, buffer, or report global cellular states, or that are generic biochemical reagents used across assays, without targeting a specific signaling node.\n\nThese reagents: act broadly or pleiotropically; are not chemotherapies; are not pathway-specific inhibitors; are not DNA/RNA-based reagents.',
-    color: '#EBF5FB',
-    border: '#A9CCE3',
-    text: '#1A5276',
   },
 ];
 
@@ -88,9 +79,9 @@ function ReagentCategorizationSOP() {
       <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 12px' }}>Specialized Reagents Storage Box Clarification</h3>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {STORAGE_BOXES.map(b => (
-          <div key={b.box} style={{ background: b.color, border: `1px solid ${b.border}`, borderRadius: 8, padding: '14px 16px' }}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: b.text, margin: '0 0 6px' }}>{b.box}</p>
-            <p style={{ fontSize: 13, color: b.text, lineHeight: 1.7, margin: 0, whiteSpace: 'pre-line' }}>{b.desc}</p>
+          <div key={b.box} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 16px' }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 6px' }}>{b.box}</p>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-line' }}>{b.desc}</p>
           </div>
         ))}
       </div>

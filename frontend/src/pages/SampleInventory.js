@@ -586,15 +586,6 @@ export default function SampleInventory({ userRole, userId, profile }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        {activeTab !== 'benchling' && activeTab !== 'sequencing' && (
-          <button onClick={() => { setForm(currentEmpty); setShowForm(true); }} style={{
-            display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
-            background: 'var(--purple-primary)', color: 'white', border: 'none',
-            borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px'
-          }}><Plus size={16} /> Add Sample</button>
-        )}
-      </div>
 
       {/* Stats */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
@@ -623,24 +614,33 @@ export default function SampleInventory({ userRole, userId, profile }) {
         ))}
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: '16px', width: 'fit-content' }}>
-        {[
-          { id: 'cell_lines', label: 'Cell Lines' },
-          { id: 'mouse', label: 'Mouse Samples' },
-          { id: 'human', label: 'Human Samples' },
-          { id: 'sequencing', label: 'Sequencing Records' },
-          { id: 'shared_reagents', label: 'Shared Reagents' },
-          { id: 'audit', label: 'Audit Log' },
-          { id: 'benchling', label: 'Benchling Sync' },
-        ].map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-            padding: '10px 20px',
-            background: activeTab === tab.id ? 'var(--purple-primary)' : 'transparent',
-            color: activeTab === tab.id ? 'white' : 'var(--text-secondary)',
-            border: 'none', fontWeight: activeTab === tab.id ? 600 : 400, fontSize: '13px'
-          }}>{tab.label}</button>
-        ))}
+      {/* Tabs + action inline */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content' }}>
+          {[
+            { id: 'cell_lines', label: 'Cell Lines' },
+            { id: 'mouse', label: 'Mouse Samples' },
+            { id: 'human', label: 'Human Samples' },
+            { id: 'sequencing', label: 'Sequencing Records' },
+            { id: 'shared_reagents', label: 'Shared Reagents' },
+            { id: 'audit', label: 'Audit Log' },
+            { id: 'benchling', label: 'Benchling Sync' },
+          ].map(tab => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+              padding: '10px 20px',
+              background: activeTab === tab.id ? 'var(--purple-primary)' : 'transparent',
+              color: activeTab === tab.id ? 'white' : 'var(--text-secondary)',
+              border: 'none', fontWeight: activeTab === tab.id ? 600 : 400, fontSize: '13px'
+            }}>{tab.label}</button>
+          ))}
+        </div>
+        {activeTab !== 'benchling' && activeTab !== 'sequencing' && activeTab !== 'audit' && activeTab !== 'shared_reagents' && (
+          <button onClick={() => { setForm(currentEmpty); setShowForm(true); }} style={{
+            display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px',
+            background: 'var(--purple-primary)', color: 'white', border: 'none',
+            borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer'
+          }}><Plus size={16} /> Add Sample</button>
+        )}
       </div>
 
       {activeTab === 'benchling' && <BenchlingTab />}

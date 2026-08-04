@@ -349,25 +349,9 @@ export default function Compliance({ userRole, userId, profile }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        {activeTab === 'checklist' && canManage && (
-          <button onClick={() => setShowAssignForm(true)} style={{
-            display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
-            background: 'var(--purple-primary)', color: 'white', border: 'none',
-            borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px'
-          }}><Plus size={16} /> Assign Checklist</button>
-        )}
-        {activeTab === 'studies' && (
-          <button onClick={() => { setEditingStudy(null); setStudyForm({ study_name: '', irb_number: '', irb_exception: false, tissues_held: false, ilab_exists: false, ilab_link: '', team_members: [], certificate_expiry: '', notes: '' }); setShowStudyForm(true); }} style={{
-            display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
-            background: 'var(--purple-primary)', color: 'white', border: 'none',
-            borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px'
-          }}><Plus size={16} /> Add Study</button>
-        )}
-      </div>
-
-      {/* Top-level tabs */}
-      <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: '20px', width: 'fit-content' }}>
+      {/* Top-level tabs + actions inline */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content' }}>
         {[
           { id: 'checklist', label: 'Compliance Checklist' },
           { id: 'studies', label: 'Studies' },
@@ -381,8 +365,25 @@ export default function Compliance({ userRole, userId, profile }) {
             border: 'none', fontWeight: activeTab === tab.id ? 600 : 400, fontSize: '13px'
           }}>{tab.label}</button>
         ))}
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {activeTab === 'checklist' && canManage && (
+            <button onClick={() => setShowAssignForm(true)} style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px',
+              background: 'var(--purple-primary)', color: 'white', border: 'none',
+              borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer'
+            }}><Plus size={16} /> Assign Checklist</button>
+          )}
+          {activeTab === 'studies' && (
+            <button onClick={() => { setEditingStudy(null); setStudyForm({ study_name: '', irb_number: '', irb_exception: false, tissues_held: false, ilab_exists: false, ilab_link: '', team_members: [], certificate_expiry: '', notes: '' }); setShowStudyForm(true); }} style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px',
+              background: 'var(--purple-primary)', color: 'white', border: 'none',
+              borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer'
+            }}><Plus size={16} /> Add Study</button>
+          )}
+        </div>
       </div>
-       
+
       {activeTab === 'checklist' && (
         <>
       {/* My assignment banner */}

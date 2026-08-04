@@ -353,15 +353,6 @@ export default function Responsibilities({ userRole, userId, profile }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        {canManage && (
-          <button onClick={() => setShowNewTaskForm(true)} style={{
-            display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
-            background: 'var(--purple-primary)', color: 'white', border: 'none',
-            borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', boxShadow: 'var(--shadow-sm)'
-          }}><Plus size={16} /> Add Task</button>
-        )}
-      </div>
 
       {submitted && (
         <div style={{
@@ -373,7 +364,8 @@ export default function Responsibilities({ userRole, userId, profile }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
           {['MISC', 'PM'].map(cat => (
             <button key={cat} onClick={() => setActiveCategory(cat)} style={{
@@ -408,6 +400,14 @@ export default function Responsibilities({ userRole, userId, profile }) {
             );
           })}
         </div>
+        </div>
+        {canManage && (
+          <button onClick={() => setShowNewTaskForm(true)} style={{
+            display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px',
+            background: 'var(--purple-primary)', color: 'white', border: 'none',
+            borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer'
+          }}><Plus size={16} /> Add Task</button>
+        )}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
