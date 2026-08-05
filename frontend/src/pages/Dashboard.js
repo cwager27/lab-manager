@@ -212,10 +212,11 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
         : Promise.resolve({ data: [] }),
       // unassigned sporadic tasks (for Mia and PM only)
       showGrantAlert
-        ? supabase.from('sporadic_tasks')
-            .select('id, title, description, due_date, status')
+        ? supabase.from('task_occurrences')
+            .select('id, due_date, task_def:tasks_definitions(id, title, category, group_name)')
             .is('assigned_to', null)
-            .or('status.is.null,status.in.(pending,in_progress)')
+            .gte('due_date', today)
+            .lte('due_date', new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0])
             .order('due_date')
         : Promise.resolve({ data: [] }),
       // recur productivity for initial load (bundled so all cards appear together)
@@ -760,14 +761,14 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                                     title="Click to view full task"
                                   >
                                     <span style={{ fontSize: 12, color: overdue ? '#C0392B' : 'var(--text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
-                                      {(t.title || '').length > 38 ? (t.title || '').slice(0, 38) + '…' : (t.title || '(no title)')}
+                                      {(() => { const title = t.task_def?.title || '(no title)'; return title.length > 38 ? title.slice(0, 38) + '…' : title; })()}
                                     </span>
                                   </button>
                                   <select
                                     defaultValue=""
                                     onChange={async e => {
                                       if (!e.target.value) return;
-                                      await supabase.from('sporadic_tasks').update({ assigned_to: e.target.value }).eq('id', t.id);
+                                      await supabase.from('task_occurrences').update({ assigned_to: e.target.value, status: 'assigned' }).eq('id', t.id);
                                       setUnassignedTasks(prev => prev.filter(x => x.id !== t.id));
                                       if (expandedUnassignedId === t.id) setExpandedUnassignedId(null);
                                     }}
@@ -784,8 +785,8 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                                 </div>
                                 {isExpanded && (
                                   <div style={{ padding: '6px 14px 10px', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)' }}>
-                                    <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px' }}>{t.title}</p>
-                                    {t.description && <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>{t.description}</p>}
+                                    <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px' }}>{t.task_def?.title || '(no title)'}</p>
+                                    {t.task_def?.category && <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 2px' }}>{t.task_def.category}{t.task_def.group_name ? ` · ${t.task_def.group_name}` : ''}</p>}
                                   </div>
                                 )}
                               </div>
