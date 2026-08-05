@@ -494,14 +494,14 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                         const s = STATUS_COLORS[r.status] || STATUS_COLORS.pending;
                         return (
                           <div key={r.id} style={{ position: 'relative' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: hasOverlap ? '#FEF5F5' : undefined }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: hasOverlap ? '#FEF5F5' : undefined }}>
                               <div style={{ minWidth: 0 }}>
                                 <span style={{ fontSize: '12px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)' }}>{r.requester?.full_name}</span>
                                 <p style={{ margin: '1px 0 0', fontSize: '11px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)' }}>
                                   {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
                                 </p>
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
                                 {tripleInfo ? (
                                   <button onClick={() => setOverlapWarning(warningOpen ? null : `vac_${r.id}`)}
                                     title="3+ members overlapping — click for details"
@@ -552,14 +552,14 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                         const s = STATUS_COLORS[r.status] || STATUS_COLORS.pending;
                         return (
                           <div key={r.id} style={{ position: 'relative' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: hasOverlap ? '#FEF5F5' : undefined }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: hasOverlap ? '#FEF5F5' : undefined }}>
                               <div style={{ minWidth: 0 }}>
                                 <span style={{ fontSize: '12px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)' }}>{r.requester?.full_name}</span>
                                 <p style={{ margin: '1px 0 0', fontSize: '11px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)' }}>
                                   {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
                                 </p>
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
                                 {tripleInfo ? (
                                   <button onClick={() => setOverlapWarning(warningOpen ? null : `vac_${r.id}`)}
                                     title="3+ members overlapping — click for details"
@@ -872,14 +872,14 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                         const label = showGrantAlert ? (r.requester?.full_name || 'Unknown') : r.leave_type;
                         return (
                           <div key={r.id} style={{ position: 'relative' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: hasOverlap ? '#FEF5F5' : undefined }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: hasOverlap ? '#FEF5F5' : undefined }}>
                               <div style={{ minWidth: 0 }}>
                                 <span style={{ fontSize: '13px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)' }}>{label}</span>
                                 <p style={{ margin: '1px 0 0', fontSize: '11px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)' }}>
                                   {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
                                 </p>
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
                                 {tripleInfo ? (
                                   <button onClick={() => setOverlapWarning(warningOpen ? null : `req_${r.id}`)}
                                     title="3+ members overlapping — click for details"
