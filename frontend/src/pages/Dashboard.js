@@ -173,8 +173,9 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
           .select('*, assignee:profiles!assigned_to(id, full_name)')
           .or('status.is.null,status.in.(pending,in_progress)').order('due_date')
       : supabase.from('sporadic_tasks')
-          .select('*')
-          .eq('assigned_to', profile.id).or('status.is.null,status.in.(pending,in_progress)').order('due_date');
+          .select('*, assignee:profiles!assigned_to(id, full_name)')
+          .or(`assigned_to.eq.${profile.id},show_on_public_dashboard.eq.true`)
+          .or('status.is.null,status.in.(pending,in_progress)').order('due_date');
 
     const queries = [
       // vacation – all approved in next 30 days
