@@ -461,9 +461,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                               <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
                             )}
                             <span style={{ fontSize: 12, color: isOverdue ? '#C0392B' : 'var(--text-primary)', fontWeight: isOverdue ? 600 : 400, flex: 1, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
-                            {task.assignee?.full_name && (
-                              <span style={{ fontSize: 11, color: isOverdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{task.assignee.full_name.split(' ')[0]}</span>
-                            )}
+                            {(() => { const name = (task.assignee?.full_name || teamMembers.find(m => m.id === task.assigned_to)?.full_name || ''); return name ? <span style={{ fontSize: 11, color: isOverdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: 500 }}>{name.split(' ')[0]}</span> : null; })()}
                             {dateStr && (
                               <span style={{ fontSize: 10, color: isOverdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: isOverdue ? 600 : 400 }}>{dateStr}</span>
                             )}
