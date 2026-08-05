@@ -213,7 +213,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
       // unassigned sporadic tasks (for Mia and PM only)
       showGrantAlert
         ? supabase.from('task_occurrences')
-            .select('id, due_date, task_def:tasks_definitions(id, title, category, group_name)')
+            .select('id, due_date, task_def:tasks_definitions(id, title, category, frequency, audit_area, group_name)')
             .is('assigned_to', null)
             .gte('due_date', today)
             .lte('due_date', new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0])
@@ -785,8 +785,13 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                                 </div>
                                 {isExpanded && (
                                   <div style={{ padding: '6px 14px 10px', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)' }}>
-                                    <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px' }}>{t.task_def?.title || '(no title)'}</p>
-                                    {t.task_def?.category && <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 2px' }}>{t.task_def.category}{t.task_def.group_name ? ` · ${t.task_def.group_name}` : ''}</p>}
+                                    <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 6px' }}>{t.task_def?.title || '(no title)'}</p>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                      {t.task_def?.category && <span style={{ fontSize: 10, background: '#EDE7F6', color: '#6A1B9A', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{t.task_def.category}</span>}
+                                      {t.task_def?.frequency && <span style={{ fontSize: 10, background: '#E3F2FD', color: '#1565C0', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{t.task_def.frequency}</span>}
+                                      {t.task_def?.audit_area && <span style={{ fontSize: 10, background: '#E8F5E9', color: '#2E7D32', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{t.task_def.audit_area}</span>}
+                                      {t.task_def?.group_name && <span style={{ fontSize: 10, background: '#FFF3E0', color: '#E65100', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{t.task_def.group_name}</span>}
+                                    </div>
                                   </div>
                                 )}
                               </div>
