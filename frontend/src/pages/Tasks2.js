@@ -1875,7 +1875,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     [...myTaskOneOffs].sort((a, b) => (a.due_date || '').localeCompare(b.due_date || '')).forEach(t => adhocBuckets[bucketFor(t.due_date)].push(t));
 
     // Render a one-off task card
-    const renderOneOffTask = t => {
+    const renderOneOffTask = (t, bucketId = '') => {
       const cls = classifyOneOff(t);
       const isDone = cls === 'ontime' || cls === 'late';
       const key = `oneoff-${t.id}`;
@@ -1901,14 +1901,15 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         await supabase.from('sporadic_tasks').update({ notes: trimmed || null }).eq('id', t.id);
         setMyTaskOneOffs(prev => prev.map(x => x.id === t.id ? { ...x, notes: trimmed || null } : x));
       };
+      const isOverdue = bucketId === 'overdue' && !isDone;
       return (
-        <div key={t.id} style={{ background: isDone ? '#EAF7F0' : 'var(--bg-card)', border: `1px solid ${isDone ? '#A9DFBF' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+        <div key={t.id} style={{ background: isDone ? '#EAF7F0' : isOverdue ? '#FEF2F2' : 'var(--bg-card)', border: `1px solid ${isDone ? '#A9DFBF' : isOverdue ? '#FECACA' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px' }}>
             <div style={{ display: 'flex', gap: '5px', flexShrink: 0, marginTop: '2px' }}>
               <button onClick={toggleResp} style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp === 'checked' || isDone ? '#27AE60' : 'var(--border)', background: resp === 'checked' || isDone ? '#27AE60' : 'transparent', color: resp === 'checked' || isDone ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: '13px', fontWeight: 600, color: isDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.5, margin: 0 }}>{t.title}</p>
+              <p style={{ fontSize: '13px', fontWeight: 600, color: isDone ? 'var(--text-muted)' : isOverdue ? '#C0392B' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.5, margin: 0 }}>{isOverdue && <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', border: '2px solid #ef4444', color: '#ef4444', fontSize: 10, fontWeight: 800, marginRight: 6, verticalAlign: 'middle', flexShrink: 0 }}>!</span>}{t.title}</p>
               {t.description && <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: 3 }}>{t.description}</div>}
               {t.assigner?.full_name && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 2 }}>Assigned by {t.assigner.full_name}</div>}
               {isDone && (t.submitted_at || t.completed_at) && (
@@ -1938,13 +1939,15 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                       const lcSubTasks = isLiveCellGroup ? groupTasks.filter(t => t.response_type === 'checkbox') : [];
                       const lcAllChecked = lcSubTasks.length > 0 && lcSubTasks.every(t => vatResponses[vKey(t.id, dueDate)]?.response === 'checked');
 
+                      const isOverdueBucket = bucketId === 'overdue';
                       return (
                         <div key={`${groupName || 'ungrouped'}__${dueDate}`} style={{ marginBottom: '4px' }}>
                           {groupName && (
-                            <div style={{ padding: '12px 2px 6px', borderBottom: `2px solid ${groupDone ? 'var(--success)' : 'var(--purple-primary)'}`, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ fontSize: '14px', fontWeight: 700, color: groupDone ? 'var(--success)' : 'var(--purple-primary)' }}>{groupName}</span>
+                            <div style={{ padding: '12px 2px 6px', borderBottom: `2px solid ${groupDone ? 'var(--success)' : isOverdueBucket ? '#ef4444' : 'var(--purple-primary)'}`, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                              {isOverdueBucket && !groupDone && <span style={{ width: 18, height: 18, borderRadius: '50%', border: '2px solid #ef4444', color: '#ef4444', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>!</span>}
+                              <span style={{ fontSize: '14px', fontWeight: 700, color: groupDone ? 'var(--success)' : isOverdueBucket ? '#C0392B' : 'var(--purple-primary)' }}>{groupName}</span>
                               {dueDate && dueDate !== 'none' && (
-                                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>· Due {fmtDate(dueDate)}</span>
+                                <span style={{ fontSize: 11, color: isOverdueBucket && !groupDone ? '#ef4444' : 'var(--text-muted)', fontWeight: 400 }}>· Due {fmtDate(dueDate)}</span>
                               )}
                               {groupDone && <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--success)', background: '#EAF7F0', padding: '2px 8px', borderRadius: 10, border: '1px solid #A9DFBF' }}>✓ Completed</span>}
                             </div>
@@ -1957,7 +1960,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                               return <div key={task.id} style={{ padding: '8px 14px', color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>Tasks to be defined.</div>;
                             }
                             return (
-                              <div key={task.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                              <div key={task.id} style={{ background: isOverdueBucket && !done ? '#FEF2F2' : 'var(--bg-card)', border: `1px solid ${isOverdueBucket && !done ? '#FECACA' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
                                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px' }}>
                                   <div style={{ display: 'flex', gap: '5px', flexShrink: 0, marginTop: '2px' }}>
                                     {(task.response_type === 'yes_no' || task.response_type === 'yes_no_na') ? (
@@ -2204,7 +2207,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                 <div>
                   {adhocItems.length === 0
                     ? <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '6px 4px' }}>None</div>
-                    : adhocItems.map(t => renderOneOffTask(t))}
+                    : adhocItems.map(t => renderOneOffTask(t, id))}
                 </div>
               </div>
             </div>
