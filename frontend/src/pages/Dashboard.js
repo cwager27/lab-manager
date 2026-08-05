@@ -392,7 +392,7 @@ export default function Dashboard({ profile, userRole, userId }) {
 
           {/* ══ LAB DASHBOARD ══ */}
           {showLabDash && <div style={{ background: '#F0F4FF', border: '1px solid #D8E0F5', borderRadius: '16px', padding: '20px' }}>
-            <h2 style={{ fontSize: '13px', fontWeight: 800, color: '#3B5BDB', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: '10px', borderLeft: '3px solid #3B5BDB', lineHeight: 1.2, margin: '0 0 16px' }}>Lab Dashboard</h2>
+            <h2 style={{ fontSize: '26px', fontWeight: 800, color: '#3B5BDB', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: '10px', borderLeft: '3px solid #3B5BDB', lineHeight: 1.2, margin: '0 0 16px' }}>Lab Dashboard</h2>
             <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
 
               {/* Col 1 — Recurrent lab task productivity */}
@@ -649,7 +649,7 @@ export default function Dashboard({ profile, userRole, userId }) {
           {/* ══ LEADERSHIP DASHBOARD ══ */}
           {showLeadershipDash && (
             <div style={{ background: '#F5FFF8', border: '1px solid #C8EDD8', borderRadius: '16px', padding: '20px' }}>
-              <h2 style={{ fontSize: '13px', fontWeight: 800, color: '#1A7F4B', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: '10px', borderLeft: '3px solid #1A7F4B', lineHeight: 1.2, margin: '0 0 16px' }}>Leadership Dashboard</h2>
+              <h2 style={{ fontSize: '26px', fontWeight: 800, color: '#1A7F4B', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: '10px', borderLeft: '3px solid #1A7F4B', lineHeight: 1.2, margin: '0 0 16px' }}>Leadership Dashboard</h2>
               <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
 
                 {/* Grants */}
@@ -757,7 +757,7 @@ export default function Dashboard({ profile, userRole, userId }) {
 
           {/* ══ PERSONAL DASHBOARD ══ */}
           {showPersonalDash && <div style={{ background: '#FBF8FF', border: '1px solid #E4D9F5', borderRadius: '16px', padding: '20px' }}>
-            <h2 style={{ fontSize: '13px', fontWeight: 800, color: '#7B3FA0', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: '10px', borderLeft: '3px solid #7B3FA0', lineHeight: 1.2, margin: '0 0 16px' }}>Personal Dashboard</h2>
+            <h2 style={{ fontSize: '26px', fontWeight: 800, color: '#7B3FA0', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: '10px', borderLeft: '3px solid #7B3FA0', lineHeight: 1.2, margin: '0 0 16px' }}>Personal Dashboard</h2>
 
             {/* Grant Alerts — full width above columns */}
             {showGrantAlert && alertGrants.length > 0 && (
