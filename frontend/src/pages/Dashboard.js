@@ -718,7 +718,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                   <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
                     <button
                       onClick={() => { localStorage.setItem('tasks2_tab', 'assigned'); setCurrentPage('tasks2'); }}
-                      style={{ width: '100%', padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 7, background: 'none', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer', textAlign: 'left' }}
+                      style={{ width: '100%', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 7, background: 'none', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer', textAlign: 'left' }}
                       onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'none'}
                     >
