@@ -170,7 +170,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
 
     const sporQuery = canEdit
       ? supabase.from('sporadic_tasks')
-          .select('*, assignee:profiles!sporadic_tasks_assigned_to_fkey(id, full_name)')
+          .select('*, assignee:profiles!assigned_to(id, full_name)')
           .or('status.is.null,status.in.(pending,in_progress)').order('due_date')
       : supabase.from('sporadic_tasks')
           .select('*')
