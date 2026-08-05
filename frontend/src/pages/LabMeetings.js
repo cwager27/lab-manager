@@ -286,23 +286,36 @@ export default function LabMeetings({ userRole, userId, profile }) {
     await fetchData(true);
   }
 
-  // Re-assigns all future TBD lab meetings in cycle order after a change.
+  // Re-assigns ALL future scheduled lab meetings in cycle order after a presenter swap.
+  // Clears existing assignments first so the rotor runs cleanly from the changed meeting forward.
   async function resequenceFutureMeetings(fromDate, updatedMeetings) {
     const pool = presenters.length ? presenters : members;
     if (!pool.length) return;
-    const futureTbd = updatedMeetings
-      .filter(m => m.meeting_type !== 'adhoc_meeting' && m.status === 'scheduled' && !m.presenter_id && m.meeting_date >= fromDate)
+    const futureScheduled = updatedMeetings
+      .filter(m => m.meeting_type !== 'adhoc_meeting' && m.status === 'scheduled' && m.meeting_date > fromDate)
       .sort((a, b) => a.meeting_date.localeCompare(b.meeting_date));
-    if (!futureTbd.length) return;
-    let working = [...updatedMeetings];
-    for (const mtg of futureTbd) {
-      if (isHoliday(mtg.meeting_date)) continue;
-      const history = working.filter(m => m.meeting_type !== 'adhoc_meeting' && m.meeting_date < mtg.meeting_date);
-      const next = getRotorPresenter(history, pool, mtg.meeting_date, vacations);
-      if (next) {
-        await supabase.from('lab_meetings').update({ presenter_id: next.id, updated_at: new Date().toISOString() }).eq('id', mtg.id);
-        working = working.map(m => m.id === mtg.id ? { ...m, presenter_id: next.id } : m);
+    if (!futureScheduled.length) return;
+
+    // Clear all future presenter slots so rotor starts fresh from the swap point
+    let working = updatedMeetings.map(m =>
+      futureScheduled.find(f => f.id === m.id) ? { ...m, presenter_id: null } : m
+    );
+
+    fixingRef.current = true;
+    try {
+      for (const mtg of futureScheduled) {
+        if (isHoliday(mtg.meeting_date)) {
+          await supabase.from('lab_meetings').update({ presenter_id: null, updated_at: new Date().toISOString() }).eq('id', mtg.id);
+          continue;
+        }
+        const history = working.filter(m => m.meeting_type !== 'adhoc_meeting' && m.meeting_date < mtg.meeting_date);
+        const next = getRotorPresenter(history, pool, mtg.meeting_date, vacations);
+        const newId = next?.id ?? null;
+        await supabase.from('lab_meetings').update({ presenter_id: newId, updated_at: new Date().toISOString() }).eq('id', mtg.id);
+        working = working.map(m => m.id === mtg.id ? { ...m, presenter_id: newId } : m);
       }
+    } finally {
+      fixingRef.current = false;
     }
   }
 
