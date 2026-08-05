@@ -4127,11 +4127,11 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       if (searchQ && !t.title.toLowerCase().includes(searchQ) && !(t.description || '').toLowerCase().includes(searchQ)) return false;
       return true;
     });
-    const pendingForTab = tasksForTab.filter(t => t.status !== 'done');
-    const doneForTab    = tasksForTab.filter(t => t.status === 'done');
+    const pendingForTab = tasksForTab.filter(t => t.status !== 'done' && t.status !== 'submitted' && t.status !== 'completed');
+    const doneForTab    = tasksForTab.filter(t => t.status === 'done' || t.status === 'submitted' || t.status === 'completed');
 
     const TaskRow = ({ task }) => {
-      const isDone = task.status === 'done';
+      const isDone = task.status === 'done' || task.status === 'submitted' || task.status === 'completed';
       const isOverdue = !isDone && task.due_date && task.due_date < todayStr;
       const isConfirmDelete = confirmDeleteOneOff === task.id;
       return (
