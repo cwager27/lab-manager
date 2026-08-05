@@ -784,8 +784,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                                   )}
                                 </div>
                                 {isExpanded && (
-                                  <div style={{ padding: '6px 14px 10px', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)' }}>
-                                    <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 6px' }}>{t.task_def?.title || '(no title)'}</p>
+                                  <div style={{ padding: '4px 14px 10px', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)' }}>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                                       {t.task_def?.category && <span style={{ fontSize: 10, background: '#EDE7F6', color: '#6A1B9A', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{t.task_def.category}</span>}
                                       {t.task_def?.frequency && <span style={{ fontSize: 10, background: '#E3F2FD', color: '#1565C0', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{t.task_def.frequency}</span>}
