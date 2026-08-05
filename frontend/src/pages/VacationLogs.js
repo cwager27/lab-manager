@@ -497,8 +497,7 @@ export default function VacationLogs({ userRole, userId, profile }) {
             <tbody>
               {sortedRequests.map((request, i) => {
                 const statusStyle = STATUS_STYLES[request.status] || STATUS_STYLES.pending;
-                const leaveColor = LEAVE_COLORS[request.leave_type] || { bg: '#F2F3F4', text: '#626567' };
-                const days = getDayCount(request.start_date, request.end_date);
+const days = getDayCount(request.start_date, request.end_date);
                 const isReviewing = reviewingId === request.id;
                 const overlaps = overlapMap[request.id];
                 const hasOverlap = !!(overlaps && overlaps.length > 0);
