@@ -317,7 +317,7 @@ export default function VacationLogs({ userRole, userId, profile }) {
           <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content' }}>
             {[
               { id: 'requests', label: 'All Requests' },
-              ...[...new Set(requests.filter(r => r.status === 'pending' || r.status === 'approved').map(r => new Date(r.start_date).getFullYear()))].sort().map(yr => ({ id: `summaries_${yr}`, label: `Summaries — ${yr}`, year: yr })),
+              ...[...new Set(requests.filter(r => r.status === 'pending' || r.status === 'approved').map(r => parseInt(r.start_date.slice(0, 4), 10)))].sort().map(yr => ({ id: `summaries_${yr}`, label: `Summaries — ${yr}`, year: yr })),
             ].map(tab => (
               <button
                 key={tab.id}
