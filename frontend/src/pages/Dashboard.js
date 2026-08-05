@@ -10,7 +10,7 @@ function formatDate(d) {
 }
 
 
-const PROD_PERIODS = [{ id: 'current', label: 'Currently' }, { id: '30d', label: 'Last 30d' }, { id: 'all', label: 'Since Joining' }];
+const PROD_PERIODS = [{ id: '30d', label: 'Last 30d' }, { id: 'all', label: 'Since Joining' }];
 
 function PeriodPicker({ value, onChange }) {
   return (
@@ -149,7 +149,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
   const [expandedUnassignedId, setExpandedUnassignedId] = useState(null);
 
   // Productivity state
-  const [recurPeriod, setRecurPeriod] = useState('current');
+  const [recurPeriod, setRecurPeriod] = useState('30d');
   const [recurData, setRecurData] = useState([]);
   const [recurLoading, setRecurLoading] = useState(false);
 
