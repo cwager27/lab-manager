@@ -442,7 +442,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
         gap: isAdhoc ? '8px' : '6px', padding: '5px 8px', alignItems: isAdhoc ? 'start' : 'center',
         background: (!isAdhoc && meeting.is_sof) ? 'var(--purple-faint)' : 'var(--bg-card)',
         border: `1px solid ${(!isAdhoc && meeting.is_sof) ? 'var(--purple-border)' : 'var(--border)'}`,
-        borderRadius: 'var(--radius-sm)', marginBottom: '3px', fontSize: '12px',
+        borderRadius: 'var(--radius-sm)', marginBottom: '3px', fontSize: '17px',
         opacity: meeting.status === 'cancelled' ? 0.55 : 1,
       }}>
 
@@ -451,7 +451,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
           <input type="date" autoFocus value={cellValue} onChange={e => setCellValue(e.target.value)}
             onBlur={() => commitEdit(meeting.id, 'meeting_date', cellValue, table)}
             onKeyDown={e => { if (e.key === 'Enter') commitEdit(meeting.id, 'meeting_date', cellValue, table); if (e.key === 'Escape') setEditingCell(null); }}
-            style={{ fontSize: '11px', padding: '2px 3px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+            style={{ fontSize: '15px', padding: '2px 3px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
         ) : (
           <span onClick={() => startEdit(meeting.id, 'meeting_date', meeting.meeting_date, table)}
             style={{ cursor: canEdit ? 'pointer' : 'default', color: isPast ? 'var(--text-muted)' : 'var(--text-primary)', fontWeight: 500 }}
@@ -467,7 +467,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
               <input autoFocus value={cellValue} onChange={e => setCellValue(e.target.value)}
                 onBlur={() => commitEdit(meeting.id, 'notes', cellValue, table)}
                 onKeyDown={e => { if (e.key === 'Enter') commitEdit(meeting.id, 'notes', cellValue, table); if (e.key === 'Escape') setEditingCell(null); }}
-                style={{ fontSize: '12px', padding: '2px 6px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+                style={{ fontSize: '17px', padding: '2px 6px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
             ) : (
               <span onClick={() => startEdit(meeting.id, 'notes', meeting.notes || '', table)}
                 title={meeting.notes || (canEdit ? 'Click to add description' : '')}
@@ -492,7 +492,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
                   }
                 }}
                 onBlur={() => { if (cellValue !== 'guest') setEditingCell(null); }}
-                style={{ fontSize: '12px', padding: '2px 3px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%' }}>
+                style={{ fontSize: '17px', padding: '2px 3px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%' }}>
                 <option value="">TBD</option>
                 {(isAdhoc ? members : (presenters.length ? presenters : members)).map(m => {
                   const ov = isOnVacationFn(m.id, meeting.meeting_date, vacations);
@@ -506,12 +506,12 @@ export default function LabMeetings({ userRole, userId, profile }) {
                     onChange={e => setGuestNameEdit(e.target.value)}
                     onBlur={() => commitEdit(meeting.id, 'presenter_id', 'guest', table)}
                     onKeyDown={e => { if (e.key === 'Enter') commitEdit(meeting.id, 'presenter_id', 'guest', table); if (e.key === 'Escape') setEditingCell(null); }}
-                    style={{ fontSize: '12px', padding: '2px 6px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', marginTop: '4px', boxSizing: 'border-box' }} />
+                    style={{ fontSize: '17px', padding: '2px 6px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', marginTop: '4px', boxSizing: 'border-box' }} />
                   <input placeholder="Title (optional)" value={guestTitleEdit}
                     onChange={e => setGuestTitleEdit(e.target.value)}
                     onBlur={() => commitEdit(meeting.id, 'presenter_id', 'guest', table)}
                     onKeyDown={e => { if (e.key === 'Enter') commitEdit(meeting.id, 'presenter_id', 'guest', table); if (e.key === 'Escape') setEditingCell(null); }}
-                    style={{ fontSize: '11px', padding: '2px 6px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', marginTop: '3px', boxSizing: 'border-box' }} />
+                    style={{ fontSize: '15px', padding: '2px 6px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', marginTop: '3px', boxSizing: 'border-box' }} />
                 </>
               )}
             </div>
@@ -523,10 +523,10 @@ export default function LabMeetings({ userRole, userId, profile }) {
                 ? <>
                     {presenterName}{onVac && <AlertTriangle size={11} style={{ marginLeft: '3px', verticalAlign: 'middle' }} />}
                     {meeting.guest_title && (
-                      <span style={{ display: 'block', fontSize: '10px', fontWeight: 400, color: 'var(--text-muted)', marginTop: '1px' }}>{meeting.guest_title}</span>
+                      <span style={{ display: 'block', fontSize: '14px', fontWeight: 400, color: 'var(--text-muted)', marginTop: '1px' }}>{meeting.guest_title}</span>
                     )}
                     {meeting.presenter_id && meeting.confirmation_status !== 'confirmed' && (
-                      <span style={{ display: 'block', fontSize: '10px', fontWeight: 400, color: '#E67E22', marginTop: '1px' }}>Invite pending acceptance</span>
+                      <span style={{ display: 'block', fontSize: '14px', fontWeight: 400, color: '#E67E22', marginTop: '1px' }}>Invite pending acceptance</span>
                     )}
                   </>
                 : <em style={{ color: 'var(--text-muted)', fontWeight: 400 }}>TBD</em>}
@@ -549,14 +549,14 @@ export default function LabMeetings({ userRole, userId, profile }) {
           <select autoFocus value={cellValue}
             onChange={async e => { setCellValue(e.target.value); await commitEdit(meeting.id, 'status', e.target.value, table); }}
             onBlur={() => setEditingCell(null)}
-            style={{ fontSize: '11px', padding: '2px 3px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%' }}>
+            style={{ fontSize: '15px', padding: '2px 3px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%' }}>
             <option value="scheduled">Scheduled</option>
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
           </select>
         ) : (
           <span onClick={() => startEdit(meeting.id, 'status', meeting.status, table)}
-            title={canEdit ? 'Click to edit' : ''} style={{ cursor: canEdit ? 'pointer' : 'default', display: 'inline-block', padding: '2px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text }}>
+            title={canEdit ? 'Click to edit' : ''} style={{ cursor: canEdit ? 'pointer' : 'default', display: 'inline-block', padding: '2px 6px', borderRadius: '10px', fontSize: '14px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text }}>
             {statusStyle.label}
           </span>
         )}
@@ -567,11 +567,11 @@ export default function LabMeetings({ userRole, userId, profile }) {
             {awayMembers.length > 0 ? (
               <span
                 title={awayMembers.map(m => m.full_name).join(' · ')}
-                style={{ fontSize: '10px', color: '#E67E22', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                style={{ fontSize: '14px', color: '#E67E22', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {awayMembers.map(m => m.full_name?.split(' ').pop() || m.full_name).join(', ')}
               </span>
             ) : (
-              <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>—</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>—</span>
             )}
           </div>
         )}
@@ -584,7 +584,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
                 onBlur={() => commitEdit(meeting.id, 'zoom_link', cellValue, table)}
                 onKeyDown={e => { if (e.key === 'Enter') commitEdit(meeting.id, 'zoom_link', cellValue, table); if (e.key === 'Escape') setEditingCell(null); }}
                 placeholder="https://…"
-                style={{ fontSize: '10px', padding: '2px 4px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+                style={{ fontSize: '14px', padding: '2px 4px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
             ) : meeting.zoom_link ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                 <a href={meeting.zoom_link} target="_blank" rel="noopener noreferrer"
@@ -593,12 +593,12 @@ export default function LabMeetings({ userRole, userId, profile }) {
                 </a>
                 {canEdit && (
                   <span onClick={() => startEdit(meeting.id, 'zoom_link', meeting.zoom_link, table)}
-                    style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: '9px', lineHeight: 1 }}>✎</span>
+                    style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: '13px', lineHeight: 1 }}>✎</span>
                 )}
               </div>
             ) : canEdit ? (
               <span onClick={() => startEdit(meeting.id, 'zoom_link', '', table)}
-                style={{ cursor: 'pointer', fontSize: '9px', color: 'var(--text-muted)', fontStyle: 'italic', whiteSpace: 'nowrap' }}>+ link</span>
+                style={{ cursor: 'pointer', fontSize: '13px', color: 'var(--text-muted)', fontStyle: 'italic', whiteSpace: 'nowrap' }}>+ link</span>
             ) : null}
           </div>
         )}
@@ -615,10 +615,10 @@ export default function LabMeetings({ userRole, userId, profile }) {
                   style={{ cursor: canEdit ? 'pointer' : 'default' }}>
                   {fields.map((f, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 4, lineHeight: 1.6 }}>
-                      <span style={{ fontSize: '9px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0 }}>
                         {ZOOM_SHORT[f.key] || f.key}:
                       </span>
-                      <span style={{ fontSize: '10px', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
+                      <span style={{ fontSize: '14px', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
                         {f.value}
                       </span>
                     </div>
@@ -627,7 +627,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
               );
             })() : canEdit ? (
               <span onClick={() => setEditingZoomInfo({ meetingId: meeting.id, fields: [{ key: 'Meeting ID', value: '', customKey: '' }] })}
-                style={{ cursor: 'pointer', fontSize: '9px', color: 'var(--text-muted)', fontStyle: 'italic' }}>+ info</span>
+                style={{ cursor: 'pointer', fontSize: '13px', color: 'var(--text-muted)', fontStyle: 'italic' }}>+ info</span>
             ) : null}
           </div>
         )}
@@ -636,14 +636,14 @@ export default function LabMeetings({ userRole, userId, profile }) {
         {!isAdhoc && (
           <div style={{ overflow: 'hidden', minWidth: 0 }}>
             {holiday ? (
-              <span style={{ fontSize: '10px', color: '#E74C3C', fontWeight: 600 }}>🏖 {holiday}</span>
+              <span style={{ fontSize: '14px', color: '#E74C3C', fontWeight: 600 }}>🏖 {holiday}</span>
             ) : awayMembers.length > 0 ? (
               <span title={awayMembers.map(m => m.full_name).join(' · ')}
-                style={{ fontSize: '10px', color: '#E67E22', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                style={{ fontSize: '14px', color: '#E67E22', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {awayMembers.map(m => m.full_name?.split(' ').pop() || m.full_name).join(', ')}
               </span>
             ) : (
-              <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>—</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>—</span>
             )}
           </div>
         )}
@@ -655,7 +655,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
               <input autoFocus value={cellValue} onChange={e => setCellValue(e.target.value)}
                 onBlur={() => commitEdit(meeting.id, 'notes', cellValue, table)}
                 onKeyDown={e => { if (e.key === 'Enter') commitEdit(meeting.id, 'notes', cellValue, table); if (e.key === 'Escape') setEditingCell(null); }}
-                style={{ fontSize: '12px', padding: '2px 6px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+                style={{ fontSize: '17px', padding: '2px 6px', border: '1px solid var(--purple-primary)', borderRadius: '4px', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
             ) : (
               <span onClick={() => startEdit(meeting.id, 'notes', meeting.notes || '', table)}
                 title={meeting.notes || (canEdit ? 'Click to add note' : '')}
@@ -694,20 +694,20 @@ export default function LabMeetings({ userRole, userId, profile }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '10px' }}>
           <div>
-            <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+            <h2 style={{ fontSize: '21px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
               {isLab ? 'Lab Meetings' : 'Ad-hoc Meetings'}
             </h2>
             {isLab && (
               <div style={{ display: 'flex', gap: '5px', marginTop: '5px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginRight: '2px' }}>Thu 1:30–3pm</span>
+                <span style={{ fontSize: '15px', color: 'var(--text-muted)', marginRight: '2px' }}>Thu 1:30–3pm</span>
                 <a href="https://zoom.us/j/98770400275" target="_blank" rel="noopener noreferrer"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'var(--purple-primary)', color: 'white', padding: '2px 9px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, textDecoration: 'none' }}>
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'var(--purple-primary)', color: 'white', padding: '2px 9px', borderRadius: '10px', fontSize: '15px', fontWeight: 600, textDecoration: 'none' }}>
                   <ExternalLink size={10} /> Join Zoom
                 </a>
-                <span style={{ background: 'var(--purple-primary)', color: 'white', padding: '2px 9px', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>
+                <span style={{ background: 'var(--purple-primary)', color: 'white', padding: '2px 9px', borderRadius: '10px', fontSize: '15px', fontWeight: 600 }}>
                   ID: 987 7040 0275
                 </span>
-                <span style={{ background: 'var(--purple-primary)', color: 'white', padding: '2px 9px', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>
+                <span style={{ background: 'var(--purple-primary)', color: 'white', padding: '2px 9px', borderRadius: '10px', fontSize: '15px', fontWeight: 600 }}>
                   PW: 676073
                 </span>
               </div>
@@ -717,12 +717,12 @@ export default function LabMeetings({ userRole, userId, profile }) {
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
               {isLab && (
                 <button onClick={fixRotation}
-                  style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 10px', background: 'transparent', color: 'var(--purple-primary)', border: '1px solid var(--purple-primary)', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '12px', cursor: 'pointer' }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 10px', background: 'transparent', color: 'var(--purple-primary)', border: '1px solid var(--purple-primary)', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '17px', cursor: 'pointer' }}>
                   Fix Rotation
                 </button>
               )}
               <button onClick={() => { setShowAddForm(table); setNewMeeting(EMPTY_MEETING); }}
-                style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 10px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '12px' }}>
+                style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 10px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '17px' }}>
                 <Plus size={12} /> Add
               </button>
             </div>
@@ -738,7 +738,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
               .filter(y => Number(y) >= curYear - 10 && Number(y) <= curYear)
               .sort((a, b) => Number(b) - Number(a));
             return years.map(year => (
-              <button key={year} onClick={() => setFilter(year)} style={{ padding: '3px 9px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: filter === year ? 'var(--purple-primary)' : 'var(--bg-primary)', color: filter === year ? 'white' : 'var(--text-secondary)', fontWeight: filter === year ? 600 : 400, fontSize: '11px' }}>
+              <button key={year} onClick={() => setFilter(year)} style={{ padding: '3px 9px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: filter === year ? 'var(--purple-primary)' : 'var(--bg-primary)', color: filter === year ? 'white' : 'var(--text-secondary)', fontWeight: filter === year ? 600 : 400, fontSize: '15px' }}>
                 {year}
               </button>
             ));
@@ -748,14 +748,14 @@ export default function LabMeetings({ userRole, userId, profile }) {
             { id: 'cancelled', label: 'Cancelled' },
             { id: 'all', label: 'All' },
           ].map(f => (
-            <button key={f.id} onClick={() => setFilter(f.id)} style={{ padding: '3px 9px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: filter === f.id ? 'var(--purple-primary)' : 'var(--bg-primary)', color: filter === f.id ? 'white' : 'var(--text-secondary)', fontWeight: filter === f.id ? 600 : 400, fontSize: '11px' }}>
+            <button key={f.id} onClick={() => setFilter(f.id)} style={{ padding: '3px 9px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: filter === f.id ? 'var(--purple-primary)' : 'var(--bg-primary)', color: filter === f.id ? 'white' : 'var(--text-secondary)', fontWeight: filter === f.id ? 600 : 400, fontSize: '15px' }}>
               {f.label}
             </button>
           ))}
         </div>
 
         {/* Column headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: isLab ? '74px 1fr 28px 80px 1fr 1fr 22px' : '70px 1fr 120px 80px 80px 48px 1fr 22px', gap: isLab ? '6px' : '8px', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', marginBottom: '4px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isLab ? '74px 1fr 28px 80px 1fr 1fr 22px' : '70px 1fr 120px 80px 80px 48px 1fr 22px', gap: isLab ? '6px' : '8px', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', marginBottom: '4px', fontSize: '14px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           <span>Date</span>
           {!isLab && <span>Description</span>}
           <span>Presenter</span>
@@ -769,9 +769,9 @@ export default function LabMeetings({ userRole, userId, profile }) {
         </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '12px' }}>Loading…</div>
+          <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '17px' }}>Loading…</div>
         ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '20px', border: '1px dashed var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-muted)', fontSize: '12px' }}>No meetings.</div>
+          <div style={{ textAlign: 'center', padding: '20px', border: '1px dashed var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-muted)', fontSize: '17px' }}>No meetings.</div>
         ) : filtered.map(m => renderRow(m, table))}
       </div>
     );
@@ -796,7 +796,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
     <div>
 
       {vacWarn && (
-        <div style={{ background: '#FEF9E7', border: '1px solid #FAD7A0', borderRadius: 'var(--radius-md)', padding: '10px 14px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#E67E22' }}>
+        <div style={{ background: '#FEF9E7', border: '1px solid #FAD7A0', borderRadius: 'var(--radius-md)', padding: '10px 14px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '18px', color: '#E67E22' }}>
           <AlertTriangle size={14} /> {vacWarn}
         </div>
       )}
@@ -811,18 +811,18 @@ export default function LabMeetings({ userRole, userId, profile }) {
       {showAddForm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '28px', width: '460px', maxHeight: '85vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '18px' }}>Add {showAddForm === 'lab' ? 'Lab' : 'Ad-hoc'} Meeting</h2>
+            <h2 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '18px' }}>Add {showAddForm === 'lab' ? 'Lab' : 'Ad-hoc'} Meeting</h2>
 
             <div style={{ display: 'flex', gap: '12px', marginBottom: '14px' }}>
               <div style={{ flex: 1 }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>Date</label>
+                <label style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>Date</label>
                 <input type="date" value={newMeeting.meeting_date} onChange={e => setNewMeeting(p => ({ ...p, meeting_date: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '18px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
+                <label style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
                   Presenter
-                  {suggested && !newMeeting.presenter_id && <span style={{ color: 'var(--purple-primary)', fontWeight: 400, textTransform: 'none', fontSize: '10px', marginLeft: '6px' }}>suggested: {fmtName(suggested.full_name)}</span>}
+                  {suggested && !newMeeting.presenter_id && <span style={{ color: 'var(--purple-primary)', fontWeight: 400, textTransform: 'none', fontSize: '14px', marginLeft: '6px' }}>suggested: {fmtName(suggested.full_name)}</span>}
                 </label>
                 <select value={newMeeting.presenter_id}
                   onChange={e => {
@@ -832,7 +832,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
                     }
                     setNewMeeting(p => ({ ...p, presenter_id: val }));
                   }}
-                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none' }}>
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '18px', outline: 'none' }}>
                   <option value="">{suggested ? `Auto: ${fmtName(suggested.full_name)}` : 'Select…'}</option>
                   {(showAddForm === 'lab' ? (presenters.length ? presenters : members) : members).map(m => {
                     const ov = isOnVacationFn(m.id, newMeeting.meeting_date, vacations);
@@ -846,49 +846,49 @@ export default function LabMeetings({ userRole, userId, profile }) {
             {newMeeting.presenter_id === 'guest' && (
               <div style={{ display: 'flex', gap: '12px', marginBottom: '14px' }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>Guest Name</label>
+                  <label style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>Guest Name</label>
                   <input value={newMeeting.guest_name} onChange={e => setNewMeeting(p => ({ ...p, guest_name: e.target.value }))}
-                    style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '18px', outline: 'none', boxSizing: 'border-box' }} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>Title (optional)</label>
+                  <label style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>Title (optional)</label>
                   <input value={newMeeting.guest_title} onChange={e => setNewMeeting(p => ({ ...p, guest_title: e.target.value }))}
-                    style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '18px', outline: 'none', boxSizing: 'border-box' }} />
                 </div>
               </div>
             )}
 
             <div style={{ marginBottom: '14px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>{showAddForm === 'adhoc' ? 'Description (optional)' : 'Notes (optional)'}</label>
+              <label style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>{showAddForm === 'adhoc' ? 'Description (optional)' : 'Notes (optional)'}</label>
               <input value={newMeeting.notes} onChange={e => setNewMeeting(p => ({ ...p, notes: e.target.value }))}
-                style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '18px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
 
             {showAddForm === 'adhoc' && (
               <>
                 <div style={{ marginBottom: '14px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>Zoom Link (optional)</label>
+                  <label style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>Zoom Link (optional)</label>
                   <input type="url" value={newMeeting.zoom_link || ''} onChange={e => setNewMeeting(p => ({ ...p, zoom_link: e.target.value }))}
                     placeholder="https://zoom.us/j/…"
-                    style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '18px', outline: 'none', boxSizing: 'border-box' }} />
                 </div>
                 <div style={{ marginBottom: '14px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase' }}>Zoom Sign-in Info (optional)</label>
+                  <label style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase' }}>Zoom Sign-in Info (optional)</label>
                   {(newMeeting.zoom_info_fields || []).map((f, idx) => (
                     <div key={idx} style={{ display: 'flex', gap: '6px', marginBottom: '6px', alignItems: 'center' }}>
                       <select value={f.key}
                         onChange={e => setNewMeeting(p => ({ ...p, zoom_info_fields: p.zoom_info_fields.map((x, i) => i === idx ? { ...x, key: e.target.value } : x) }))}
-                        style={{ padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', outline: 'none' }}>
+                        style={{ padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '17px', outline: 'none' }}>
                         {ZOOM_KEY_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
                       </select>
                       {f.key === 'Other' && (
                         <input value={f.customKey || ''} placeholder="Label"
                           onChange={e => setNewMeeting(p => ({ ...p, zoom_info_fields: p.zoom_info_fields.map((x, i) => i === idx ? { ...x, customKey: e.target.value } : x) }))}
-                          style={{ width: '80px', padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', outline: 'none' }} />
+                          style={{ width: '80px', padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '17px', outline: 'none' }} />
                       )}
                       <input value={f.value} placeholder="Value"
                         onChange={e => setNewMeeting(p => ({ ...p, zoom_info_fields: p.zoom_info_fields.map((x, i) => i === idx ? { ...x, value: e.target.value } : x) }))}
-                        style={{ flex: 1, padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', outline: 'none' }} />
+                        style={{ flex: 1, padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '17px', outline: 'none' }} />
                       {idx > 0 && (
                         <button type="button" onClick={() => setNewMeeting(p => ({ ...p, zoom_info_fields: p.zoom_info_fields.filter((_, i) => i !== idx) }))}
                           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
@@ -899,14 +899,14 @@ export default function LabMeetings({ userRole, userId, profile }) {
                   ))}
                   {(newMeeting.zoom_info_fields || []).length < 3 && (
                     <button type="button" onClick={() => setNewMeeting(p => ({ ...p, zoom_info_fields: [...(p.zoom_info_fields || []), { key: 'Meeting ID', value: '', customKey: '' }] }))}
-                      style={{ fontSize: '11px', color: 'var(--purple-primary)', background: 'none', border: 'none', cursor: 'pointer', padding: '0', marginBottom: '4px' }}>
+                      style={{ fontSize: '15px', color: 'var(--purple-primary)', background: 'none', border: 'none', cursor: 'pointer', padding: '0', marginBottom: '4px' }}>
                       + Add field
                     </button>
                   )}
                   {(() => {
                     const preview = formatZoomInfo(buildZoomInfo(newMeeting.zoom_info_fields));
                     return preview ? (
-                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '6px 10px', borderRadius: 'var(--radius-md)', marginTop: '4px' }}>
+                      <div style={{ fontSize: '15px', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '6px 10px', borderRadius: 'var(--radius-md)', marginTop: '4px' }}>
                         {preview}
                       </div>
                     ) : null;
@@ -919,34 +919,34 @@ export default function LabMeetings({ userRole, userId, profile }) {
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: newMeeting.is_sof ? '12px' : '20px' }}>
                   <input type="checkbox" id="add-sof" checked={newMeeting.is_sof} onChange={e => setNewMeeting(p => ({ ...p, is_sof: e.target.checked }))} style={{ width: '15px', height: '15px', accentColor: 'var(--purple-primary)' }} />
-                  <label htmlFor="add-sof" style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>State of the Field (SOF)</label>
+                  <label htmlFor="add-sof" style={{ fontSize: '18px', color: 'var(--text-primary)', fontWeight: 500 }}>State of the Field (SOF)</label>
                 </div>
                 {newMeeting.is_sof && (
                   <div style={{ marginBottom: '20px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>SOF Topic</label>
+                    <label style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>SOF Topic</label>
                     <input value={newMeeting.sof_topic || ''} onChange={e => setNewMeeting(p => ({ ...p, sof_topic: e.target.value }))}
                       placeholder="e.g. APOBEC3A detection methods"
-                      style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                      style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '18px', outline: 'none', boxSizing: 'border-box' }} />
                   </div>
                 )}
               </>
             )}
 
             {suggestedHoliday && (
-              <div style={{ background: '#FDEDEC', border: '1px solid #F1948A', borderRadius: 'var(--radius-md)', padding: '8px 12px', marginBottom: '14px', fontSize: '12px', color: '#E74C3C', display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <div style={{ background: '#FDEDEC', border: '1px solid #F1948A', borderRadius: 'var(--radius-md)', padding: '8px 12px', marginBottom: '14px', fontSize: '17px', color: '#E74C3C', display: 'flex', gap: '6px', alignItems: 'center' }}>
                 <AlertTriangle size={13} /> This date falls on {suggestedHoliday} — lab meetings are not scheduled on holidays.
               </div>
             )}
             {vacWarn && (
-              <div style={{ background: '#FEF9E7', border: '1px solid #FAD7A0', borderRadius: 'var(--radius-md)', padding: '8px 12px', marginBottom: '14px', fontSize: '12px', color: '#E67E22', display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <div style={{ background: '#FEF9E7', border: '1px solid #FAD7A0', borderRadius: 'var(--radius-md)', padding: '8px 12px', marginBottom: '14px', fontSize: '17px', color: '#E67E22', display: 'flex', gap: '6px', alignItems: 'center' }}>
                 <AlertTriangle size={13} /> {vacWarn}
               </div>
             )}
 
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button onClick={() => { setShowAddForm(null); setNewMeeting(EMPTY_MEETING); }} style={{ padding: '8px 18px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, fontSize: '13px' }}>Cancel</button>
+              <button onClick={() => { setShowAddForm(null); setNewMeeting(EMPTY_MEETING); }} style={{ padding: '8px 18px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, fontSize: '18px' }}>Cancel</button>
               <button onClick={handleAddMeeting} disabled={!newMeeting.meeting_date || saving}
-                style={{ padding: '8px 18px', borderRadius: 'var(--radius-md)', border: 'none', background: !newMeeting.meeting_date ? 'var(--border)' : 'var(--purple-primary)', color: !newMeeting.meeting_date ? 'var(--text-muted)' : 'white', fontWeight: 600, fontSize: '13px' }}>
+                style={{ padding: '8px 18px', borderRadius: 'var(--radius-md)', border: 'none', background: !newMeeting.meeting_date ? 'var(--border)' : 'var(--purple-primary)', color: !newMeeting.meeting_date ? 'var(--text-muted)' : 'white', fontWeight: 600, fontSize: '18px' }}>
                 {saving ? 'Adding…' : 'Add Meeting'}
               </button>
             </div>
@@ -963,17 +963,17 @@ export default function LabMeetings({ userRole, userId, profile }) {
               <div key={idx} style={{ display: 'flex', gap: '6px', marginBottom: '8px', alignItems: 'center' }}>
                 <select value={f.key}
                   onChange={e => setEditingZoomInfo(prev => ({ ...prev, fields: prev.fields.map((x, i) => i === idx ? { ...x, key: e.target.value } : x) }))}
-                  style={{ padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', outline: 'none' }}>
+                  style={{ padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '17px', outline: 'none' }}>
                   {ZOOM_KEY_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
                 </select>
                 {f.key === 'Other' && (
                   <input value={f.customKey || ''} placeholder="Label"
                     onChange={e => setEditingZoomInfo(prev => ({ ...prev, fields: prev.fields.map((x, i) => i === idx ? { ...x, customKey: e.target.value } : x) }))}
-                    style={{ width: '70px', padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', outline: 'none' }} />
+                    style={{ width: '70px', padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '17px', outline: 'none' }} />
                 )}
                 <input value={f.value} placeholder="Value"
                   onChange={e => setEditingZoomInfo(prev => ({ ...prev, fields: prev.fields.map((x, i) => i === idx ? { ...x, value: e.target.value } : x) }))}
-                  style={{ flex: 1, padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', outline: 'none' }} />
+                  style={{ flex: 1, padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '17px', outline: 'none' }} />
                 {idx > 0 && (
                   <button type="button" onClick={() => setEditingZoomInfo(prev => ({ ...prev, fields: prev.fields.filter((_, i) => i !== idx) }))}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
@@ -984,22 +984,22 @@ export default function LabMeetings({ userRole, userId, profile }) {
             ))}
             {editingZoomInfo.fields.length < 3 && (
               <button type="button" onClick={() => setEditingZoomInfo(prev => ({ ...prev, fields: [...prev.fields, { key: 'Meeting ID', value: '', customKey: '' }] }))}
-                style={{ fontSize: '11px', color: 'var(--purple-primary)', background: 'none', border: 'none', cursor: 'pointer', padding: '0', marginBottom: '10px' }}>
+                style={{ fontSize: '15px', color: 'var(--purple-primary)', background: 'none', border: 'none', cursor: 'pointer', padding: '0', marginBottom: '10px' }}>
                 + Add field
               </button>
             )}
             {(() => {
               const preview = formatZoomInfo(buildZoomInfo(editingZoomInfo.fields));
               return (
-                <div style={{ fontSize: '11px', color: preview ? 'var(--text-secondary)' : 'var(--text-muted)', background: 'var(--bg-secondary)', padding: '6px 10px', borderRadius: 'var(--radius-md)', marginBottom: '14px', fontStyle: preview ? 'normal' : 'italic' }}>
+                <div style={{ fontSize: '15px', color: preview ? 'var(--text-secondary)' : 'var(--text-muted)', background: 'var(--bg-secondary)', padding: '6px 10px', borderRadius: 'var(--radius-md)', marginBottom: '14px', fontStyle: preview ? 'normal' : 'italic' }}>
                   {preview || 'No info entered'}
                 </div>
               );
             })()}
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button onClick={() => setEditingZoomInfo(null)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, fontSize: '13px' }}>Cancel</button>
+              <button onClick={() => setEditingZoomInfo(null)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, fontSize: '18px' }}>Cancel</button>
               <button onClick={() => commitZoomInfo(editingZoomInfo.meetingId, editingZoomInfo.fields)}
-                style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600, fontSize: '13px' }}>Save</button>
+                style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600, fontSize: '18px' }}>Save</button>
             </div>
           </div>
         </div>
