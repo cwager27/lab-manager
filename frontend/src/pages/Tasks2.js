@@ -1902,25 +1902,25 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         setMyTaskOneOffs(prev => prev.map(x => x.id === t.id ? { ...x, notes: trimmed || null } : x));
       };
       return (
-        <div key={t.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+        <div key={t.id} style={{ background: isDone ? '#EAF7F0' : 'var(--bg-card)', border: `1px solid ${isDone ? '#A9DFBF' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px' }}>
             <div style={{ display: 'flex', gap: '5px', flexShrink: 0, marginTop: '2px' }}>
-              <button onClick={toggleResp} style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp === 'checked' || isDone ? 'var(--success)' : 'var(--border)', background: resp === 'checked' || isDone ? 'var(--success)' : 'transparent', color: resp === 'checked' || isDone ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
+              <button onClick={toggleResp} style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp === 'checked' || isDone ? '#27AE60' : 'var(--border)', background: resp === 'checked' || isDone ? '#27AE60' : 'transparent', color: resp === 'checked' || isDone ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: '13px', color: isDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.5, margin: 0 }}>{t.title}</p>
+              <p style={{ fontSize: '13px', fontWeight: 600, color: isDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.5, margin: 0 }}>{t.title}</p>
               {t.description && <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: 3 }}>{t.description}</div>}
               {t.assigner?.full_name && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 2 }}>Assigned by {t.assigner.full_name}</div>}
               {isDone && (t.submitted_at || t.completed_at) && (
                 <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
-                  <span style={{ color: 'var(--success)' }}>✓</span> Completed on {new Date(t.submitted_at || t.completed_at).toLocaleDateString()}
-                  {cls === 'late' && <span style={{ color: '#f59e0b', marginLeft: 4 }}>(late)</span>}
+                  Due {t.due_date ? fmtDate(t.due_date) : '—'}{cls === 'late' && <span style={{ color: '#f59e0b', marginLeft: 4 }}>(late)</span>}
                 </div>
               )}
-              <textarea value={notes} onChange={e => updateNotes(e.target.value)} onBlur={e => saveNotes(e.target.value)} placeholder="Add a note…" rows={1}
-                style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />
+              {!isDone && <textarea value={notes} onChange={e => updateNotes(e.target.value)} onBlur={e => saveNotes(e.target.value)} placeholder="Add a note…" rows={1}
+                style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />}
               {t.file_url && <div style={{ marginTop: 6 }}><a href={t.file_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: 'var(--purple-primary)', fontWeight: 600 }}>📎 Attachment →</a></div>}
             </div>
+            {isDone && <span style={{ fontSize: 11, fontWeight: 700, color: '#27AE60', background: '#D5F5E3', padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap', flexShrink: 0, alignSelf: 'center' }}>✓ Completed</span>}
           </div>
         </div>
       );
