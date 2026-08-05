@@ -231,8 +231,8 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
       { data: myRecurData },
       { data: memberData },
       { data: grantData },
-      { data: initRecurOccData },
       { data: unassignedData },
+      { data: initRecurOccData },
     ] = await Promise.all(queries);
 
     const allVac = vacData || [];
