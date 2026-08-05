@@ -1432,7 +1432,7 @@ export default function Finance({ userRole }) {
                     <div style={{ position: 'relative' }}>
                       <button onClick={() => { setDraftGrantsTotals(selectedGrantsTotals); setGrantSearchTotals(''); setGrantFilterTotalsOpen(v => !v); }}
                         style={{ padding: '8px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {selectedGrantsTotals.length === 0 ? 'All Grants' : `${selectedGrantsTotals.length} Grant${selectedGrantsTotals.length > 1 ? 's' : ''} Selected`}
+                        {selectedGrantsTotals.length === 0 ? 'Grants' : `${selectedGrantsTotals.length} Grant${selectedGrantsTotals.length > 1 ? 's' : ''} Selected`}
                         <span style={{ fontSize: '10px' }}>▼</span>
                       </button>
                       {grantFilterTotalsOpen && (
@@ -1507,7 +1507,7 @@ export default function Finance({ userRole }) {
                         onClick={() => { setDraftGrants(selectedGrants); setGrantSearch(''); setGrantFilterOpen(v => !v); }}
                         style={{ padding: '8px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
                       >
-                        {selectedGrants.length === 0 ? 'All Grants' : `${selectedGrants.length} Grant${selectedGrants.length > 1 ? 's' : ''} Selected`}
+                        {selectedGrants.length === 0 ? 'Grants' : `${selectedGrants.length} Grant${selectedGrants.length > 1 ? 's' : ''} Selected`}
                         <span style={{ fontSize: '10px' }}>▼</span>
                       </button>
                       {grantFilterOpen && (
@@ -1589,7 +1589,7 @@ export default function Finance({ userRole }) {
                         onClick={() => { setDraftGrantsExpType(selectedGrantsExpType); setGrantSearchExpType(''); setGrantFilterExpTypeOpen(v => !v); }}
                         style={{ padding: '8px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
                       >
-                        {selectedGrantsExpType.length === 0 ? 'All Grants' : `${selectedGrantsExpType.length} Grant${selectedGrantsExpType.length > 1 ? 's' : ''} Selected`}
+                        {selectedGrantsExpType.length === 0 ? 'Grants' : `${selectedGrantsExpType.length} Grant${selectedGrantsExpType.length > 1 ? 's' : ''} Selected`}
                         <span style={{ fontSize: '10px' }}>▼</span>
                       </button>
                       {grantFilterExpTypeOpen && (
