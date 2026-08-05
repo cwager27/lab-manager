@@ -971,7 +971,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
 
   const filteredAdminContacts = Object.values(
     contacts
-      .filter(c => (c.role === 'external' || c.role === 'member') && c.status !== 'alumni')
+      .filter(c => c.role === 'external' && c.status !== 'alumni')
       .reduce((acc, c) => {
         const key = `${(c.last_name || '').toLowerCase().trim()}__${(c.first_name || '').toLowerCase().trim()}`;
         if (!acc[key] || countFields(c) > countFields(acc[key])) acc[key] = c;
