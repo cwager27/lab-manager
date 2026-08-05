@@ -34,18 +34,22 @@ function TaskStatusCard({ icon, title, tasks, getTitle, dateKey, upcomingLabel =
   const upcoming = tasks.filter(t => !isDoneStatus(t) && t[dateKey] && t[dateKey] > next14);
   const isEmpty  = !missed.length && !twoWeeks.length && !upcoming.length;
 
-  const renderSection = (label, items, headBg, headColor) => {
+  const renderSection = (label, items, headBg, headColor, isMissed = false) => {
     if (!items.length) return null;
     return (
       <div key={label}>
-        <div style={{ padding: '5px 14px', background: headBg, display: 'flex', alignItems: 'center', gap: 6, borderTop: '1px solid var(--border)' }}>
-          <span style={{ fontSize: 10, fontWeight: 700, color: headColor, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+        <div style={{ padding: '5px 14px', background: isMissed ? '#FEF5F5' : headBg, display: 'flex', alignItems: 'center', gap: 6, borderTop: '1px solid var(--border)' }}>
+          {isMissed && <AlertTriangle size={11} color="#E74C3C" />}
+          <span style={{ fontSize: 10, fontWeight: 700, color: isMissed ? '#E74C3C' : headColor, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
         </div>
         {items.map(t => (
-          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderTop: '1px solid var(--border)' }}>
-            <span style={{ fontSize: 12, color: headBg === '#ef4444' ? '#ef4444' : 'var(--text-primary)', flex: 1, lineHeight: 1.3 }}>{getTitle(t)}</span>
+          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderTop: '1px solid #FCCACA', background: '#FEF5F5' }}>
+            <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#FDEDEC', border: '1.5px solid #E74C3C', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 900, color: '#E74C3C', lineHeight: 1 }}>!</span>
+            </div>
+            <span style={{ fontSize: 12, color: '#C0392B', fontWeight: 600, flex: 1, lineHeight: 1.3 }}>{getTitle(t)}</span>
             {t[dateKey] && (
-              <span style={{ fontSize: 10, color: headBg === '#ef4444' ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(t[dateKey])}</span>
+              <span style={{ fontSize: 10, color: '#E74C3C', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: 600 }}>{formatDate(t[dateKey])}</span>
             )}
           </div>
         ))}
@@ -63,7 +67,7 @@ function TaskStatusCard({ icon, title, tasks, getTitle, dateKey, upcomingLabel =
         <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Nothing missed or upcoming.</p>
       ) : (
         <>
-          {renderSection('Missed', missed, '#ef4444', '#fff')}
+          {renderSection('Missed', missed, '#FEF5F5', '#E74C3C', true)}
           {renderSection('Upcoming — next 2 weeks', twoWeeks, '#FFFBF0', '#D68910')}
           {renderSection(upcomingLabel, upcoming, 'var(--bg-secondary)', 'var(--text-secondary)')}
         </>
