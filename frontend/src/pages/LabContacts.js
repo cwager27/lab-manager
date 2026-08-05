@@ -853,17 +853,22 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
     if (status === 'alumni') {
       const member = members.find(m => m.id === memberId);
       const name = member?.full_name || 'Member';
-      // Assign offboarding tasks to the PM, fall back to current user
+      // Assign offboarding tasks to both admin (Mia) and PM
+      const { data: adminData } = await supabase.from('profiles').select('id').eq('role', 'admin').limit(1);
       const { data: pmData } = await supabase.from('profiles').select('id').eq('role', 'pm').limit(1);
-      const assignTo = pmData?.[0]?.id || userId;
       const due = new Date();
       due.setDate(due.getDate() + 7);
       const dueDate = due.toISOString().split('T')[0];
-      await supabase.from('sporadic_tasks').insert([
-        { title: `Remove ${name} — Slack access`, category: 'MISC', response_type: 'checkbox', status: 'approved', assigned_to: assignTo, assigned_by: userId, due_date: dueDate },
-        { title: `Remove ${name} — Lab Platform access`, category: 'MISC', response_type: 'checkbox', status: 'approved', assigned_to: assignTo, assigned_by: userId, due_date: dueDate },
-        { title: `Remove ${name} — Google Drive access`, category: 'MISC', response_type: 'checkbox', status: 'approved', assigned_to: assignTo, assigned_by: userId, due_date: dueDate },
-      ]);
+      const assignees = [...new Set([adminData?.[0]?.id, pmData?.[0]?.id].filter(Boolean))];
+      const taskTitles = [
+        `Remove ${name} — Slack access`,
+        `Remove ${name} — Lab Platform access`,
+        `Remove ${name} — Google Drive access`,
+      ];
+      const rows = assignees.flatMap(assignTo =>
+        taskTitles.map(title => ({ title, category: 'MISC', response_type: 'checkbox', status: 'approved', assigned_to: assignTo, assigned_by: userId, due_date: dueDate }))
+      );
+      if (rows.length) await supabase.from('sporadic_tasks').insert(rows);
       // Reassign any future lab meetings the person was scheduled to present
       fetch(`${process.env.REACT_APP_BACKEND_URL}/api/members/alumni-reassign`, {
         method: 'POST',

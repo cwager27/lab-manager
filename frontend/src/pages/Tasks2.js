@@ -1887,6 +1887,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         const now = new Date().toISOString();
         if (nowDone) {
           await supabase.from('sporadic_tasks').update({ status: 'submitted', response: 'checked', submitted_at: now }).eq('id', t.id);
+          // Sync: complete any other copies of this task (same title, different assignee)
+          await supabase.from('sporadic_tasks').update({ status: 'submitted', response: 'checked', submitted_at: now }).eq('title', t.title).neq('id', t.id).in('status', ['pending', 'approved']);
           setMyTaskOneOffs(prev => prev.map(x => x.id === t.id ? { ...x, status: 'submitted', submitted_at: now } : x));
         } else {
           await supabase.from('sporadic_tasks').update({ status: 'pending', response: null, submitted_at: null }).eq('id', t.id);
