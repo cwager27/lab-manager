@@ -123,7 +123,7 @@ function Card({ icon, iconColor, title, children }) {
   );
 }
 
-export default function Dashboard({ profile, userRole, userId }) {
+export default function Dashboard({ profile, userRole, userId, setCurrentPage }) {
   const canEdit = userRole === 'pm' || userRole === 'admin';
   const isMia = profile?.full_name?.toLowerCase().startsWith('mia');
   const showGrantAlert = isMia || userRole === 'pm';
@@ -716,10 +716,16 @@ export default function Dashboard({ profile, userRole, userId }) {
                 {/* Unassigned tasks */}
                 <div style={{ flex: '2 1 0', minWidth: 0 }}>
                   <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-                    <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <button
+                      onClick={() => { localStorage.setItem('tasks2_tab', 'assigned'); setCurrentPage('tasks2'); }}
+                      style={{ width: '100%', padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 7, background: 'none', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer', textAlign: 'left' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                    >
                       <UserX size={13} color="#E74C3C" />
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Unassigned tasks</span>
-                    </div>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>Unassigned tasks</span>
+                      <span style={{ fontSize: 10, color: 'var(--purple-primary)', fontWeight: 600 }}>View →</span>
+                    </button>
                     {/* Stat pills */}
                     <div style={{ display: 'flex', gap: 10, padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
                       <div style={{ flex: 1, background: unassigned7.length > 0 ? '#FDEDEC' : '#EAF7F0', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>

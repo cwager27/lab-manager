@@ -184,7 +184,7 @@ export default function App() {
         permissions={permissions}
       />
       <main style={{ marginLeft: '240px', flex: 1, padding: '32px', maxWidth: 'calc(100vw - 240px)' }}>
-        {currentPage === 'dashboard' && <Dashboard profile={profile} userRole={userRole} userId={user.id} />}
+        {currentPage === 'dashboard' && <Dashboard profile={profile} userRole={userRole} userId={user.id} setCurrentPage={setCurrentPage} />}
         {currentPage === 'tasks2' && <Tasks2 userRole={userRole} userId={user.id} profile={profile} />}
         {currentPage === 'vacation' && <VacationLogs userRole={userRole} userId={user.id} profile={profile} />}
         {currentPage === 'meetings' && <LabMeetings userRole={userRole} userId={user.id} profile={profile} permissions={permissions} />}
