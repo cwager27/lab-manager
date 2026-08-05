@@ -448,15 +448,22 @@ export default function Dashboard({ profile, userRole, userId }) {
                         const dateStr = noDate
                           ? (task.created_at ? formatDate(task.created_at.slice(0, 10)) : null)
                           : task.due_date ? formatDate(task.due_date) : null;
+                        const isOverdue = cls === 0;
                         return (
-                          <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
-                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
-                            <span style={{ fontSize: 12, color: 'var(--text-primary)', flex: 1, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
+                          <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderTop: i > 0 ? (isOverdue ? '1px solid #FCCACA' : '1px solid var(--border)') : 'none', background: isOverdue ? '#FEF5F5' : undefined }}>
+                            {isOverdue ? (
+                              <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#FDEDEC', border: '1.5px solid #E74C3C', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <span style={{ fontSize: 13, fontWeight: 900, color: '#E74C3C', lineHeight: 1 }}>!</span>
+                              </div>
+                            ) : (
+                              <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
+                            )}
+                            <span style={{ fontSize: 12, color: isOverdue ? '#C0392B' : 'var(--text-primary)', fontWeight: isOverdue ? 600 : 400, flex: 1, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
                             {task.assignee?.full_name && (
-                              <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{task.assignee.full_name.split(' ')[0]}</span>
+                              <span style={{ fontSize: 11, color: isOverdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{task.assignee.full_name.split(' ')[0]}</span>
                             )}
                             {dateStr && (
-                              <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{dateStr}</span>
+                              <span style={{ fontSize: 10, color: isOverdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: isOverdue ? 600 : 400 }}>{dateStr}</span>
                             )}
                             <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 8, background: statusBg, color: statusColor, flexShrink: 0, whiteSpace: 'nowrap' }}>{statusLabel}</span>
                           </div>
