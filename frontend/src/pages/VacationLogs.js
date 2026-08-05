@@ -62,6 +62,7 @@ export default function VacationLogs({ userRole, userId, profile }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('vacation_tab') || 'requests');
   const [summaryData, setSummaryData] = useState(null);
+  const [activeYear, setActiveYear] = useState(new Date().getFullYear());
   const [sortCol, setSortCol] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
   const [reqSortCol, setReqSortCol] = useState('start_date');
@@ -90,8 +91,7 @@ export default function VacationLogs({ userRole, userId, profile }) {
     setLoading(false);
   }
 
-  async function fetchSummaries() {
-    const year = new Date().getFullYear();
+  async function fetchSummaries(year = activeYear) {
     const yearStart = `${year}-01-01`;
     const yearEnd = `${year}-12-31`;
     const [{ data: members }, { data: reqs }] = await Promise.all([
@@ -181,7 +181,7 @@ export default function VacationLogs({ userRole, userId, profile }) {
       setShowForm(false);
       setForm(EMPTY_FORM);
       fetchRequests();
-      if (summaryData !== null) fetchSummaries();
+      if (summaryData !== null) fetchSummaries(activeYear);
     }
   }
 
@@ -317,13 +317,18 @@ export default function VacationLogs({ userRole, userId, profile }) {
           <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content' }}>
             {[
               { id: 'requests', label: 'All Requests' },
-              { id: 'summaries', label: `Summaries — ${new Date().getFullYear()}` },
+              ...[...new Set(requests.map(r => new Date(r.start_date).getFullYear()))].sort().map(yr => ({ id: `summaries_${yr}`, label: `Summaries — ${yr}`, year: yr })),
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => {
                   setActiveTab(tab.id);
-                  if (tab.id === 'summaries' && !summaryData) fetchSummaries();
+                  if (tab.id !== 'requests') {
+                    const yr = tab.year;
+                    setActiveYear(yr);
+                    setSummaryData(null);
+                    fetchSummaries(yr);
+                  }
                 }}
                 style={{
                   padding: '10px 20px', border: 'none',
@@ -352,7 +357,7 @@ export default function VacationLogs({ userRole, userId, profile }) {
         </div>
       )}
 
-      {activeTab === 'summaries' && canSeeAll ? (
+      {activeTab.startsWith('summaries_') && canSeeAll ? (
         summaryData === null ? (
           <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading summaries...</div>
         ) : Object.keys(summaryData).length === 0 ? (
