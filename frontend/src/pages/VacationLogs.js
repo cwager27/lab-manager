@@ -29,9 +29,9 @@ const LEAVE_TYPES = [
 ];
 
 const STATUS_STYLES = {
-  pending: { bg: '#FEF9E7', text: '#F39C12', border: '#FAD7A0', label: 'Pending' },
-  approved: { bg: '#EAF7F0', text: '#27AE60', border: '#A9DFBF', label: 'Approved' },
-  denied: { bg: '#FDEDEC', text: '#E74C3C', border: '#F1948A', label: 'Denied' },
+  pending: { bg: '#FEF9E7', text: '#F39C12', label: 'Pending' },
+  approved: { bg: '#EAF7F0', text: '#27AE60', label: 'Approved' },
+  denied: { bg: '#FDEDEC', text: '#E74C3C', label: 'Denied' },
 };
 
 const LEAVE_COLORS = {
@@ -298,16 +298,16 @@ export default function VacationLogs({ userRole, userId, profile }) {
 
       <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
         {[
-          { label: 'Total', value: requests.length, color: 'var(--purple-primary)', bg: 'var(--purple-faint)' },
-          { label: 'Pending', value: pendingRequests.length, color: '#F39C12', bg: '#FEF9E7' },
-          { label: 'Approved', value: approvedRequests.length, color: '#27AE60', bg: '#EAF7F0' },
-          { label: 'Out Today', value: currentlyOut.length, color: '#2980B9', bg: '#EBF5FB' },
+          { label: 'Total', value: requests.length },
+          { label: 'Pending', value: pendingRequests.length },
+          { label: 'Approved', value: approvedRequests.length },
+          { label: 'Out Today', value: currentlyOut.length },
         ].map(stat => (
           <div key={stat.label} style={{
-            flex: 1, background: stat.bg, borderRadius: 'var(--radius-md)', padding: '16px', textAlign: 'center',
+            flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '16px', textAlign: 'center',
           }}>
-            <div style={{ fontSize: '24px', fontWeight: 700, color: stat.color }}>{stat.value}</div>
-            <div style={{ fontSize: '12px', color: stat.color, marginTop: '2px' }}>{stat.label}</div>
+            <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>{stat.value}</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{stat.label}</div>
           </div>
         ))}
       </div>
@@ -503,7 +503,7 @@ export default function VacationLogs({ userRole, userId, profile }) {
                 const overlaps = overlapMap[request.id];
                 const hasOverlap = !!(overlaps && overlaps.length > 0);
                 const warningOpen = overlapWarning === request.id;
-                const rowBg = hasOverlap ? '#FFF5F5' : i % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-primary)';
+                const rowBg = 'var(--bg-card)';
                 const colSpan = canSeeAll ? 7 : 6;
                 return (
                   <React.Fragment key={request.id}>
@@ -525,12 +525,12 @@ export default function VacationLogs({ userRole, userId, profile }) {
                       <td style={{ ...reqTdStyle, whiteSpace: 'nowrap' }}>{fmtDate(request.end_date)}</td>
                       <td style={{ ...reqTdStyle, textAlign: 'center', fontWeight: 600 }}>{days}</td>
                       <td style={reqTdStyle}>
-                        <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: leaveColor.bg, color: leaveColor.text, whiteSpace: 'nowrap' }}>
+                        <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 500, background: 'var(--bg-secondary)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                           {request.leave_type}
                         </span>
                       </td>
                       <td style={reqTdStyle}>
-                        <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: statusStyle.bg, color: statusStyle.text, border: `1px solid ${statusStyle.border}`, whiteSpace: 'nowrap' }}>
+                        <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: statusStyle.bg, color: statusStyle.text, whiteSpace: 'nowrap' }}>
                           {statusStyle.label}
                         </span>
                       </td>
