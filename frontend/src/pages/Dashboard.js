@@ -233,7 +233,7 @@ export default function Dashboard({ profile, userRole, userId }) {
     const allMeetings = allMeetingData || [];
     setLabMeetings(allMeetings.filter(m => m.meeting_type !== 'adhoc_meeting').slice(0, 3));
     setAdhocMeetings(allMeetings.filter(m => m.meeting_type === 'adhoc_meeting').slice(0, 6));
-    setMyTimeOff(myVacData || []);
+    setMyTimeOff((myVacData || []).filter(r => r.end_date >= today));
     setMyTasks(sporData || []);
     setMyRecurOccs(myRecurData || []);
     setTeamMembers(memberData || []);
