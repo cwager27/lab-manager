@@ -118,6 +118,10 @@ export default function Finance({ userRole }) {
   const [grantFilterExpTypeOpen, setGrantFilterExpTypeOpen] = useState(false);
   const [draftGrantsExpType, setDraftGrantsExpType] = useState([]);
   const [grantSearchExpType, setGrantSearchExpType] = useState('');
+  const [selectedGrantsTotals, setSelectedGrantsTotals] = useState([]);
+  const [grantFilterTotalsOpen, setGrantFilterTotalsOpen] = useState(false);
+  const [draftGrantsTotals, setDraftGrantsTotals] = useState([]);
+  const [grantSearchTotals, setGrantSearchTotals] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [userFilterOpen, setUserFilterOpen] = useState(false);
   const [draftUsers, setDraftUsers] = useState([]);
@@ -732,8 +736,12 @@ export default function Finance({ userRole }) {
     });
   }, [reagents, reagentSearch, reagentsSortCol, reagentsSortDir, catalogByNum, allFYs]);
 
-  const totalComplete = catStatusData.reduce((s, r) => s + (r.complete || 0), 0);
-  const totalProcessing = catStatusData.reduce((s, r) => s + (r.processing || 0), 0);
+  const activeGrantsTotals = selectedGrantsTotals.length === 0 ? GRANT_NAMES : selectedGrantsTotals;
+  const filteredGrantOptionsTotals = GRANT_NAMES.filter(g => g.toLowerCase().includes(grantSearchTotals.toLowerCase()));
+  const totalComplete = activeGrantsTotals.reduce((sum, g) =>
+    sum + Object.values(ordersDataByGrant[g] || {}).reduce((s, m) => s + (m.complete || 0), 0), 0);
+  const totalProcessing = activeGrantsTotals.reduce((sum, g) =>
+    sum + Object.values(ordersDataByGrant[g] || {}).reduce((s, m) => s + (m.processing || 0), 0), 0);
   const totalsChartData = [
     { name: 'Complete',   value: totalComplete,   fill: CHART_BLUE },
     { name: 'Processing', value: totalProcessing, fill: CHART_RED  },
@@ -1417,9 +1425,39 @@ export default function Finance({ userRole }) {
 
               {/* 1. Complete and Processing, totals */}
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '12px', flexWrap: 'wrap' }}>
                   <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Complete and Processing, totals</h3>
-                  <button onClick={exportTotalsTable} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <button onClick={exportTotalsTable} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
+                    <div style={{ position: 'relative' }}>
+                      <button onClick={() => { setDraftGrantsTotals(selectedGrantsTotals); setGrantSearchTotals(''); setGrantFilterTotalsOpen(v => !v); }}
+                        style={{ padding: '8px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {selectedGrantsTotals.length === 0 ? 'All Grants' : `${selectedGrantsTotals.length} Grant${selectedGrantsTotals.length > 1 ? 's' : ''} Selected`}
+                        <span style={{ fontSize: '10px' }}>▼</span>
+                      </button>
+                      {grantFilterTotalsOpen && (
+                        <div style={{ position: 'absolute', zIndex: 200, top: 'calc(100% + 4px)', right: 0, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px', width: '340px', boxShadow: 'var(--shadow-lg)' }}>
+                          <input value={grantSearchTotals} onChange={e => setGrantSearchTotals(e.target.value)} placeholder="Search grants…" style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box', marginBottom: '8px' }} />
+                          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                            <button onClick={() => setDraftGrantsTotals([...GRANT_NAMES])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Select All</button>
+                            <button onClick={() => setDraftGrantsTotals([])} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>Clear</button>
+                          </div>
+                          <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            {filteredGrantOptionsTotals.map(g => (
+                              <label key={g} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px' }}>
+                                <input type="checkbox" checked={draftGrantsTotals.includes(g)} onChange={e => setDraftGrantsTotals(prev => e.target.checked ? [...prev, g] : prev.filter(x => x !== g))} />
+                                <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{g}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                            <button onClick={() => setGrantFilterTotalsOpen(false)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+                            <button onClick={() => { setSelectedGrantsTotals(draftGrantsTotals); setGrantFilterTotalsOpen(false); }} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>OK</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
                   <div style={{ flex: '1 1 0', minWidth: 0 }}>
