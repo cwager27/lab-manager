@@ -146,6 +146,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
   const [unassignedTasks, setUnassignedTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [overlapWarning, setOverlapWarning] = useState(null);
+  const [expandedUnassignedId, setExpandedUnassignedId] = useState(null);
 
   // Productivity state
   const [recurPeriod, setRecurPeriod] = useState('current');
@@ -204,7 +205,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
         .gte('due_date', new Date(Date.now() - 90 * 86400000).toISOString().split('T')[0])
         .lte('due_date', new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0])
         .order('due_date'),
-      supabase.from('profiles').select('id, full_name, email, role').order('full_name'),
+      supabase.from('profiles').select('id, full_name, email, role, lab_status').order('full_name'),
       // grants (for Mia and PM only)
       showGrantAlert
         ? supabase.from('grants').select('id, name, end_date, total_amount, remaining_balance')
@@ -212,7 +213,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
       // unassigned sporadic tasks (for Mia and PM only)
       showGrantAlert
         ? supabase.from('sporadic_tasks')
-            .select('id, title, due_date, status')
+            .select('id, title, description, due_date, status')
             .is('assigned_to', null)
             .or('status.is.null,status.in.(pending,in_progress)')
             .order('due_date')
@@ -737,22 +738,61 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                         <div style={{ fontSize: 10, fontWeight: 600, color: unassigned30.length > 0 ? '#F39C12' : '#27AE60', marginTop: 2 }}>Next 30 days</div>
                       </div>
                     </div>
-                    {/* Task list */}
-                    {unassignedTasks.length === 0 ? (
-                      <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>All tasks assigned.</p>
+                    {/* Next 7 days task list */}
+                    {unassigned7.length === 0 ? (
+                      <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No unassigned tasks in next 7 days.</p>
                     ) : (
-                      <div style={{ maxHeight: 220, overflowY: 'auto' }}>
-                        {unassignedTasks.map((t, i) => {
-                          const overdue = t.due_date && t.due_date < today;
-                          const in7 = t.due_date && t.due_date <= next7;
-                          return (
-                            <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '7px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: overdue ? '#FEF5F5' : in7 ? '#FFFBF0' : undefined }}>
-                              <span style={{ fontSize: 12, color: overdue ? '#E74C3C' : 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
-                              {t.due_date && <span style={{ fontSize: 10, color: overdue ? '#E74C3C' : in7 ? '#D68910' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(t.due_date)}</span>}
-                            </div>
-                          );
-                        })}
-                      </div>
+                      <>
+                        <div style={{ padding: '5px 14px', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)' }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Next 7 days — click to expand</span>
+                        </div>
+                        <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+                          {unassigned7.map((t, i) => {
+                            const overdue = t.due_date && t.due_date < today;
+                            const isExpanded = expandedUnassignedId === t.id;
+                            const activeMembers = teamMembers.filter(m => m.lab_status !== 'alumni');
+                            return (
+                              <div key={t.id} style={{ borderTop: i > 0 ? '1px solid var(--border)' : '1px solid var(--border)', background: overdue ? '#FEF5F5' : undefined }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px' }}>
+                                  <button
+                                    onClick={() => setExpandedUnassignedId(isExpanded ? null : t.id)}
+                                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', flex: 1, minWidth: 0, textAlign: 'left' }}
+                                    title="Click to view full task"
+                                  >
+                                    <span style={{ fontSize: 12, color: overdue ? '#C0392B' : 'var(--text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                                      {t.title.length > 38 ? t.title.slice(0, 38) + '…' : t.title}
+                                    </span>
+                                  </button>
+                                  <select
+                                    defaultValue=""
+                                    onChange={async e => {
+                                      if (!e.target.value) return;
+                                      await supabase.from('sporadic_tasks').update({ assigned_to: e.target.value }).eq('id', t.id);
+                                      setUnassignedTasks(prev => prev.filter(x => x.id !== t.id));
+                                      if (expandedUnassignedId === t.id) setExpandedUnassignedId(null);
+                                    }}
+                                    style={{ fontSize: 11, border: '1px solid var(--border)', borderRadius: 6, padding: '3px 4px', color: 'var(--text-secondary)', background: 'var(--bg-primary)', flexShrink: 0, maxWidth: 110, cursor: 'pointer' }}
+                                  >
+                                    <option value="">Assign…</option>
+                                    {activeMembers.map(m => (
+                                      <option key={m.id} value={m.id}>{m.full_name.split(' ')[0]}</option>
+                                    ))}
+                                  </select>
+                                  {t.due_date && (
+                                    <span style={{ fontSize: 10, color: overdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: overdue ? 600 : 400 }}>{formatDate(t.due_date)}</span>
+                                  )}
+                                </div>
+                                {isExpanded && (
+                                  <div style={{ padding: '6px 14px 10px', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)' }}>
+                                    <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px' }}>{t.title}</p>
+                                    {t.description && <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>{t.description}</p>}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
                     )}
                   </div>
                 </div>
