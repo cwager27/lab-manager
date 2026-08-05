@@ -744,9 +744,6 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                       <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No unassigned tasks in next 7 days.</p>
                     ) : (
                       <>
-                        <div style={{ padding: '5px 14px', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)' }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Next 7 days — click to expand</span>
-                        </div>
                         <div style={{ maxHeight: 280, overflowY: 'auto' }}>
                           {unassigned7.map((t, i) => {
                             const overdue = t.due_date && t.due_date < today;
