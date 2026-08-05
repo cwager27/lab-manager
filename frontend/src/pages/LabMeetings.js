@@ -525,9 +525,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
                     {meeting.guest_title && (
                       <span style={{ display: 'block', fontSize: '14px', fontWeight: 400, color: 'var(--text-muted)', marginTop: '1px' }}>{meeting.guest_title}</span>
                     )}
-                    {meeting.presenter_id && meeting.confirmation_status !== 'confirmed' && (
-                      <span style={{ display: 'block', fontSize: '14px', fontWeight: 400, color: '#E67E22', marginTop: '1px' }}>Invite pending acceptance</span>
-                    )}
+                    {/* invite pending acceptance — temporarily hidden */}
                   </>
                 : <em style={{ color: 'var(--text-muted)', fontWeight: 400 }}>TBD</em>}
             </span>
