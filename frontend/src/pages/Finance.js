@@ -204,7 +204,7 @@ export default function Finance({ userRole }) {
     return { months, catData, catStatusData, grantNames, byGrant };
   }, [orders, selectedGlobalYears]);
 
-  const { months: MONTHS, catStatusData, grantNames: GRANT_NAMES, byGrant: ordersDataByGrant } = chartData;
+  const { months: MONTHS, grantNames: GRANT_NAMES, byGrant: ordersDataByGrant } = chartData;
 
   const [vendors, setVendors] = useState([]);
   const [editingOrder, setEditingOrder] = useState(null);
