@@ -760,7 +760,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                                     title="Click to view full task"
                                   >
                                     <span style={{ fontSize: 12, color: overdue ? '#C0392B' : 'var(--text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
-                                      {t.title.length > 38 ? t.title.slice(0, 38) + '…' : t.title}
+                                      {(t.title || '').length > 38 ? (t.title || '').slice(0, 38) + '…' : (t.title || '(no title)')}
                                     </span>
                                   </button>
                                   <select
