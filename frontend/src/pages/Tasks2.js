@@ -631,17 +631,16 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       await supabase.from('tasks_definitions').update(payload).eq('id', editingTaskDef.id);
     } else {
       await supabase.from('tasks_definitions').insert([payload]);
-      // Generate occurrences and reload scope task list so new task/frequency appears immediately
       fetch(`${API}/api/tasks/generate-occurrences`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ windowDays: 90 }),
       }).catch(() => {});
-      fetch(`${API}/api/tasks2/data`)
-        .then(r => r.json())
-        .then(d => { if (d.tasks) setTasks(d.tasks); })
-        .catch(() => {});
     }
+    fetch(`${API}/api/tasks2/data`)
+      .then(r => r.json())
+      .then(d => { if (d.tasks) setTasks(d.tasks); })
+      .catch(() => {});
     const relatedUpdates = Object.entries(relatedTaskEdits).filter(([, t]) => t.trim());
     for (const [id, title] of relatedUpdates) {
       await supabase.from('tasks_definitions').update({ title: title.trim() }).eq('id', id);
@@ -655,6 +654,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
   async function handleDeleteTaskDef(id) {
     await supabase.from('tasks_definitions').update({ status: 'archived' }).eq('id', id);
+    setTasks(prev => prev.filter(t => t.id !== id));
     setConfirmDeleteDef(null);
     setEditingTaskDef(null);
     setVatLoaded(false);
@@ -1283,6 +1283,15 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     if (period === '30d') {
       qFrom = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
       qTo = todayStr;
+    } else if (period === '3m') {
+      qFrom = new Date(Date.now() - 90 * 86400000).toISOString().split('T')[0];
+      qTo = todayStr;
+    } else if (period === '6m') {
+      qFrom = new Date(Date.now() - 182 * 86400000).toISOString().split('T')[0];
+      qTo = todayStr;
+    } else if (period === '12m') {
+      qFrom = new Date(Date.now() - 365 * 86400000).toISOString().split('T')[0];
+      qTo = todayStr;
     } else if (period === 'all') {
       qFrom = '2020-01-01';
       qTo = '2099-12-31';
@@ -1336,6 +1345,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     });
 
     const rows = allProfiles
+      .filter(p => p.role !== 'pm')
       .map(p => {
         const occs     = byPerson[p.id] || [];
         const sporadic = sporadicByPerson[p.id] || [];
@@ -1424,6 +1434,9 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     const periods = [
       { id: 'current', label: 'Currently' },
       { id: '30d',     label: 'Last 30 Days' },
+      { id: '3m',      label: 'Last 3 Months' },
+      { id: '6m',      label: 'Last 6 Months' },
+      { id: '12m',     label: 'Last 12 Months' },
       { id: 'all',     label: 'Since Joining' },
     ];
 
@@ -2222,7 +2235,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     );
 
     const renderCompleted = () => {
-      // Period cutoff dates
       const periodCutoffs = {
         week:  new Date(Date.now() - 7  * 86400000).toISOString(),
         month: new Date(Date.now() - 30 * 86400000).toISOString(),
@@ -2231,7 +2243,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       };
       const cutoff = periodCutoffs[completedPeriod];
 
-      // Filter completed recurrent groups by period (use occurrence completed_at)
       const filteredDoneGroups = doneGroups.filter(g => {
         if (!cutoff) return true;
         const occ = g.tasks.map(t => occsByDefAndDate[t.id]?.[g.dueDate]).find(Boolean);
@@ -2239,7 +2250,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         return completedAt && completedAt >= cutoff;
       });
 
-      // Filter completed ad hoc by period (use submitted_at or completed_at)
       const filteredDoneOneOffs = doneOneOffs.filter(t => {
         if (!cutoff) return true;
         const ts = t.submitted_at || t.completed_at;
@@ -2248,8 +2258,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
       const showRec   = completedTypeFilter === 'all' || completedTypeFilter === 'recurrent';
       const showAdhoc = completedTypeFilter === 'all' || completedTypeFilter === 'adhoc';
-      const visibleRec   = showRec   ? filteredDoneGroups   : [];
-      const visibleAdhoc = showAdhoc ? filteredDoneOneOffs  : [];
+      const visibleRec   = showRec   ? filteredDoneGroups  : [];
+      const visibleAdhoc = showAdhoc ? filteredDoneOneOffs : [];
 
       const PERIOD_OPTIONS = [
         { id: 'week',  label: 'Last Week' },
@@ -2264,33 +2274,45 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       ];
 
       const pillBtn = (active) => ({
-        padding: '5px 13px', borderRadius: 20, border: `1.5px solid ${active ? 'var(--purple-primary)' : 'var(--border)'}`,
+        padding: '4px 12px', borderRadius: 20,
+        border: `1.5px solid ${active ? 'var(--purple-primary)' : 'var(--border)'}`,
         background: active ? 'var(--purple-primary)' : 'transparent',
-        color: active ? '#fff' : 'var(--text-secondary)',
-        fontSize: 12, fontWeight: 600, cursor: 'pointer',
+        color: active ? '#fff' : 'var(--text-muted)',
+        fontSize: 12, fontWeight: 500, cursor: 'pointer',
       });
 
-      const SectionHeader = ({ label, count, collapsed, onToggle }) => (
-        <button onClick={onToggle} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: collapsed ? 'var(--radius-md)' : 'var(--radius-md) var(--radius-md) 0 0', cursor: 'pointer', marginBottom: collapsed ? 12 : 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</span>
-            <span style={{ fontSize: 11, background: '#D5F5E3', color: '#27AE60', borderRadius: 10, padding: '1px 7px', fontWeight: 700 }}>{count}</span>
+      const SectionDivider = ({ label, count, collapsed, onToggle }) => (
+        <div onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, cursor: 'pointer', userSelect: 'none' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>{label}</span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>({count})</span>
+          <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+          <ChevronDown size={12} style={{ color: 'var(--text-muted)', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', flexShrink: 0 }} />
+        </div>
+      );
+
+      const historyRow = ({ key, onUncheck, title, sub }) => (
+        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 4px', borderBottom: '1px solid var(--border)' }}>
+          <button onClick={onUncheck} title="Mark as incomplete"
+            style={{ width: 22, height: 22, borderRadius: '50%', border: '1.5px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+            <Check size={11} />
+          </button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', textDecoration: 'line-through', lineHeight: 1.4 }}>{title}</div>
+            {sub && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, opacity: 0.75 }}>{sub}</div>}
           </div>
-          <ChevronDown size={14} style={{ color: 'var(--text-muted)', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }} />
-        </button>
+        </div>
       );
 
       return (
         <div>
-          {/* Filters */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 20, alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 24, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
               {PERIOD_OPTIONS.map(({ id, label }) => (
                 <button key={id} onClick={() => setCompletedPeriod(id)} style={pillBtn(completedPeriod === id)}>{label}</button>
               ))}
             </div>
-            <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ width: 1, height: 16, background: 'var(--border)' }} />
+            <div style={{ display: 'flex', gap: 5 }}>
               {TYPE_OPTIONS.map(({ id, label }) => (
                 <button key={id} onClick={() => setCompletedTypeFilter(id)} style={pillBtn(completedTypeFilter === id)}>{label}</button>
               ))}
@@ -2298,44 +2320,44 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           </div>
 
           {visibleRec.length === 0 && visibleAdhoc.length === 0 ? (
-            <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>No completed tasks in this period.</div>
+            <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No completed tasks in this period.</div>
           ) : (
             <div>
               {showRec && (
-                <div style={{ marginBottom: 20 }}>
-                  <SectionHeader label="Recurrent Tasks" count={visibleRec.length} collapsed={completedRecCollapsed} onToggle={() => setCompletedRecCollapsed(p => !p)} />
+                <div style={{ marginBottom: 28 }}>
+                  <SectionDivider label="Recurrent" count={visibleRec.length} collapsed={completedRecCollapsed} onToggle={() => setCompletedRecCollapsed(p => !p)} />
                   {!completedRecCollapsed && (
-                    <div style={{ border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)', padding: '10px 10px 4px' }}>
-                      {visibleRec.length === 0
-                        ? <div style={{ padding: '12px 4px', fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>None in this period.</div>
-                        : visibleRec.map(g => (
-                          <div key={`${g.groupName}__${g.dueDate}`} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#EAF7F0', border: '1px solid #A9DFBF', borderRadius: 'var(--radius-md)', padding: '11px 14px', marginBottom: 6 }}>
-                            <button onClick={() => uncheckGroup(g)} title="Mark as incomplete"
-                              style={{ width: 26, height: 26, borderRadius: '50%', border: '2px solid #27AE60', background: '#27AE60', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
-                              <CheckCircle size={13} />
-                            </button>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', textDecoration: 'line-through' }}>{g.groupName}</div>
-                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Due {fmtDate(g.dueDate)} · {g.tasks.length} task{g.tasks.length !== 1 ? 's' : ''}</div>
-                            </div>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#27AE60', background: '#D5F5E3', padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap' }}>✓ Completed</span>
-                          </div>
-                        ))
-                      }
+                    <div>
+                      {visibleRec.map(g => historyRow({
+                        key: `${g.groupName}__${g.dueDate}`,
+                        onUncheck: () => uncheckGroup(g),
+                        title: g.groupName,
+                        sub: `Due ${fmtDate(g.dueDate)} · ${g.tasks.length} task${g.tasks.length !== 1 ? 's' : ''}`,
+                      }))}
                     </div>
                   )}
                 </div>
               )}
 
               {showAdhoc && (
-                <div style={{ marginBottom: 20 }}>
-                  <SectionHeader label="Ad hoc Tasks" count={visibleAdhoc.length} collapsed={completedAdhocCollapsed} onToggle={() => setCompletedAdhocCollapsed(p => !p)} />
+                <div style={{ marginBottom: 28 }}>
+                  <SectionDivider label="Ad hoc" count={visibleAdhoc.length} collapsed={completedAdhocCollapsed} onToggle={() => setCompletedAdhocCollapsed(p => !p)} />
                   {!completedAdhocCollapsed && (
-                    <div style={{ border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)', padding: '10px 10px 4px' }}>
-                      {visibleAdhoc.length === 0
-                        ? <div style={{ padding: '12px 4px', fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>None in this period.</div>
-                        : visibleAdhoc.map(t => renderOneOffTask(t))
-                      }
+                    <div>
+                      {visibleAdhoc.map(t => {
+                        const uncheck = async () => {
+                          await supabase.from('sporadic_tasks').update({ status: 'pending', response: null, submitted_at: null }).eq('id', t.id);
+                          setMyTaskOneOffs(prev => prev.map(x => x.id === t.id ? { ...x, status: 'pending', submitted_at: null } : x));
+                        };
+                        const cls = classifyOneOff(t);
+                        const late = cls === 'late';
+                        return historyRow({
+                          key: t.id,
+                          onUncheck: uncheck,
+                          title: t.title,
+                          sub: [t.due_date ? `Due ${fmtDate(t.due_date)}` : null, late ? 'completed late' : null, t.assigner?.full_name ? `from ${t.assigner.full_name}` : null].filter(Boolean).join(' · '),
+                        });
+                      })}
                     </div>
                   )}
                 </div>
@@ -2354,6 +2376,9 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       const periods = [
         { id: 'current', label: 'Currently' },
         { id: '30d',     label: 'Last 30 Days' },
+        { id: '3m',      label: 'Last 3 Months' },
+        { id: '6m',      label: 'Last 6 Months' },
+        { id: '12m',     label: 'Last 12 Months' },
         { id: 'all',     label: 'Since Joining' },
       ];
 
@@ -2442,7 +2467,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         <div style={{ display: 'flex', marginBottom: 24, borderBottom: '2px solid var(--border)' }}>
           {[
             { id: 'todo',        label: 'To Do Tasks' },
-            { id: 'completed',   label: 'Completed' },
+            { id: 'completed',   label: 'History' },
             { id: 'productivity', label: 'My Productivity' },
           ].map(({ id, label, badge }) => (
             <button key={id} onClick={() => setMyTaskSubTab(id)}
@@ -3683,7 +3708,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
     // Summary table: always current month + next 2 months
     const now = new Date();
-    const summaryMonths = [0, 1, 2, 3].map(i => {
+    const summaryMonths = [0, 1, 2].map(i => {
       const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
       return {
         year: d.getFullYear(),
@@ -3733,7 +3758,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
 
         {/* ── 3-Month Summary Table ── */}
-        <div>
+        <div style={{ padding: 20, background: 'var(--bg-primary)', borderRadius: 10, border: '1px solid var(--border)' }}>
           <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: 'var(--text-primary)' }}>
             3-Month Outlook
           </div>
@@ -3755,7 +3780,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                   <tr>
                     {summaryMonths.flatMap(m =>
                       activeFreqs.map(f => (
-                        <th key={`${m.key}_${f}`} style={{ ...thSt, textAlign: 'center', color: FREQ_COLORS[f]?.text || 'var(--text-muted)', background: FREQ_COLORS[f]?.bg || 'var(--bg-secondary)' }}>
+                        <th key={`${m.key}_${f}`} style={{ ...thSt, textAlign: 'center', color: '#7B3FA0', background: '#F5EEF8' }}>
                           {FREQ_LABEL[f]}
                         </th>
                       ))
@@ -3788,7 +3813,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         </div>
 
         {/* ── Monthly calendar grid ── */}
-        <div>
+        <div style={{ padding: 20, background: 'var(--bg-primary)', borderRadius: 10, border: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 16 }}>
             <button onClick={() => { if (calMonth === 1) { setCalMonth(12); setCalYear(y => y - 1); } else setCalMonth(m => m - 1); }}
               style={{ ...btn('ghost'), padding: '6px 12px' }}>←</button>
@@ -4138,7 +4163,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       const isOverdue = !isDone && task.due_date && task.due_date < todayStr;
       const isConfirmDelete = confirmDeleteOneOff === task.id;
       return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--bg-primary)', borderRadius: 8, border: `1px solid ${isOverdue ? '#fca5a5' : 'var(--border)'}`, opacity: isDone ? 0.55 : 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: isOverdue ? '#FEF2F2' : 'var(--bg-primary)', borderRadius: 8, border: `1px solid ${isOverdue ? '#fca5a5' : 'var(--border)'}`, opacity: isDone ? 0.55 : 1 }}>
           <input type="checkbox" checked={isDone} onChange={() => handleOneOffToggleDone(task)}
             style={{ width: 15, height: 15, flexShrink: 0, cursor: 'pointer', accentColor: 'var(--purple-primary)' }} />
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -4179,7 +4204,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       <div>
 
         {/* ── CREATE FORM ── */}
-        <div style={{ marginBottom: 24, padding: 20, background: 'var(--bg-secondary)', borderRadius: 10, border: '1px solid var(--border)' }}>
+        <div style={{ marginBottom: 24, padding: 20, background: 'var(--bg-primary)', borderRadius: 10, border: '1px solid var(--border)' }}>
           <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Create Ad hoc Task</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div style={{ gridColumn: '1 / -1' }}>
@@ -4234,57 +4259,60 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           </button>
         </div>
 
-        {/* ── TASK LIST (person subtabs + search) ── */}
-        {oneOffLoading ? (
-          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading…</div>
-        ) : oneOffTasks.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 14 }}>No ad hoc tasks yet.</div>
-        ) : (
-          <div>
-            {/* Search */}
-            <div style={{ marginBottom: 14 }}>
-              <input value={oneOffSearch} onChange={e => setOneOffSearch(e.target.value)}
-                placeholder="Search tasks across all users…"
-                style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
-            </div>
-
-            {/* Person subtabs */}
-            <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border)', marginBottom: 16, flexWrap: 'wrap' }}>
-              {[{ id: 'all', label: 'All', count: oneOffTasks.length }, ...peopleWithTasks.map(p => ({ id: p.id, label: fmtName(p.full_name), count: oneOffTasks.filter(t => t.assigned_to === p.id).length }))].map(tab => (
-                <button key={tab.id} onClick={() => setOneOffPersonTab(tab.id)} style={{ padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: oneOffPersonTab === tab.id ? 'var(--purple-primary)' : 'var(--text-muted)', borderBottom: `2px solid ${oneOffPersonTab === tab.id ? 'var(--purple-primary)' : 'transparent'}`, marginBottom: -2, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {tab.label}
-                  <span style={{ fontSize: 11, background: oneOffPersonTab === tab.id ? 'var(--purple-faint)' : 'var(--bg-secondary)', color: oneOffPersonTab === tab.id ? 'var(--purple-primary)' : 'var(--text-muted)', borderRadius: 10, padding: '1px 6px', fontWeight: 700 }}>{tab.count}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Task rows */}
-            {pendingForTab.length === 0 && doneForTab.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: 13 }}>
-                {searchQ ? 'No tasks match your search.' : 'No tasks for this person.'}
+        {/* ── TASK LIST CARD ── */}
+        <div style={{ marginTop: 20, padding: 20, background: 'var(--bg-primary)', borderRadius: 10, border: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Existing Tasks</div>
+          {oneOffLoading ? (
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading…</div>
+          ) : oneOffTasks.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: 14 }}>No ad hoc tasks yet.</div>
+          ) : (
+            <div>
+              {/* Search */}
+              <div style={{ marginBottom: 14 }}>
+                <input value={oneOffSearch} onChange={e => setOneOffSearch(e.target.value)}
+                  placeholder="Search tasks across all users…"
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {pendingForTab.length > 0 && (
-                  <>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 }}>
-                      Pending · {pendingForTab.length}
-                    </div>
-                    {pendingForTab.sort((a, b) => (a.due_date || '').localeCompare(b.due_date || '')).map(t => <TaskRow key={t.id} task={t} />)}
-                  </>
-                )}
-                {doneForTab.length > 0 && (
-                  <>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '12px 0 4px' }}>
-                      Completed · {doneForTab.length}
-                    </div>
-                    {doneForTab.sort((a, b) => (b.due_date || '').localeCompare(a.due_date || '')).map(t => <TaskRow key={t.id} task={t} />)}
-                  </>
-                )}
+
+              {/* Person subtabs */}
+              <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border)', marginBottom: 16, flexWrap: 'wrap' }}>
+                {[{ id: 'all', label: 'All', count: oneOffTasks.length }, ...peopleWithTasks.map(p => ({ id: p.id, label: fmtName(p.full_name), count: oneOffTasks.filter(t => t.assigned_to === p.id).length }))].map(tab => (
+                  <button key={tab.id} onClick={() => setOneOffPersonTab(tab.id)} style={{ padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: oneOffPersonTab === tab.id ? 'var(--purple-primary)' : 'var(--text-muted)', borderBottom: `2px solid ${oneOffPersonTab === tab.id ? 'var(--purple-primary)' : 'transparent'}`, marginBottom: -2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {tab.label}
+                    <span style={{ fontSize: 11, background: oneOffPersonTab === tab.id ? 'var(--purple-faint)' : 'var(--bg-secondary)', color: oneOffPersonTab === tab.id ? 'var(--purple-primary)' : 'var(--text-muted)', borderRadius: 10, padding: '1px 6px', fontWeight: 700 }}>{tab.count}</span>
+                  </button>
+                ))}
               </div>
-            )}
-          </div>
-        )}
+
+              {/* Task rows */}
+              {pendingForTab.length === 0 && doneForTab.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: 13 }}>
+                  {searchQ ? 'No tasks match your search.' : 'No tasks for this person.'}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {pendingForTab.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 }}>
+                        Pending · {pendingForTab.length}
+                      </div>
+                      {pendingForTab.sort((a, b) => (a.due_date || '').localeCompare(b.due_date || '')).map(t => <TaskRow key={t.id} task={t} />)}
+                    </>
+                  )}
+                  {doneForTab.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '12px 0 4px' }}>
+                        Completed · {doneForTab.length}
+                      </div>
+                      {doneForTab.sort((a, b) => (b.due_date || '').localeCompare(a.due_date || '')).map(t => <TaskRow key={t.id} task={t} />)}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -4467,7 +4495,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       )}
 
       {canManage && tab === 'calendar' && (
-        <div style={{ ...card, overflowX: 'hidden' }}>
+        <div style={{ overflowX: 'hidden' }}>
           {renderCalendar()}
         </div>
       )}
@@ -4497,7 +4525,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       )}
 
       {canManage && tab === 'oneoff' && (
-        <div style={card}>
+        <div>
           {renderOneOffTab()}
         </div>
       )}

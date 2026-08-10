@@ -7,13 +7,13 @@ import {
 const CATEGORIES = ['All', 'R', 'Python', 'Shell', 'Bioinformatics', 'HPC', 'Software', 'General'];
 
 const CAT_COLORS = {
-  R:              { bg: '#EBF5FB', text: '#2471A3', border: '#AED6F1' },
-  Python:         { bg: '#EAF7F0', text: '#1E8449', border: '#A9DFBF' },
-  Shell:          { bg: '#FEF9E7', text: '#B7770D', border: '#FAD7A0' },
+  R:              { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
+  Python:         { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
+  Shell:          { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
   Bioinformatics: { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
-  HPC:            { bg: '#FDEDEC', text: '#C0392B', border: '#F1948A' },
-  Software:       { bg: '#F2F3F4', text: '#5D6D7E', border: '#CCD1D1' },
-  General:        { bg: '#FDEBD0', text: '#C0392B', border: '#F0B27A' },
+  HPC:            { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
+  Software:       { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
+  General:        { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
 };
 
 const LANG_LABELS = {

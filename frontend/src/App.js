@@ -1,21 +1,28 @@
 import './styles/global.css';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { supabase, isRecoveryUrl, recoveryTokenHash } from './lib/supabase';
 import Navigation from './components/Navigation';
-import VacationLogs from './pages/VacationLogs';
-import LabMeetings from './pages/LabMeetings';
-import Finance from './pages/Finance';
-import SampleInventory from './pages/SampleInventory';
-import LabContacts from './pages/LabContacts';
-import Compliance from './pages/Compliance';
-import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import SetNewPassword from './pages/SetNewPassword';
 import Onboarding from './pages/Onboarding';
-import Tasks2 from './pages/Tasks2';
-import LabPoliciesSOPs from './pages/LabPoliciesSOPs';
-import ComputationalTips from './pages/ComputationalTips';
-import LegalDocuments from './pages/LegalDocuments';
+
+const Dashboard         = lazy(() => import('./pages/Dashboard'));
+const Tasks2            = lazy(() => import('./pages/Tasks2'));
+const VacationLogs      = lazy(() => import('./pages/VacationLogs'));
+const LabMeetings       = lazy(() => import('./pages/LabMeetings'));
+const Finance           = lazy(() => import('./pages/Finance'));
+const SampleInventory   = lazy(() => import('./pages/SampleInventory'));
+const LabContacts       = lazy(() => import('./pages/LabContacts'));
+const Compliance        = lazy(() => import('./pages/Compliance'));
+const LabPoliciesSOPs   = lazy(() => import('./pages/LabPoliciesSOPs'));
+const ComputationalTips = lazy(() => import('./pages/ComputationalTips'));
+const LegalDocuments    = lazy(() => import('./pages/LegalDocuments'));
+
+const PageLoader = () => (
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--text-muted)' }}>
+    Loading…
+  </div>
+);
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
@@ -184,6 +191,7 @@ export default function App() {
         permissions={permissions}
       />
       <main style={{ marginLeft: '240px', flex: 1, padding: '32px', maxWidth: 'calc(100vw - 240px)' }}>
+        <Suspense fallback={<PageLoader />}>
         {currentPage === 'dashboard' && <Dashboard profile={profile} userRole={userRole} userId={user.id} setCurrentPage={setCurrentPage} />}
         {currentPage === 'tasks2' && <Tasks2 userRole={userRole} userId={user.id} profile={profile} />}
         {currentPage === 'vacation' && <VacationLogs userRole={userRole} userId={user.id} profile={profile} />}
@@ -205,6 +213,7 @@ export default function App() {
             This system is coming soon.
           </div>
         )}
+        </Suspense>
       </main>
     </div>
   );

@@ -54,68 +54,32 @@ router.delete('/auth/members/:id', async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
 
-    // 1. Reassign future scheduled meetings using the same workload-ratio logic as vacation reassignment
-    const { data: futureMeetings } = await supabaseAdmin
-      .from('lab_meetings')
-      .select('*')
-      .eq('presenter_id', id)
-      .eq('status', 'scheduled')
-      .gte('meeting_date', today);
+    // 1. Reassign future scheduled meetings to the next scheduled presenter in the sequence
+    {
+      const { data: allFutureMeetings } = await supabaseAdmin
+        .from('lab_meetings')
+        .select('id, meeting_date, presenter_id')
+        .eq('status', 'scheduled')
+        .gte('meeting_date', today)
+        .order('meeting_date');
 
-    if (futureMeetings && futureMeetings.length > 0) {
-      const { data: allMembers } = await supabaseAdmin
-        .from('profiles')
-        .select('*')
-        .neq('id', id)
-        .in('role', ['admin', 'pm', 'member']);
+      const allMeetings = allFutureMeetings || [];
 
-      const { data: approvedVacations } = await supabaseAdmin
-        .from('vacation_requests')
-        .select('requested_by, start_date, end_date')
-        .eq('status', 'approved');
+      for (const meeting of allMeetings) {
+        if (meeting.presenter_id !== id) continue;
 
-      const now = new Date();
+        // Find the presenter of the next scheduled meeting that belongs to someone else
+        const next = allMeetings.find(m =>
+          m.meeting_date > meeting.meeting_date && m.presenter_id && m.presenter_id !== id
+        );
 
-      // Pre-compute ratios once and mutate in-place so multiple missed meetings
-      // distribute across the team rather than all landing on the same person.
-      const membersWithLiveRatio = (allMembers || []).map(m => {
-        const joined = new Date(m.joined_at || m.created_at);
-        const days = Math.max(1, Math.ceil((now - joined) / (1000 * 60 * 60 * 24)));
-        return { ...m, days, ratio: (m.task_counter || 0) / days };
-      });
-
-      for (const meeting of futureMeetings) {
-        // Filter out members on vacation on the meeting date
-        const available = membersWithLiveRatio.filter(m => {
-          return !(approvedVacations || []).some(v =>
-            v.requested_by === m.id &&
-            v.start_date <= meeting.meeting_date &&
-            v.end_date >= meeting.meeting_date
-          );
-        });
-
-        if (available.length === 0) {
-          // No one available — leave unassigned so admin can handle manually
-          await supabaseAdmin.from('lab_meetings')
-            .update({ presenter_id: null, updated_at: new Date().toISOString() })
-            .eq('id', meeting.id);
-          continue;
-        }
-
-        // Sort by current live ratio, pick the least burdened
-        available.sort((a, b) => a.ratio - b.ratio);
-        const newPresenter = available[0];
-
-        // Update ratio in the master array so the next iteration distributes fairly
-        newPresenter.task_counter = (newPresenter.task_counter || 0) + 1;
-        newPresenter.ratio = newPresenter.task_counter / newPresenter.days;
-
+        const newPresenterId = next?.presenter_id || null;
         const token = require('crypto').randomBytes(16).toString('hex');
 
         await supabaseAdmin.from('lab_meetings').update({
-          presenter_id: newPresenter.id,
-          confirmation_status: 'pending',
-          confirmation_token: token,
+          presenter_id: newPresenterId,
+          confirmation_status: newPresenterId ? 'pending' : null,
+          confirmation_token: newPresenterId ? token : null,
           reminder_count: 0,
           last_reminder_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -129,13 +93,31 @@ router.delete('/auth/members/:id', async (req, res) => {
     // 3. Unassign sporadic tasks
     await supabaseAdmin.from('sporadic_tasks').update({ assigned_to: null }).eq('assigned_to', id);
 
-    // 4. Delete their lab_contacts entry
+    // 4. Unassign task occurrences
+    await supabaseAdmin.from('task_occurrences').update({ assigned_to: null, status: 'unassigned' }).eq('assigned_to', id).gte('due_date', today).neq('status', 'done');
+
+    // 5. Delete vacation requests (FK blocks auth user deletion if left)
+    await supabaseAdmin.from('vacation_requests').delete().eq('requested_by', id);
+
+    // 6. Null out task reassignment records referencing this user
+    await supabaseAdmin.from('task_reassignments').update({ original_assignee_id: null }).eq('original_assignee_id', id);
+
+    // 7. Null out compliance studies assigned to this user
+    await supabaseAdmin.from('compliance_studies').update({ assigned_to: null }).eq('assigned_to', id);
+
+    // 9. Delete their lab_contacts entry — match by both email AND name to avoid wiping other contacts
     const { data: prof } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', id).maybeSingle();
-    if (prof?.email) {
-      await supabaseAdmin.from('lab_contacts').delete().ilike('email', prof.email);
+    if (prof?.email && prof?.full_name) {
+      const nameParts = prof.full_name.trim().split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      await supabaseAdmin.from('lab_contacts').delete()
+        .ilike('email', prof.email)
+        .ilike('first_name', firstName)
+        .ilike('last_name', lastName);
     }
 
-    // 5. Delete auth user (cascades to profiles row via FK)
+    // 10. Delete auth user (cascades to profiles row via FK)
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(id);
     if (deleteError) throw deleteError;
 

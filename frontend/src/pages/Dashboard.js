@@ -10,7 +10,7 @@ function formatDate(d) {
 }
 
 
-const PROD_PERIODS = [{ id: '30d', label: 'Last 30d' }, { id: 'all', label: 'Since Joining' }];
+const PROD_PERIODS = [{ id: '30d', label: 'Last 30d' }, { id: '3m', label: 'Last 3mo' }, { id: '6m', label: 'Last 6mo' }, { id: '12m', label: 'Last 12mo' }, { id: 'all', label: 'Since Joining' }];
 
 function PeriodPicker({ value, onChange }) {
   return (
@@ -258,6 +258,9 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
   function prodDateRange(period) {
     const today = new Date().toISOString().split('T')[0];
     if (period === '30d') return { from: new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0], to: today };
+    if (period === '3m') return { from: new Date(Date.now() - 90 * 86400000).toISOString().split('T')[0], to: today };
+    if (period === '6m') return { from: new Date(Date.now() - 182 * 86400000).toISOString().split('T')[0], to: today };
+    if (period === '12m') return { from: new Date(Date.now() - 365 * 86400000).toISOString().split('T')[0], to: today };
     if (period === 'all') return { from: '2020-01-01', to: '2099-12-31' };
     return { from: '2020-01-01', to: new Date(Date.now() + 60 * 86400000).toISOString().split('T')[0] };
   }

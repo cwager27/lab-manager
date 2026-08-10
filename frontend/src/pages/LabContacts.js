@@ -692,6 +692,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   const [saving, setSaving] = useState(false);
   const [memberError, setMemberError] = useState('');
   const [confirmDeleteMember, setConfirmDeleteMember] = useState(null);
+  const [confirmDeleteContact, setConfirmDeleteContact] = useState(null);
   const [passwordTarget, setPasswordTarget] = useState(null);
   const [newPassword, setNewPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -757,10 +758,13 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   }
 
   async function handleDeleteContact(id) {
-    if (window.confirm('Remove this contact?')) {
-      await supabase.from('lab_contacts').delete().eq('id', id);
-      fetchData();
-    }
+    setConfirmDeleteContact(id);
+  }
+
+  async function doDeleteContact() {
+    await supabase.from('lab_contacts').delete().eq('id', confirmDeleteContact);
+    setConfirmDeleteContact(null);
+    fetchData();
   }
 
   async function handleAddMember(e) {
@@ -1330,6 +1334,22 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
               <button onClick={() => handleDeleteMember(confirmDeleteMember)} disabled={saving} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--danger)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>
                 {saving ? 'Removing...' : 'Remove Member'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Delete Contact Modal */}
+      {confirmDeleteContact && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '420px', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px', color: 'var(--danger)' }}>Remove Contact</h2>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '24px' }}>
+              Are you sure you want to remove this contact?
+            </p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setConfirmDeleteContact(null)} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={doDeleteContact} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--danger)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Remove Contact</button>
             </div>
           </div>
         </div>

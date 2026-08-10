@@ -35,14 +35,14 @@ const STATUS_STYLES = {
 };
 
 const LEAVE_COLORS = {
-  'Vacation':                    { bg: '#FEE2E2', text: '#B91C1C' },
-  'Sick Leave':                  { bg: '#FFEDD5', text: '#C2410C' },
-  'Parental Leave':              { bg: '#FEF9C3', text: '#92400E' },
-  'Bereavement':                 { bg: '#DCFCE7', text: '#166534' },
-  'Medical Leave':               { bg: '#CFFAFE', text: '#155E75' },
-  'Jury Duty/Voting':            { bg: '#DBEAFE', text: '#1D4ED8' },
-  'Volunteer/Community Service': { bg: '#EDE9FE', text: '#6D28D9' },
-  'Work from Home':              { bg: '#FCE7F3', text: '#BE185D' },
+  'Vacation':                    { bg: 'transparent', text: 'var(--text-secondary)' },
+  'Sick Leave':                  { bg: 'transparent', text: 'var(--text-secondary)' },
+  'Parental Leave':              { bg: 'transparent', text: 'var(--text-secondary)' },
+  'Bereavement':                 { bg: 'transparent', text: 'var(--text-secondary)' },
+  'Medical Leave':               { bg: 'transparent', text: 'var(--text-secondary)' },
+  'Jury Duty/Voting':            { bg: 'transparent', text: 'var(--text-secondary)' },
+  'Volunteer/Community Service': { bg: 'transparent', text: 'var(--text-secondary)' },
+  'Work from Home':              { bg: 'transparent', text: 'var(--text-secondary)' },
 };
 
 const EMPTY_FORM = {

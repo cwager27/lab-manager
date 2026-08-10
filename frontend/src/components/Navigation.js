@@ -17,13 +17,13 @@ export default function Navigation({ currentPage, setCurrentPage, userRole, prof
     { id: 'tasks2', label: 'Tasks', icon: ClipboardList, always: true },
     { id: 'vacation', label: 'Time Off', icon: Palmtree, always: true },
     { id: 'meetings', label: 'Team Meetings', icon: Calendar, always: true },
-    { id: 'finance', label: 'Finance', icon: DollarSign, always: true },
     { id: 'inventory', label: 'Sample Inventory', icon: FlaskConical, always: true },
-    { id: 'policies', label: 'Lab Policies & SOPs', icon: BookOpen, always: true },
     { id: 'compliance', label: 'Compliance', icon: ShieldCheck, always: true },
-    { id: 'contacts', label: 'Contacts', icon: Users, contactsOnly: true },
-    { id: 'tips', label: 'Computational Tips', icon: Terminal, always: true },
+    { id: 'policies', label: 'Lab Policies & SOPs', icon: BookOpen, always: true },
+    { id: 'finance', label: 'Finance', icon: DollarSign, always: true },
     { id: 'legal', label: 'Legal Documents', icon: Scale, managerOnly: true },
+    { id: 'tips', label: 'Computational Tips', icon: Terminal, always: true },
+    { id: 'contacts', label: 'Contacts', icon: Users, contactsOnly: true },
   ].filter(item => item.always || (item.adminOnly && userRole === 'admin') || (item.managerOnly && canManage) || (item.contactsOnly && (permissions?.can_view_contacts || canManage)));
 
   return (

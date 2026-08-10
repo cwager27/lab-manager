@@ -73,10 +73,18 @@ function grantMeta(grant) {
 
 
 
+function getCurrentFY() {
+  const now = new Date();
+  const m = now.getMonth(); // 0-indexed; September = 8
+  const y = now.getFullYear();
+  return `fy${String(m >= 8 ? y + 1 : y).slice(2)}`;
+}
+
 function getFiscalYear(dateStr) {
-  if (!dateStr) return 'fy26';
+  if (!dateStr) return getCurrentFY();
   const d = new Date(dateStr + 'T00:00:00Z');
-  const fyYear = d.getUTCMonth() >= 6 ? d.getUTCFullYear() + 1 : d.getUTCFullYear();
+  // FY starts Sept 1: months 0-7 (Jan-Aug) stay in same calendar year's FY
+  const fyYear = d.getUTCMonth() >= 8 ? d.getUTCFullYear() + 1 : d.getUTCFullYear();
   return `fy${String(fyYear).slice(2)}`;
 }
 
@@ -210,7 +218,7 @@ export default function Finance({ userRole }) {
   const [editingOrder, setEditingOrder] = useState(null);
   const [editOrderForm, setEditOrderForm] = useState({});
   const [confirmDeleteOrder, setConfirmDeleteOrder] = useState(false);
-  const [ordersYearTab, setOrdersYearTab] = useState('fy27');
+  const [ordersYearTab, setOrdersYearTab] = useState(getCurrentFY);
   const [importError, setImportError] = useState(null);
   const [showImportFYModal, setShowImportFYModal] = useState(false);
   const [importFYInput, setImportFYInput] = useState('');
@@ -241,7 +249,7 @@ export default function Finance({ userRole }) {
 
   const { widths: grantsWidths, onColMouseDown: grantsResize } = useResizableColumns(8);
   const { widths: ordersWidths, onColMouseDown: ordersResize } = useResizableColumns(14);
-  const { widths: reagentsWidths, onColMouseDown: reagentsResize } = useResizableColumns(8 + allFYs.length + 1);
+  const { widths: reagentsWidths, onColMouseDown: reagentsResize } = useResizableColumns(10);
   const { widths: nanoseqWidths, onColMouseDown: nanoseqResize } = useResizableColumns(8 + allFYs.length + 1);
 
   const canManage = userRole === 'admin' || userRole === 'pm';
@@ -402,6 +410,7 @@ export default function Finance({ userRole }) {
     catalogRows.forEach(r => { m[r.catalog_number] = r; });
     return m;
   }, [catalogRows]);
+
 
   const sortedCatalogRows = useMemo(() => {
     const rows = [...catalogRows];
@@ -664,10 +673,21 @@ export default function Finance({ userRole }) {
     setEditingReagent(null); setConfirmDeleteReagent(false);
   }
 
-  const REAGENT_DRAFT_HEADERS = ['Category', 'Item (name)', 'Vendor', 'Cat number', 'Unit description', 'Unit price', 'Units (n)', 'Unused', "FY'26", "FY'25", "FY'24"];
+  const REAGENT_DRAFT_HEADERS = ['Category', 'Item (name)', 'Vendor', 'Cat number', 'Units', "FY'24", "FY'25", "FY'26", 'In Lab'];
 
   function handleExportReagents() {
-    const rows = sortedReagents.map(r => ({ 'Category': r.category||'', 'Item (name)': r.name||'', 'Vendor': r.vendor||'', 'Cat number': r.catalog_number||'', 'Unit description': r.unit_description||'', 'Unit price': r.unit_price??'', 'Units (n)': r.units??'', 'Unused': r.quantity_in_lab??'', "FY'26": r.fy26_purchases??'', "FY'25": r.fy25_purchases??'', "FY'24": r.fy24_purchases??'' }));
+    const rows = sortedReagents.map(r => ({
+      'Category': r.category || '',
+      'Item (name)': r.name || '',
+      'Vendor': r.vendor || '',
+      'Cat number': r.catalog_number || '',
+      'Units': r.unit_description || '',
+      'Since Lab Opened': ((r.fy24_purchases || 0) + (r.fy25_purchases || 0) + (r.fy26_purchases || 0)) || '',
+      'In Lab': r.quantity_in_lab ?? '',
+      "FY'24": r.fy24_purchases ?? '',
+      "FY'25": r.fy25_purchases ?? '',
+      "FY'26": r.fy26_purchases ?? '',
+    }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Reagents');
@@ -716,16 +736,13 @@ export default function Finance({ userRole }) {
 
   const sortedReagents = useMemo(() => {
     const q = reagentSearch.toLowerCase();
-    const filtered = q ? reagents.filter(r => ['name','vendor','catalog_number','category'].some(k => r[k] != null && String(r[k]).toLowerCase().includes(q))) : reagents;
+    const filtered = q ? reagents.filter(r => ['name','vendor','catalog_number','category','unit_description'].some(k => r[k] != null && String(r[k]).toLowerCase().includes(q))) : reagents;
     if (!reagentsSortCol) return filtered;
     return [...filtered].sort((a, b) => {
       let av, bv;
-      if (allFYs.includes(reagentsSortCol)) {
-        av = catalogByNum[a.catalog_number]?.fyCounts?.[reagentsSortCol] || 0;
-        bv = catalogByNum[b.catalog_number]?.fyCounts?.[reagentsSortCol] || 0;
-      } else if (reagentsSortCol === 'fy_total') {
-        av = Object.values(catalogByNum[a.catalog_number]?.fyCounts || {}).reduce((s,n) => s+n, 0);
-        bv = Object.values(catalogByNum[b.catalog_number]?.fyCounts || {}).reduce((s,n) => s+n, 0);
+      if (reagentsSortCol === 'since_opened') {
+        av = (a.fy24_purchases || 0) + (a.fy25_purchases || 0) + (a.fy26_purchases || 0);
+        bv = (b.fy24_purchases || 0) + (b.fy25_purchases || 0) + (b.fy26_purchases || 0);
       } else {
         av = a[reagentsSortCol]; bv = b[reagentsSortCol];
       }
@@ -734,7 +751,7 @@ export default function Finance({ userRole }) {
       const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv));
       return reagentsSortDir === 'asc' ? cmp : -cmp;
     });
-  }, [reagents, reagentSearch, reagentsSortCol, reagentsSortDir, catalogByNum, allFYs]);
+  }, [reagents, reagentSearch, reagentsSortCol, reagentsSortDir]);
 
   const activeGrantsTotals = selectedGrantsTotals.length === 0 ? GRANT_NAMES : selectedGrantsTotals;
   const filteredGrantOptionsTotals = GRANT_NAMES.filter(g => g.toLowerCase().includes(grantSearchTotals.toLowerCase()));
@@ -844,19 +861,21 @@ export default function Finance({ userRole }) {
   }
 
   function handleExportCatalog() {
+    const date = new Date().toISOString().split('T')[0];
     const wb = XLSX.utils.book_new();
-    const makeRows = rows => rows.map(r => {
-      const row = { 'Item': r.item, 'Vendor': r.vendor, 'Category': r.category, 'Cat #': r.catalog_number, 'Unit description': r.unit_description || '', 'Unit price': r.unit_price ?? '', 'Units (n)': r.units ?? '', 'Standardized Reagent': r.is_standardized ? 'Yes' : 'No' };
-      allFYs.forEach(fy => { row[fyLabel(fy)] = r.fyCounts[fy] || 0; });
-      row['Total'] = r.total;
-      return row;
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(makeRows(sortedCatalogRows)), 'All');
+    const headers = ['Item', 'Vendor', 'Category', 'Cat #', 'Unit description', 'Unit price', 'Units (n)', 'Standardized Reagent', ...allFYs.map(fyLabel), 'Total'];
+    const makeAoa = rows => [
+      ['Export date:', date],
+      [],
+      headers,
+      ...rows.map(r => [r.item, r.vendor, r.category, r.catalog_number, r.unit_description || '', r.unit_price ?? '', r.units ?? '', r.is_standardized ? 'Yes' : 'No', ...allFYs.map(fy => r.fyCounts[fy] || 0), r.total]),
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(makeAoa(sortedCatalogRows)), 'All');
     allFYs.forEach(fy => {
       const filtered = sortedCatalogRows.filter(r => r.fyCounts[fy]);
-      if (filtered.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(makeRows(filtered)), fyLabel(fy));
+      if (filtered.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(makeAoa(filtered)), fyLabel(fy));
     });
-    XLSX.writeFile(wb, 'catalog_orders.xlsx');
+    XLSX.writeFile(wb, `orders_by_catalog_${date}.xlsx`);
   }
 
   function handleExportVendorChart() {
@@ -872,13 +891,18 @@ export default function Finance({ userRole }) {
     exportTableXLSX(rows, 'vendor_spending.xlsx');
   }
 
+  const orderFYTabs = useMemo(() => {
+    const cur = getCurrentFY();
+    const fySet = new Set(orders.map(o => getFiscalYear(o.order_date)));
+    fySet.add(cur);
+    return [...fySet]
+      .filter(fy => fy <= cur)
+      .sort((a, b) => b.localeCompare(a))
+      .map(fy => ({ id: fy, label: fy.replace('fy', 'FY') }));
+  }, [orders]);
+
   const filteredOrders = useMemo(() => orders.filter(o => {
-    if (ordersYearTab === 'misc') {
-      if (o.order_date) return false;
-    } else {
-      if (!o.order_date) return false;
-      if (getFiscalYear(o.order_date) !== ordersYearTab) return false;
-    }
+    if (getFiscalYear(o.order_date) !== ordersYearTab) return false;
     if (searchQuery === '') return true;
     const q = searchQuery.toLowerCase();
     return o.item?.toLowerCase().includes(q) || o.vendor?.toLowerCase().includes(q) || o.requisition_id?.toLowerCase().includes(q);
@@ -927,7 +951,8 @@ export default function Finance({ userRole }) {
     XLSX.utils.book_append_sheet(wb, ws, 'Orders');
     XLSX.writeFile(wb, 'orders_import_template.xlsx');
   }
-  const fy26Spend = orders.filter(o => o.order_date && getFiscalYear(o.order_date) === 'fy26').reduce((sum, o) => sum + (o.total_price || 0), 0);
+  const curFY = getCurrentFY();
+  const curFYSpend = orders.filter(o => o.order_date && getFiscalYear(o.order_date) === curFY).reduce((sum, o) => sum + (o.total_price || 0), 0);
   const alertGrants = grants.filter(g => { const pct = g.total_amount && g.remaining_balance ? (g.remaining_balance / g.total_amount) * 100 : null; const daysLeft = g.end_date ? Math.ceil((new Date(g.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null; return (pct !== null && pct < 25) || (daysLeft !== null && daysLeft <= 90); });
 
 
@@ -946,14 +971,17 @@ export default function Finance({ userRole }) {
 
       <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
         {[
-          { label: 'Active Grants', value: grants.length, color: 'var(--purple-primary)', bg: 'var(--purple-faint)' },
-          { label: 'Total Orders', value: orders.length, color: '#2980B9', bg: '#EBF5FB' },
-          { label: 'FY26 Spend', value: `$${Math.round(fy26Spend).toLocaleString()}`, color: '#27AE60', bg: '#EAF7F0' },
-          { label: 'Grant Alerts', value: alertGrants.length, color: alertGrants.length > 0 ? '#F39C12' : '#27AE60', bg: alertGrants.length > 0 ? '#FEF9E7' : '#EAF7F0' },
+          { label: 'Total Orders',                value: orders.length,                                           tab: 'orders'   },
+          { label: `${curFY.toUpperCase()} Spend`, value: `$${Math.round(curFYSpend).toLocaleString()}`,        tab: 'charts'   },
+          { label: 'Vendors',                     value: vendors.length,                                         tab: 'vendors'  },
+          { label: 'Active Grants',               value: grants.length,                                          tab: 'grants'   },
+          { label: 'Grant Alerts',                value: alertGrants.length,                                     tab: 'grants'   },
+          { label: 'Std. Reagents',               value: reagents.length + nanoseq.length,                      tab: 'reagents' },
         ].map(stat => (
-          <div key={stat.label} style={{ flex: 1, background: stat.bg, borderRadius: 'var(--radius-md)', padding: '16px', textAlign: 'center' }}>
-            <div style={{ fontSize: '22px', fontWeight: 700, color: stat.color }}>{stat.value}</div>
-            <div style={{ fontSize: '12px', color: stat.color, marginTop: '2px' }}>{stat.label}</div>
+          <div key={stat.label} onClick={() => setActiveTab(stat.tab)}
+            style={{ flex: 1, background: 'var(--purple-faint)', borderRadius: 'var(--radius-md)', padding: '16px', textAlign: 'center', cursor: 'pointer' }}>
+            <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--purple-primary)' }}>{stat.value}</div>
+            <div style={{ fontSize: '12px', color: 'var(--purple-primary)', marginTop: '2px', opacity: 0.8 }}>{stat.label}</div>
           </div>
         ))}
       </div>
@@ -1175,7 +1203,7 @@ export default function Finance({ userRole }) {
                 </div>
               )}
               <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
-                {[{ id: 'fy27', label: 'FY27' }, { id: 'fy26', label: 'FY26' }, { id: 'fy25', label: 'FY25' }, { id: 'fy24', label: 'FY24' }, { id: 'fy23', label: 'FY23' }, { id: 'misc', label: 'Misc FY' }].map(({ id, label }) => (
+                {orderFYTabs.map(({ id, label }) => (
                   <button key={id} onClick={() => setOrdersYearTab(id)}
                     style={{ padding: '5px 14px', borderRadius: 'var(--radius-md)', border: '1px solid', fontSize: '12px', fontWeight: 600, cursor: 'pointer', borderColor: ordersYearTab === id ? 'var(--purple-primary)' : 'var(--border)', background: ordersYearTab === id ? 'var(--purple-primary)' : 'transparent', color: ordersYearTab === id ? 'white' : 'var(--text-muted)' }}>
                     {label}
@@ -1237,7 +1265,7 @@ export default function Finance({ userRole }) {
                           style={{ borderTop: '1px solid var(--border)', cursor: 'pointer', opacity: isDeleted ? 0.45 : 1 }}
                           onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
                           onMouseLeave={e => e.currentTarget.style.background = ''}>
-                          {cell(order.item, { color: 'var(--text-primary)' })}
+                          <td style={{ padding: '6px 6px', fontSize: '11px', color: 'var(--text-primary)', whiteSpace: 'normal', wordBreak: 'break-word' }}>{order.item}</td>
                           {cell(order.vendor)}
                           {cell(order.catalog_number, { mono: true, color: 'var(--text-muted)' })}
                           {cell(order.category)}
@@ -1277,8 +1305,8 @@ export default function Finance({ userRole }) {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  {['misc', 'nanoseq'].map(rt => (
-                    <button key={rt} onClick={() => { setReagentTab(rt); setReagentSearch(''); }} style={{ padding: '7px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: reagentTab === rt ? 'var(--purple-primary)' : 'var(--bg-primary)', color: reagentTab === rt ? 'white' : 'var(--text-secondary)', fontWeight: reagentTab === rt ? 600 : 400, fontSize: '12px' }}>{rt === 'misc' ? 'Misc' : 'Nanoseq'}</button>
+                  {[{ id: 'misc', label: 'Misc', count: reagents.length }, { id: 'nanoseq', label: 'Nanoseq', count: nanoseq.length }].map(rt => (
+                    <button key={rt.id} onClick={() => { setReagentTab(rt.id); setReagentSearch(''); }} style={{ padding: '7px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: reagentTab === rt.id ? 'var(--purple-primary)' : 'var(--bg-primary)', color: reagentTab === rt.id ? 'white' : 'var(--text-secondary)', fontWeight: reagentTab === rt.id ? 600 : 400, fontSize: '12px' }}>{rt.label} <span style={{ opacity: 0.75, fontWeight: 400 }}>({rt.count})</span></button>
                   ))}
                 </div>
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '7px 12px' }}>
@@ -1293,6 +1321,9 @@ export default function Finance({ userRole }) {
                     <button onClick={() => setReagentSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '16px', lineHeight: 1, padding: 0 }}>×</button>
                   )}
                 </div>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                  {reagentTab === 'misc' ? `${sortedReagents.length} reagents` : `${nanoseq.length} reagents`}
+                </span>
               </div>
 
               {importReagentError && (
@@ -1314,41 +1345,49 @@ export default function Finance({ userRole }) {
                     <colgroup>{reagentsWidths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
                     <thead>
                       <tr style={{ background: 'var(--bg-secondary)' }}>
-                        {[['category','Category'],['name','Item'],['vendor','Vendor'],['catalog_number','Cat number'],['unit_description','Unit description'],['unit_price','Unit price'],['units','Units (n)'],['quantity_in_lab','Unused']].map(([key, label], i) => (
-                          <th key={key} onClick={() => { if (reagentsSortCol === key) { setReagentsSortDir(d => d === 'asc' ? 'desc' : 'asc'); } else { setReagentsSortCol(key); setReagentsSortDir('asc'); } }} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: reagentsSortCol === key ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', position: 'relative' }}>
-                            {label}{reagentsSortCol === key ? (reagentsSortDir === 'asc' ? ' ↑' : ' ↓') : ''}<ColResizer colIdx={i} totalCols={8 + allFYs.length + 1} onColMouseDown={reagentsResize} />
+                        {[
+                          ['category', 'Category'],
+                          ['name', 'Item (name)'],
+                          ['vendor', 'Vendor'],
+                          ['catalog_number', 'Cat number'],
+                          ['unit_description', 'Units'],
+                          ['since_opened', 'Since Lab Opened'],
+                          ['quantity_in_lab', 'In Lab'],
+                          ['fy24_purchases', "FY'24"],
+                          ['fy25_purchases', "FY'25"],
+                          ['fy26_purchases', "FY'26"],
+                        ].map(([key, label], i) => (
+                          <th key={key} onClick={() => { if (reagentsSortCol === key) { setReagentsSortDir(d => d === 'asc' ? 'desc' : 'asc'); } else { setReagentsSortCol(key); setReagentsSortDir('asc'); } }}
+                            style={{ padding: '10px 12px', textAlign: i >= 5 ? 'center' : 'left', fontSize: '11px', color: reagentsSortCol === key ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', position: 'relative' }}>
+                            {label}{reagentsSortCol === key ? (reagentsSortDir === 'asc' ? ' ↑' : ' ↓') : ''}<ColResizer colIdx={i} totalCols={10} onColMouseDown={reagentsResize} />
                           </th>
                         ))}
-                        {allFYs.map((fy, fi) => (
-                          <th key={fy} onClick={() => { if (reagentsSortCol === fy) { setReagentsSortDir(d => d === 'asc' ? 'desc' : 'asc'); } else { setReagentsSortCol(fy); setReagentsSortDir('asc'); } }} style={{ padding: '10px 12px', textAlign: 'center', fontSize: '11px', color: reagentsSortCol === fy ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', position: 'relative' }}>
-                            {fyLabel(fy)}{reagentsSortCol === fy ? (reagentsSortDir === 'asc' ? ' ↑' : ' ↓') : ''}<ColResizer colIdx={8 + fi} totalCols={8 + allFYs.length + 1} onColMouseDown={reagentsResize} />
-                          </th>
-                        ))}
-                        <th onClick={() => { if (reagentsSortCol === 'fy_total') { setReagentsSortDir(d => d === 'asc' ? 'desc' : 'asc'); } else { setReagentsSortCol('fy_total'); setReagentsSortDir('asc'); } }} style={{ padding: '10px 12px', textAlign: 'center', fontSize: '11px', color: reagentsSortCol === 'fy_total' ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>
-                          Total{reagentsSortCol === 'fy_total' ? (reagentsSortDir === 'asc' ? ' ↑' : ' ↓') : ''}
-                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {sortedReagents.length === 0 && (
-                        <tr><td colSpan={8 + allFYs.length + 1} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>{reagentSearch ? `No reagents match "${reagentSearch}"` : 'No reagents yet.'}</td></tr>
+                        <tr><td colSpan={10} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>{reagentSearch ? `No reagents match "${reagentSearch}"` : 'No reagents yet.'}</td></tr>
                       )}
-                      {sortedReagents.map(r => (
-                        <tr key={r.id} onClick={() => canManage && openEditReagent(r)} style={{ borderTop: '1px solid var(--border)', cursor: canManage ? 'pointer' : 'default' }}
-                          onMouseEnter={e => { if (canManage) e.currentTarget.style.background = 'var(--bg-secondary)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = ''; }}>
-                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{r.category}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-primary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{r.vendor}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{r.catalog_number}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{r.unit_description ?? '—'}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{r.unit_price != null ? `$${Number(r.unit_price).toLocaleString()}` : '—'}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'center' }}>{r.units ?? '—'}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center' }}>{r.quantity_in_lab ?? '—'}</td>
-                          {allFYs.map(fy => { const cnt = catalogByNum[r.catalog_number]?.fyCounts?.[fy] || 0; return <td key={fy} style={{ padding: '10px 12px', fontSize: '12px', color: cnt ? 'var(--purple-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: cnt ? 600 : 400 }}>{cnt || '—'}</td>; })}
-                          {(() => { const total = Object.values(catalogByNum[r.catalog_number]?.fyCounts || {}).reduce((s,n) => s+n, 0); return <td style={{ padding: '10px 12px', fontSize: '12px', color: total ? 'var(--text-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: total ? 600 : 400 }}>{total || '—'}</td>; })()}
-                        </tr>
-                      ))}
+                      {sortedReagents.map(r => {
+                        const sinceOpened = (r.fy24_purchases || 0) + (r.fy25_purchases || 0) + (r.fy26_purchases || 0);
+                        const fyCell = (val) => <td style={{ padding: '10px 12px', fontSize: '12px', color: val ? 'var(--purple-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: val ? 600 : 400 }}>{val ?? '—'}</td>;
+                        return (
+                          <tr key={r.id} onClick={() => canManage && openEditReagent(r)} style={{ borderTop: '1px solid var(--border)', cursor: canManage ? 'pointer' : 'default' }}
+                            onMouseEnter={e => { if (canManage) e.currentTarget.style.background = 'var(--bg-secondary)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = ''; }}>
+                            <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{r.category || '—'}</td>
+                            <td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-primary)', whiteSpace: 'normal', wordBreak: 'break-word' }}>{r.name || '—'}</td>
+                            <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{r.vendor || '—'}</td>
+                            <td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{r.catalog_number || '—'}</td>
+                            <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'normal', wordBreak: 'break-word' }}>{r.unit_description || '—'}</td>
+                            <td style={{ padding: '10px 12px', fontSize: '12px', color: sinceOpened ? 'var(--text-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: sinceOpened ? 600 : 400 }}>{sinceOpened || '—'}</td>
+                            <td style={{ padding: '10px 12px', fontSize: '12px', color: r.quantity_in_lab != null ? 'var(--text-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: r.quantity_in_lab != null ? 600 : 400 }}>{r.quantity_in_lab ?? '—'}</td>
+                            {fyCell(r.fy24_purchases)}
+                            {fyCell(r.fy25_purchases)}
+                            {fyCell(r.fy26_purchases)}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1371,7 +1410,7 @@ export default function Finance({ userRole }) {
                         {filteredNanoseq.length === 0 && (
                           <tr><td colSpan={8 + allFYs.length + 1} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No reagents match "{reagentSearch}"</td></tr>
                         )}
-                        {filteredNanoseq.map(r => { const fyData = catalogByNum[r.code]?.fyCounts || {}; const total = Object.values(fyData).reduce((s,n) => s+n, 0); return <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.protocol}</td><td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-primary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.company}</td><td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{r.code}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-primary)' }}>{r.cost ? `$${r.cost.toLocaleString()}` : '—'}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{r.amount}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.n_reactions ?? '—'}</td><td style={{ padding: '10px 12px', fontSize: '12px' }}>{r.link && <a href={r.link} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--purple-primary)', textDecoration: 'none', fontSize: '11px' }}>View</a>}</td>{allFYs.map(fy => { const cnt = fyData[fy] || 0; return <td key={fy} style={{ padding: '10px 12px', fontSize: '12px', color: cnt ? 'var(--purple-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: cnt ? 600 : 400 }}>{cnt || '—'}</td>; })}<td style={{ padding: '10px 12px', fontSize: '12px', color: total ? 'var(--text-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: total ? 600 : 400 }}>{total || '—'}</td></tr>; })}
+                        {filteredNanoseq.map(r => { const fyData = catalogByNum[r.code]?.fyCounts || {}; const total = Object.values(fyData).reduce((s,n) => s+n, 0); return <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.protocol}</td><td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-primary)', whiteSpace: 'normal', wordBreak: 'break-word' }}>{r.name}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.company}</td><td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{r.code}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-primary)' }}>{r.cost ? `$${r.cost.toLocaleString()}` : '—'}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{r.amount}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.n_reactions ?? '—'}</td><td style={{ padding: '10px 12px', fontSize: '12px' }}>{r.link && <a href={r.link} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--purple-primary)', textDecoration: 'none', fontSize: '11px' }}>View</a>}</td>{allFYs.map(fy => { const cnt = fyData[fy] || 0; return <td key={fy} style={{ padding: '10px 12px', fontSize: '12px', color: cnt ? 'var(--purple-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: cnt ? 600 : 400 }}>{cnt || '—'}</td>; })}<td style={{ padding: '10px 12px', fontSize: '12px', color: total ? 'var(--text-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: total ? 600 : 400 }}>{total || '—'}</td></tr>; })}
                       </tbody>
                     </table>
                   )}
@@ -1738,18 +1777,18 @@ export default function Finance({ userRole }) {
                 </div>
                 <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
                   <div style={{ flex: '1 1 0', minWidth: 0 }}>
-                    <ResponsiveContainer width="100%" height={380}>
-                      <LineChart data={userCatData.data} margin={{ top: 20, right: 16, left: 10, bottom: 20 }}>
+                    <ResponsiveContainer width="100%" height={400}>
+                      <LineChart data={userCatData.data} margin={{ top: 20, right: 16, left: 10, bottom: 60 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
-                        <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#555' }} />
+                        <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#555' }} interval={0} angle={-40} textAnchor="end" height={60} />
                         <YAxis scale="log" domain={[1, 'auto']} ticks={[1, 10, 100, 1000, 10000, 100000]}
                                tickFormatter={v => v >= 1000 ? `$${(v/1000).toFixed(0)}K` : `$${v.toFixed(0)}`}
                                tick={{ fontSize: 10, fill: '#555' }} width={55} />
-                        <Tooltip formatter={(v, name) => v != null ? [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name] : ['-', name]} />
+                        <Tooltip formatter={(v, name) => v != null && v > 0 ? [`$${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, name] : [null, name]} />
                         <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '16px' }} />
                         {activeCats.map(cat => (
                           <Line key={cat} type="linear" dataKey={cat} stroke={CATEGORY_COLORS[cat] || '#888888'}
-                                dot={{ r: 3, fill: CATEGORY_COLORS[cat] || '#888888', strokeWidth: 0 }}
+                                dot={(p) => p.value > 0 ? <circle key={p.index} cx={p.cx} cy={p.cy} r={3} fill={CATEGORY_COLORS[cat] || '#888888'} stroke="none" /> : null}
                                 strokeWidth={1.5} connectNulls={false} />
                         ))}
                       </LineChart>
@@ -2214,7 +2253,7 @@ export default function Finance({ userRole }) {
                       )}
                       {sortedCatalogRows.map((r, i) => (
                         <tr key={r.catalog_number} style={{ borderTop: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
-                          <td style={{ ...tdStyle(), whiteSpace: 'normal', minWidth: '200px' }}>{r.item}</td>
+                          <td style={{ ...tdStyle(), whiteSpace: 'normal', overflow: 'visible', textOverflow: 'unset', minWidth: '200px' }}>{r.item}</td>
                           <td style={tdStyle({ maxW: '120px' })}>{r.vendor || '—'}</td>
                           <td style={tdStyle({ maxW: '140px' })}>{r.category || '—'}</td>
                           <td style={tdStyle({ mono: true, color: 'var(--text-muted)' })}>{r.catalog_number}</td>

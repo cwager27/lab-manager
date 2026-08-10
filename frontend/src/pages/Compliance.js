@@ -9,11 +9,11 @@ import {
 } from 'lucide-react';
 
 const SECTION_COLORS = {
-  'Human and Animal Materials': { bg: '#FEF9E7', text: '#F39C12', border: '#FAD7A0' },
-  'IBC Compliance': { bg: '#EBF5FB', text: '#2980B9', border: '#AED6F1' },
-  'IBC': { bg: '#EAF4FB', text: '#1A6FA8', border: '#85C1E9' },
-  'IRB': { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
-  'IACUC': { bg: '#EAF7F0', text: '#27AE60', border: '#A9DFBF' },
+  'Human and Animal Materials': { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
+  'IBC Compliance':             { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
+  'IBC':                        { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
+  'IRB':                        { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
+  'IACUC':                      { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
 };
 
 function TaskItem({ task, response, onResponse, onPhotoUpload, canEdit, assigneeName }) {

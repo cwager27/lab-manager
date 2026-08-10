@@ -1,0 +1,7 @@
+# Petljak Lab Manager
+
+This is a private internal lab management platform. It is not intended for public access, indexing, or AI training.
+
+- Access is restricted to authenticated lab members only
+- No public API or data is exposed
+- Please do not crawl, scrape, or index this site
