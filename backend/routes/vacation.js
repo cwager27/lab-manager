@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { createClient } = require('@supabase/supabase-js');
+const { supabaseAdmin } = require('../lib/supabaseAdmin');
 const transporter = { sendMail: async () => {} }; // emails disabled
 
 router.post('/vacation-request', async (req, res) => {
@@ -53,6 +54,19 @@ router.post('/vacation-request', async (req, res) => {
   } catch (error) {
     console.error('Vacation request email error:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/vacation-requests/all', async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('vacation_requests')
+      .select('*, requester:profiles!vacation_requests_requested_by_fkey(full_name, email)')
+      .order('start_date', { ascending: true });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -418,6 +418,7 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
         const nameParts = (member.full_name || '').split(' ');
         const { error } = await supabase.from('lab_contacts').insert([{
           ...payload,
+          full_name: member.full_name || '',
           email: member.email,
           first_name: nameParts[0] || '',
           last_name: nameParts.slice(1).join(' ') || '',
@@ -700,6 +701,10 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState(false);
   const [showFormPw, setShowFormPw] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [emailSuccess, setEmailSuccess] = useState(false);
 
   const canManage = userRole === 'admin' || (permissions?.can_add_members);
   const canViewPersonalPhone = userRole === 'admin' || userRole === 'pm' || profile?.full_name?.toLowerCase().startsWith('mia');
@@ -899,6 +904,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
 
   async function updateAdminContact(contactId, form) {
     const payload = {
+      full_name: `${form.first_name || ''} ${form.last_name || ''}`.trim(),
       first_name: form.first_name || '',
       last_name: form.last_name || '',
       role: form.role || 'external',
@@ -962,6 +968,29 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
       setPwError(err.message);
     }
     setPwSaving(false);
+  }
+
+  async function handleChangeEmail() {
+    if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) { setEmailError('Enter a valid email address.'); return; }
+    setEmailSaving(true);
+    setEmailError('');
+    try {
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/change-member-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: passwordTarget.id, newEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update email');
+      setPasswordTarget(prev => ({ ...prev, email: newEmail }));
+      setMembers(prev => prev.map(m => m.id === passwordTarget.id ? { ...m, email: newEmail } : m));
+      setNewEmail('');
+      setEmailSuccess(true);
+      fetchData();
+    } catch (err) {
+      setEmailError(err.message);
+    }
+    setEmailSaving(false);
   }
 
   const memberNames = new Set(members.map(m => m.full_name?.toLowerCase().trim()).filter(Boolean));
@@ -1408,44 +1437,79 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
       {/* Change Password Modal */}
       {passwordTarget && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
-          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '400px', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
-            {pwSuccess ? (
-              <div style={{ textAlign: 'center', padding: '16px 0' }}>
-                <div style={{ fontSize: '32px', marginBottom: '12px' }}>✓</div>
-                <p style={{ fontSize: '15px', fontWeight: 600, color: '#27AE60', margin: 0 }}>Password updated for {passwordTarget.full_name}</p>
-              </div>
-            ) : (
-              <>
-                <h2 style={{ fontSize: '17px', fontWeight: 700, marginBottom: '6px' }}>Set Password</h2>
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>
-                  Set a new password for <strong>{passwordTarget.full_name}</strong>. Their active sessions won't be affected — the new password takes effect on next login.
-                </p>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>New Password</label>
-                <div style={{ position: 'relative', marginBottom: '8px' }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '32px', width: '420px', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '17px', fontWeight: 700, margin: 0 }}>Account Settings</h2>
+              <button onClick={() => { setPasswordTarget(null); setNewPassword(''); setShowPw(false); setPwError(''); setPwSuccess(false); setNewEmail(''); setEmailError(''); setEmailSuccess(false); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '18px', lineHeight: 1 }}>✕</button>
+            </div>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '24px', marginTop: -8 }}>
+              Managing credentials for <strong>{passwordTarget.full_name}</strong>
+            </p>
+
+            {/* Change Email */}
+            <div style={{ marginBottom: '24px', paddingBottom: '24px', borderBottom: '1px solid var(--border)' }}>
+              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Change Login Email</label>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '10px' }}>Current: <strong>{passwordTarget.email}</strong></p>
+              {emailSuccess ? (
+                <p style={{ fontSize: '13px', color: '#27AE60', fontWeight: 600 }}>✓ Email updated successfully</p>
+              ) : (
+                <>
                   <input
-                    type={showPw ? 'text' : 'password'}
-                    value={newPassword}
-                    onChange={e => { setNewPassword(e.target.value); setPwError(''); }}
-                    placeholder="Min. 8 characters"
-                    autoFocus
-                    onKeyDown={e => e.key === 'Enter' && handleChangePassword()}
-                    style={{ width: '100%', padding: '10px 40px 10px 12px', border: `1px solid ${pwError ? 'var(--danger)' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                    type="email"
+                    value={newEmail}
+                    onChange={e => { setNewEmail(e.target.value); setEmailError(''); }}
+                    placeholder="New email address"
+                    onKeyDown={e => e.key === 'Enter' && handleChangeEmail()}
+                    style={{ width: '100%', padding: '10px 12px', border: `1px solid ${emailError ? 'var(--danger)' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', fontSize: '14px', outline: 'none', boxSizing: 'border-box', marginBottom: '6px' }}
                   />
-                  <button onClick={() => setShowPw(v => !v)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
-                    {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
-                </div>
-                {pwError && <p style={{ fontSize: '12px', color: 'var(--danger)', margin: '0 0 12px' }}>{pwError}</p>}
-                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
-                  <button onClick={() => { setPasswordTarget(null); setNewPassword(''); setShowPw(false); setPwError(''); }}
-                    style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
-                  <button onClick={handleChangePassword} disabled={pwSaving || !newPassword}
-                    style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: pwSaving || !newPassword ? 'var(--border)' : 'var(--purple-primary)', color: pwSaving || !newPassword ? 'var(--text-muted)' : 'white', fontWeight: 600, cursor: pwSaving || !newPassword ? 'default' : 'pointer' }}>
-                    {pwSaving ? 'Saving…' : 'Set Password'}
-                  </button>
-                </div>
-              </>
-            )}
+                  {emailError && <p style={{ fontSize: '12px', color: 'var(--danger)', margin: '0 0 8px' }}>{emailError}</p>}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    {(() => {
+                      const sameAsCurrent = newEmail.trim().toLowerCase() === (passwordTarget.email || '').toLowerCase();
+                      const disabled = emailSaving || !newEmail.trim() || sameAsCurrent;
+                      return (
+                        <button onClick={handleChangeEmail} disabled={disabled}
+                          style={{ padding: '8px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: disabled ? 'var(--border)' : 'var(--purple-primary)', color: disabled ? 'var(--text-muted)' : 'white', fontWeight: 600, fontSize: '13px', cursor: disabled ? 'default' : 'pointer' }}>
+                          {emailSaving ? 'Saving…' : 'Update Email'}
+                        </button>
+                      );
+                    })()}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Change Password */}
+            <div>
+              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Change Password</label>
+              {pwSuccess ? (
+                <p style={{ fontSize: '13px', color: '#27AE60', fontWeight: 600 }}>✓ Password updated successfully</p>
+              ) : (
+                <>
+                  <div style={{ position: 'relative', marginBottom: '6px' }}>
+                    <input
+                      type={showPw ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={e => { setNewPassword(e.target.value); setPwError(''); }}
+                      placeholder="Min. 8 characters"
+                      onKeyDown={e => e.key === 'Enter' && handleChangePassword()}
+                      style={{ width: '100%', padding: '10px 40px 10px 12px', border: `1px solid ${pwError ? 'var(--danger)' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                    />
+                    <button onClick={() => setShowPw(v => !v)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+                      {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                  {pwError && <p style={{ fontSize: '12px', color: 'var(--danger)', margin: '0 0 8px' }}>{pwError}</p>}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button onClick={handleChangePassword} disabled={pwSaving || !newPassword}
+                      style={{ padding: '8px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: pwSaving || !newPassword ? 'var(--border)' : 'var(--purple-primary)', color: pwSaving || !newPassword ? 'var(--text-muted)' : 'white', fontWeight: 600, fontSize: '13px', cursor: pwSaving || !newPassword ? 'default' : 'pointer' }}>
+                      {pwSaving ? 'Saving…' : 'Set Password'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

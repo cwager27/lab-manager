@@ -26,6 +26,35 @@ router.post('/auth/change-member-password', async (req, res) => {
   }
 });
 
+router.post('/auth/change-member-email', async (req, res) => {
+  const { userId, newEmail } = req.body;
+  if (!userId || !newEmail) return res.status(400).json({ error: 'userId and newEmail required' });
+  try {
+    const { data: prof } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', userId).maybeSingle();
+
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(userId, { email: newEmail, email_confirm: true });
+    if (authError) return res.status(500).json({ error: authError.message });
+
+    const { error: profileError } = await supabaseAdmin.from('profiles').update({ email: newEmail }).eq('id', userId);
+    if (profileError) return res.status(500).json({ error: profileError.message });
+
+    // Update lab_contacts — match by name since email may already be stale/mismatched
+    if (prof?.full_name) {
+      const nameParts = prof.full_name.trim().split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      await supabaseAdmin.from('lab_contacts').update({ email: newEmail })
+        .ilike('first_name', firstName)
+        .ilike('last_name', lastName);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('change-member-email error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Returns whether an email address has a registered profile.
 // Used by the forgot-password form to block resets for unknown emails
 // without exposing auth.users directly (which requires service role).

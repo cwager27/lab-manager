@@ -81,13 +81,18 @@ export default function VacationLogs({ userRole, userId, profile }) {
 
   async function fetchRequests() {
     setLoading(true);
-    let query = supabase
-      .from('vacation_requests')
-      .select('*, requester:profiles!vacation_requests_requested_by_fkey(full_name, email)')
-      .order('start_date', { ascending: true });
-    if (!canSeeAll) query = query.eq('requested_by', userId);
-    const { data } = await query;
-    setRequests(data || []);
+    if (canSeeAll) {
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/vacation-requests/all`);
+      const data = await res.json();
+      setRequests(Array.isArray(data) ? data : []);
+    } else {
+      const { data } = await supabase
+        .from('vacation_requests')
+        .select('*, requester:profiles!vacation_requests_requested_by_fkey(full_name, email)')
+        .order('start_date', { ascending: true })
+        .eq('requested_by', userId);
+      setRequests(data || []);
+    }
     setLoading(false);
   }
 
@@ -224,7 +229,7 @@ export default function VacationLogs({ userRole, userId, profile }) {
 
   async function handleDelete(requestId) {
     await supabase.from('vacation_requests').delete().eq('id', requestId);
-    fetchRequests();
+    setRequests(prev => prev.filter(r => r.id !== requestId));
   }
 
   function getDayCount(start, end) {
@@ -298,10 +303,10 @@ export default function VacationLogs({ userRole, userId, profile }) {
 
       <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
         {[
-          { label: 'Total', value: requests.length },
+          { label: 'Out Today', value: currentlyOut.length },
           { label: 'Pending', value: pendingRequests.length },
           { label: 'Approved', value: approvedRequests.length },
-          { label: 'Out Today', value: currentlyOut.length },
+          { label: 'Total', value: requests.length },
         ].map(stat => (
           <div key={stat.label} style={{
             flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '16px', textAlign: 'center',
@@ -535,7 +540,7 @@ const days = getDayCount(request.start_date, request.end_date);
                       </td>
                       <td style={{ ...reqTdStyle, whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                          {(request.requested_by === userId || (isAdmin && request.status !== 'approved')) && (
+                          {(request.requested_by === userId || isAdmin) && (
                             <button onClick={() => handleDelete(request.id)} title="Delete"
                               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}
                               onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}

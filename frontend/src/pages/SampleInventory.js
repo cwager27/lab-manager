@@ -300,63 +300,215 @@ function BenchlingTab() {
 
 // ─── Sequencing Records Tab ──────────────────────────────────────────────────
 
-const SEQ_COLS = [
-  { key: 'linked_sample',   label: 'Linked Sample' },
-  { key: 'date_sequenced',  label: 'Date Sequenced' },
-  { key: 'method',          label: 'Method' },
-  { key: 'library_id',      label: 'Library ID' },
-  { key: 'library_prep',    label: 'Library Prep' },
-  { key: 'status',          label: 'Status' },
-  { key: 'failure_reason',  label: 'Failure Reason' },
-  { key: 'facility',        label: 'Facility / Platform' },
-  { key: 'requested_by',    label: 'Requested By' },
-  { key: 'benchling_entry', label: 'Benchling ELN' },
-  { key: 'notes',           label: 'Notes' },
-];
+const QC_STYLES = {
+  Pass:    { bg: '#EAF7F0', text: '#1E8449', border: '#A9DFBF' },
+  Fail:    { bg: '#FDEDEC', text: '#C0392B', border: '#F1948A' },
+  Pending: { bg: '#FEF9E7', text: '#B7950B', border: '#F9E79F' },
+};
+
+function QCBadge({ status }) {
+  const s = QC_STYLES[status] || { bg: 'var(--bg-secondary)', text: 'var(--text-muted)', border: 'var(--border)' };
+  return (
+    <span style={{ padding: '2px 9px', borderRadius: 12, fontSize: 11, fontWeight: 700,
+      background: s.bg, color: s.text, border: `1px solid ${s.border}`, whiteSpace: 'nowrap' }}>
+      {status || 'Pending'}
+    </span>
+  );
+}
 
 function SequencingTab() {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [fetchedAt, setFetchedAt] = useState(null);
+  const [qcFilter, setQcFilter] = useState('all');
+  const [search, setSearch] = useState('');
+
+  useEffect(() => { loadData(); }, []);
+
+  async function loadData() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API}/api/benchling/sequencing`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to load');
+      setRows(json.rows || []);
+      setFetchedAt(json.fetchedAt || null);
+    } catch (err) {
+      setError(err.message);
+    }
+    setLoading(false);
+  }
+
+  const counts = { all: rows.length, Pass: 0, Fail: 0, Pending: 0 };
+  for (const r of rows) {
+    if (r.qcStatus === 'Pass') counts.Pass++;
+    else if (r.qcStatus === 'Fail') counts.Fail++;
+    else counts.Pending++;
+  }
+
+  const filtered = rows.filter(r => {
+    if (qcFilter !== 'all') {
+      const status = r.qcStatus || 'Pending';
+      if (status !== qcFilter) return false;
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      return [r.name, r.sampleName, r.subject, r.project, r.strategy, r.location, r.creator, r.assay]
+        .some(v => (v || '').toLowerCase().includes(q));
+    }
+    return true;
+  });
+
+  const thSt = { padding: '10px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600,
+    color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap',
+    background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' };
+  const tdSt = { padding: '10px 12px', fontSize: 13, borderTop: '1px solid var(--border)', verticalAlign: 'middle' };
+  const muted = { color: 'var(--text-muted)' };
+
   return (
     <div>
-      <div style={{ marginBottom: 20, padding: '12px 16px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
-        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Pending Benchling access</p>
-        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-          Sequencing records will be pulled automatically from Benchling ELN once access is configured. No manual entry — this table will populate once the integration is live.
-        </p>
+      {/* Controls row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+        {/* QC filter tabs */}
+        <div style={{ display: 'flex', gap: 6 }}>
+          {[
+            { id: 'all',     label: `All (${counts.all})` },
+            { id: 'Pass',    label: `Pass (${counts.Pass})` },
+            { id: 'Fail',    label: `Fail (${counts.Fail})` },
+            { id: 'Pending', label: `Pending (${counts.Pending})` },
+          ].map(f => (
+            <button key={f.id} onClick={() => setQcFilter(f.id)} style={{
+              padding: '6px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)',
+              fontSize: 12, fontWeight: qcFilter === f.id ? 700 : 400, cursor: 'pointer',
+              background: qcFilter === f.id ? 'var(--purple-primary)' : 'transparent',
+              color: qcFilter === f.id ? 'white' : 'var(--text-secondary)',
+            }}>{f.label}</button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {/* Search */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '7px 12px' }}>
+            <Search size={13} color="var(--text-muted)" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search libraries, samples, strategy…"
+              style={{ border: 'none', outline: 'none', fontSize: 12, background: 'transparent', color: 'var(--text-primary)', width: 220 }} />
+          </div>
+          {/* Refresh */}
+          <button onClick={loadData} disabled={loading} style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px',
+            background: loading ? 'var(--border)' : 'var(--purple-primary)',
+            color: loading ? 'var(--text-muted)' : 'white',
+            border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: 12, cursor: loading ? 'default' : 'pointer',
+          }}>
+            <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            {loading ? 'Loading…' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
-      <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
-          <thead>
-            <tr style={{ background: 'var(--bg-secondary)' }}>
-              {SEQ_COLS.map(col => (
-                <th key={col.key} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
-                  {col.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {[1, 2, 3].map(i => (
-              <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
-                <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>—</td>
-                <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>—</td>
-                <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>—</td>
-                <td style={{ padding: '10px 12px', fontSize: '11px', fontFamily: 'monospace', color: 'var(--text-muted)' }}>—</td>
-                <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>—</td>
-                <td style={{ padding: '10px 12px' }}>
-                  <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>—</span>
-                </td>
-                <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>—</td>
-                <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>—</td>
-                <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>—</td>
-                <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>—</td>
-                <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>—</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p style={{ marginTop: 10, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>0 sequencing records · awaiting Benchling sync</p>
+      {error && (
+        <div style={{ marginBottom: 14, padding: '10px 14px', background: '#FDEDEC', border: '1px solid #F1948A', borderRadius: 'var(--radius-md)', fontSize: 13, color: '#C0392B' }}>
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-muted)' }}>Fetching sequencing records from Benchling…</div>
+      ) : (
+        <>
+          <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1000 }}>
+              <thead>
+                <tr>
+                  <th style={thSt}>Library</th>
+                  <th style={thSt}>QC</th>
+                  <th style={thSt}>Coverage</th>
+                  <th style={thSt}>Strategy</th>
+                  <th style={thSt}>Location</th>
+                  <th style={thSt}>Sample</th>
+                  <th style={thSt}>Subject / Project</th>
+                  <th style={thSt}>Tissue</th>
+                  <th style={thSt}>Requested By</th>
+                  <th style={thSt}>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} style={{ ...tdSt, textAlign: 'center', color: 'var(--text-muted)', padding: '32px 12px' }}>
+                      No records match your filters.
+                    </td>
+                  </tr>
+                ) : filtered.map(r => (
+                  <tr key={r.id} style={{ background: r.qcStatus === 'Fail' ? '#FEF9F9' : 'transparent' }}>
+                    {/* Library */}
+                    <td style={{ ...tdSt, fontWeight: 600 }}>
+                      {r.webURL ? (
+                        <a href={r.webURL} target="_blank" rel="noopener noreferrer"
+                          style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          {r.name}
+                          <ExternalLink size={11} />
+                        </a>
+                      ) : r.name}
+                    </td>
+                    {/* QC */}
+                    <td style={tdSt}><QCBadge status={r.qcStatus} /></td>
+                    {/* Coverage */}
+                    <td style={{ ...tdSt, ...muted }}>{r.coverage || '—'}</td>
+                    {/* Strategy */}
+                    <td style={{ ...tdSt, ...muted }}>{r.strategy || '—'}</td>
+                    {/* Location */}
+                    <td style={{ ...tdSt, ...muted }}>{r.location || '—'}</td>
+                    {/* Sample */}
+                    <td style={{ ...tdSt, fontSize: 12 }}>
+                      {r.sampleName ? (
+                        r.sampleWebURL ? (
+                          <a href={r.sampleWebURL} target="_blank" rel="noopener noreferrer"
+                            style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>
+                            {r.sampleName} <ExternalLink size={10} />
+                          </a>
+                        ) : r.sampleName
+                      ) : r.assay ? (
+                        <span style={{ color: 'var(--text-secondary)' }}>{r.assay}</span>
+                      ) : <span style={muted}>—</span>}
+                    </td>
+                    {/* Subject / Project */}
+                    <td style={{ ...tdSt, fontSize: 12 }}>
+                      {r.subject || r.project ? (
+                        <div>
+                          {r.subject && <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{r.subject}</div>}
+                          {r.project && <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{r.project}</div>}
+                        </div>
+                      ) : <span style={muted}>—</span>}
+                    </td>
+                    {/* Tissue */}
+                    <td style={{ ...tdSt, fontSize: 12 }}>
+                      {r.tissueType ? (
+                        <div>
+                          <div style={{ color: 'var(--text-secondary)' }}>{r.tissueType}</div>
+                          {r.tissueState && <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{r.tissueState}</div>}
+                        </div>
+                      ) : <span style={muted}>—</span>}
+                    </td>
+                    {/* Requested By */}
+                    <td style={{ ...tdSt, fontSize: 12, color: 'var(--text-secondary)' }}>{r.creator || '—'}</td>
+                    {/* Date */}
+                    <td style={{ ...tdSt, fontSize: 12, ...muted, whiteSpace: 'nowrap' }}>
+                      {r.sampleDate || (r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '—')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>
+            {filtered.length} of {rows.length} records
+            {fetchedAt && ` · fetched ${new Date(fetchedAt).toLocaleTimeString()}`}
+          </p>
+        </>
+      )}
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

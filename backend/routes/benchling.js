@@ -93,6 +93,64 @@ router.post('/benchling/sync', async (req, res) => {
   }
 });
 
+// GET /api/benchling/sequencing
+// Live fetch: Libraries (ts_UPl03umOxM) joined with Subjects Sequencing Samples (ts_4aMFYaEXNb).
+router.get('/benchling/sequencing', async (req, res) => {
+  if (!BENCHLING_TENANT || !BENCHLING_API_KEY) {
+    return res.status(500).json({ error: 'Benchling not configured. Add BENCHLING_TENANT and BENCHLING_API_KEY to environment variables.' });
+  }
+  try {
+    const [libraries, samples] = await Promise.all([
+      fetchAllPages('/custom-entities?pageSize=100&schemaId=ts_UPl03umOxM', 'customEntities'),
+      fetchAllPages('/custom-entities?pageSize=100&schemaId=ts_4aMFYaEXNb', 'customEntities'),
+    ]);
+
+    const sampleById = {};
+    for (const s of samples) sampleById[s.id] = s;
+
+    const rows = libraries.map(lib => {
+      const f = lib.fields || {};
+      const sampleId = f['Sample']?.value || null;
+      const sample = sampleId ? sampleById[sampleId] : null;
+      const sf = sample?.fields || {};
+
+      return {
+        id: lib.id,
+        name: lib.name,
+        registryId: lib.entityRegistryId || null,
+        webURL: lib.webURL || null,
+        createdAt: lib.createdAt || null,
+        creator: lib.creator?.name || null,
+        qcStatus: f['QC Status']?.displayValue || null,
+        coverage: f['Coverage']?.displayValue != null ? `${f['Coverage'].displayValue}x` : null,
+        strategy: f['Sequencing Strategy']?.displayValue || null,
+        location: f['Sequencing Location']?.displayValue || null,
+        assay: f['Assay']?.displayValue || null,
+        indexBarcode: f['Index barcode']?.displayValue || null,
+        sampleId: sampleId,
+        sampleName: f['Sample']?.displayValue || null,
+        sampleWebURL: sample?.webURL || null,
+        subject: sf['Subject']?.displayValue || null,
+        project: sf['Project']?.displayValue || null,
+        tissueType: sf['Isolate Type Name']?.displayValue || null,
+        tissueState: sf['Tissue State']?.displayValue || null,
+        sex: sf['Sex']?.displayValue || null,
+        age: sf['Age']?.displayValue || null,
+        species: sf['Species']?.displayValue || null,
+        sampleDate: sf['Date']?.displayValue || null,
+        matchedNormal: sf['Matched Normal Sample']?.displayValue || null,
+        bioReplicate: sf['Biological Replicate Number']?.displayValue || null,
+        techReplicate: sf['Technical Replicate #']?.displayValue || null,
+      };
+    });
+
+    res.json({ rows, fetchedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('Benchling sequencing error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/benchling/cache
 // Returns cached Benchling data from Supabase.
 router.get('/benchling/cache', async (req, res) => {
