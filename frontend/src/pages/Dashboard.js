@@ -453,6 +453,14 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                           ? (task.created_at ? formatDate(task.created_at.slice(0, 10)) : null)
                           : task.due_date ? formatDate(task.due_date) : null;
                         const isOverdue = cls === 0;
+                        const daysLate = isOverdue && task.due_date
+                          ? Math.ceil((new Date(today) - new Date(task.due_date)) / 86400000)
+                          : 0;
+                        const statusBadge = isOverdue
+                          ? { label: daysLate === 1 ? '1d overdue' : `${daysLate}d overdue`, bg: '#FDEDEC', color: '#C0392B', border: '#F1948A' }
+                          : noDate
+                          ? { label: 'Assigned', bg: 'var(--purple-faint)', color: 'var(--purple-primary)', border: 'var(--border)' }
+                          : { label: 'Upcoming', bg: '#FEF9E7', color: '#B7950B', border: '#F9E79F' };
                         return (
                           <div key={task.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 14px', borderTop: i > 0 ? (isOverdue ? '1px solid #FCCACA' : '1px solid var(--border)') : 'none', background: isOverdue ? '#FEF5F5' : undefined }}>
                             {isOverdue ? (
@@ -463,11 +471,12 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                               <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0, marginTop: 4 }} />
                             )}
                             <span style={{ fontSize: 13, color: isOverdue ? '#C0392B' : 'var(--text-primary)', fontWeight: isOverdue ? 600 : 400, flex: 1, lineHeight: 1.4 }}>{task.title}</span>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
                               {(() => { const name = (task.assignee?.full_name || teamMembers.find(m => m.id === task.assigned_to)?.full_name || ''); return name ? <span style={{ fontSize: 12, color: isOverdue ? '#E74C3C' : 'var(--text-muted)', whiteSpace: 'nowrap', fontWeight: 500 }}>{name.split(' ')[0]}</span> : null; })()}
                               {dateStr && (
                                 <span style={{ fontSize: 11, color: isOverdue ? '#E74C3C' : 'var(--text-muted)', whiteSpace: 'nowrap', fontWeight: isOverdue ? 600 : 400 }}>{dateStr}</span>
                               )}
+                              <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 8, background: statusBadge.bg, color: statusBadge.color, border: `1px solid ${statusBadge.border}`, whiteSpace: 'nowrap' }}>{statusBadge.label}</span>
                             </div>
                           </div>
                         );
