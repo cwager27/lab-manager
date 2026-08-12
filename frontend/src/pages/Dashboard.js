@@ -444,6 +444,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                   {sortedAdhocTasks.filter(t => t.status !== 'done' && t.status !== 'submitted').length === 0 ? (
                     <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>No upcoming or overdue tasks.</p>
                   ) : (
+                    <div style={{ position: 'relative' }}>
                     <div style={{ maxHeight: 320, overflowY: 'auto' }}>
                       {sortedAdhocTasks.filter(t => t.status !== 'done' && t.status !== 'submitted').map((task, i) => {
                         const cls = classifyAdhocTask(task);
@@ -482,6 +483,8 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                         );
                       })}
                     </div>
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)' }} />
+                    </div>
                   )}
                 </div>
               </div>
@@ -497,7 +500,8 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                   {outToday.length === 0 ? (
                     <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>Everyone in.</p>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ position: 'relative' }}>
+                    <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
                       {outToday.map((r, i) => {
                         const hasOverlap = vacOverlapIds.has(r.id);
                         const tripleInfo = tripleVacOverlapInfo[r.id];
@@ -543,6 +547,8 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                         );
                       })}
                     </div>
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none' }} />
+                    </div>
                   )}
                 </div>
                 {/* Out next 8 weeks */}
@@ -554,7 +560,8 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                   {nextWeekOut.length === 0 ? (
                     <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>None scheduled.</p>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ position: 'relative' }}>
+                    <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
                       {nextWeekOut.map((r, i) => {
                         const hasOverlap = vacOverlapIds.has(r.id);
                         const tripleInfo = tripleVacOverlapInfo[r.id];
@@ -600,6 +607,8 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                           </div>
                         );
                       })}
+                    </div>
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none' }} />
                     </div>
                   )}
                 </div>
