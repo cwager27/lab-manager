@@ -17,7 +17,7 @@ function PeriodPicker({ value, onChange }) {
     <div style={{ display: 'flex', gap: 4 }}>
       {PROD_PERIODS.map(({ id, label }) => (
         <button key={id} onClick={() => onChange(id)}
-          style={{ padding: '3px 10px', borderRadius: 12, border: `1.5px solid ${value === id ? 'var(--purple-primary)' : 'var(--border)'}`, background: value === id ? 'var(--purple-primary)' : 'transparent', color: value === id ? '#fff' : 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+          style={{ padding: '3px 10px', borderRadius: 12, border: `1.5px solid ${value === id ? 'var(--purple-primary)' : 'var(--border)'}`, background: value === id ? 'var(--purple-primary)' : 'transparent', color: value === id ? '#fff' : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
           {label}
         </button>
       ))}
@@ -40,7 +40,7 @@ function TaskStatusCard({ icon, title, tasks, getTitle, dateKey, upcomingLabel =
       <div key={label}>
         <div style={{ padding: '5px 14px', background: isMissed ? '#FEF5F5' : headBg, display: 'flex', alignItems: 'center', gap: 6, borderTop: '1px solid var(--border)' }}>
           {isMissed && <AlertTriangle size={11} color="#E74C3C" />}
-          <span style={{ fontSize: 10, fontWeight: 700, color: isMissed ? '#E74C3C' : headColor, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: isMissed ? '#E74C3C' : headColor, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
         </div>
         {items.map(t => (
           <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderTop: isMissed ? '1px solid #FCCACA' : '1px solid var(--border)', background: isMissed ? '#FEF5F5' : undefined }}>
@@ -49,9 +49,9 @@ function TaskStatusCard({ icon, title, tasks, getTitle, dateKey, upcomingLabel =
                 <span style={{ fontSize: 13, fontWeight: 900, color: '#E74C3C', lineHeight: 1 }}>!</span>
               </div>
             )}
-            <span style={{ fontSize: 12, color: isMissed ? '#C0392B' : 'var(--text-primary)', fontWeight: isMissed ? 600 : 400, flex: 1, lineHeight: 1.3 }}>{getTitle(t)}</span>
+            <span style={{ fontSize: 13, color: isMissed ? '#C0392B' : 'var(--text-primary)', fontWeight: isMissed ? 600 : 400, flex: 1, lineHeight: 1.3 }}>{getTitle(t)}</span>
             {t[dateKey] && (
-              <span style={{ fontSize: 10, color: isMissed ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: isMissed ? 600 : 400 }}>{formatDate(t[dateKey])}</span>
+              <span style={{ fontSize: 11, color: isMissed ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: isMissed ? 600 : 400 }}>{formatDate(t[dateKey])}</span>
             )}
           </div>
         ))}
@@ -63,10 +63,10 @@ function TaskStatusCard({ icon, title, tasks, getTitle, dateKey, upcomingLabel =
     <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
       <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 7 }}>
         {icon}
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</span>
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</span>
       </div>
       {isEmpty ? (
-        <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Nothing missed or upcoming.</p>
+        <p style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>Nothing missed or upcoming.</p>
       ) : (
         <>
           {renderSection('Missed', missed, '#FEF5F5', '#E74C3C', true)}
@@ -85,9 +85,9 @@ function RecurScoreRow({ row }) {
   if (matured === 0) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', width: 72, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{firstName}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', width: 90, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{firstName}</div>
         <div style={{ flex: 1, height: 10, borderRadius: 5, background: 'var(--border)' }} />
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', width: 46, textAlign: 'right', flexShrink: 0 }}>—</div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', width: 46, textAlign: 'right', flexShrink: 0 }}>—</div>
       </div>
     );
   }
@@ -98,13 +98,13 @@ function RecurScoreRow({ row }) {
   const labelColor = onTimePct >= 70 ? '#27AE60' : onTimePct >= 40 ? '#F39C12' : '#E74C3C';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', width: 72, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{firstName}</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', width: 90, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{firstName}</div>
       <div style={{ flex: 1, height: 10, borderRadius: 5, overflow: 'hidden', display: 'flex', background: '#E5E5EA' }}>
         {pctOnTime > 0 && <div style={{ width: `${pctOnTime}%`, background: '#27AE60', height: '100%', transition: 'width 0.4s ease' }} />}
         {pctLate > 0 && <div style={{ width: `${pctLate}%`, background: '#F39C12', height: '100%', transition: 'width 0.4s ease' }} />}
         {pctMissed > 0 && <div style={{ width: `${pctMissed}%`, background: '#E74C3C', height: '100%', transition: 'width 0.4s ease' }} />}
       </div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: labelColor, width: 46, textAlign: 'right', flexShrink: 0 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: labelColor, width: 46, textAlign: 'right', flexShrink: 0 }}>
         {onTimePct}%
       </div>
     </div>
@@ -116,7 +116,7 @@ function Card({ icon, iconColor, title, children }) {
     <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
       <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
         {icon}
-        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>{title}</span>
+        <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{title}</span>
       </div>
       {children}
     </div>
@@ -407,7 +407,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                   <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                       <ClipboardList size={13} color="var(--text-primary)" />
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Recurrent lab task productivity</span>
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Recurrent lab task productivity</span>
                     </div>
                     <PeriodPicker value={recurPeriod} onChange={setRecurPeriod} />
                   </div>
@@ -416,14 +416,14 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                       {[['#27AE60', 'On time'], ['#F39C12', 'Late'], ['#E74C3C', 'Missed']].map(([color, label]) => (
                         <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                           <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{label}</span>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{label}</span>
                         </div>
                       ))}
                     </div>
-                    <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>% on time</span>
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>% on time</span>
                   </div>
                   {recurLoading ? (
-                    <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Loading…</p>
+                    <p style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>Loading…</p>
                   ) : (
                     <div style={{ padding: '4px 14px 8px' }}>
                       {recurData.filter(row => !row.profile?.full_name?.toLowerCase().startsWith('mia')).sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).map(row => (
@@ -439,7 +439,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
                   <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 7 }}>
                     <ClipboardList size={13} color="#27AE60" />
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Ad hoc task productivity</span>
+                    <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Ad hoc task productivity</span>
                   </div>
                   {sortedAdhocTasks.filter(t => t.status !== 'done' && t.status !== 'submitted').length === 0 ? (
                     <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>No upcoming or overdue tasks.</p>
@@ -464,12 +464,12 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                             ) : (
                               <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
                             )}
-                            <span style={{ fontSize: 12, color: isOverdue ? '#C0392B' : 'var(--text-primary)', fontWeight: isOverdue ? 600 : 400, flex: 1, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
-                            {(() => { const name = (task.assignee?.full_name || teamMembers.find(m => m.id === task.assigned_to)?.full_name || ''); return name ? <span style={{ fontSize: 11, color: isOverdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: 500 }}>{name.split(' ')[0]}</span> : null; })()}
+                            <span style={{ fontSize: 13, color: isOverdue ? '#C0392B' : 'var(--text-primary)', fontWeight: isOverdue ? 600 : 400, flex: 1, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
+                            {(() => { const name = (task.assignee?.full_name || teamMembers.find(m => m.id === task.assigned_to)?.full_name || ''); return name ? <span style={{ fontSize: 12, color: isOverdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: 500 }}>{name.split(' ')[0]}</span> : null; })()}
                             {dateStr && (
-                              <span style={{ fontSize: 10, color: isOverdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: isOverdue ? 600 : 400 }}>{dateStr}</span>
+                              <span style={{ fontSize: 11, color: isOverdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: isOverdue ? 600 : 400 }}>{dateStr}</span>
                             )}
-                            <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 8, background: statusBg, color: statusColor, flexShrink: 0, whiteSpace: 'nowrap' }}>{statusLabel}</span>
+                            <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 8, background: statusBg, color: statusColor, flexShrink: 0, whiteSpace: 'nowrap' }}>{statusLabel}</span>
                           </div>
                         );
                       })}
@@ -484,7 +484,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
                   <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
                     <Palmtree size={13} color="#F39C12" />
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Out today</span>
+                    <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Out today</span>
                   </div>
                   {outToday.length === 0 ? (
                     <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>Everyone in.</p>
@@ -499,8 +499,8 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                           <div key={r.id} style={{ position: 'relative' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: hasOverlap ? '#FEF5F5' : undefined }}>
                               <div style={{ minWidth: 0 }}>
-                                <span style={{ fontSize: '12px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)' }}>{r.requester?.full_name}</span>
-                                <p style={{ margin: '1px 0 0', fontSize: '11px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)' }}>
+                                <span style={{ fontSize: '13px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)' }}>{r.requester?.full_name}</span>
+                                <p style={{ margin: '1px 0 0', fontSize: '12px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)' }}>
                                   {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
                                 </p>
                               </div>
@@ -508,13 +508,13 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                                 {tripleInfo ? (
                                   <button onClick={() => setOverlapWarning(warningOpen ? null : `vac_${r.id}`)}
                                     title="3+ members overlapping — click for details"
-                                    style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '1px 7px', fontSize: 10, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer' }}>
+                                    style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '1px 7px', fontSize: 11, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer' }}>
                                     ⚠ {tripleInfo.length + 1} overlap
                                   </button>
                                 ) : hasOverlap ? (
-                                  <span style={{ fontSize: 9, fontWeight: 700, color: '#E74C3C', background: '#FDEDEC', padding: '1px 5px', borderRadius: 6, border: '1px solid #F1948A' }}>OVERLAP</span>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: '#E74C3C', background: '#FDEDEC', padding: '1px 5px', borderRadius: 6, border: '1px solid #F1948A' }}>OVERLAP</span>
                                 ) : null}
-                                <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.text }}>
+                                <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '12px', fontWeight: 600, background: s.bg, color: s.text }}>
                                   {r.status === 'pending' ? 'Pending' : r.status.charAt(0).toUpperCase() + r.status.slice(1)}
                                 </span>
                               </div>
@@ -528,7 +528,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                                     <span style={{ fontSize: 11, color: '#92400E', whiteSpace: 'nowrap' }}>{formatDate(o.start)}–{formatDate(o.end)}</span>
                                   </div>
                                 ))}
-                                <button onClick={() => setOverlapWarning(null)} style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Dismiss</button>
+                                <button onClick={() => setOverlapWarning(null)} style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Dismiss</button>
                               </div>
                             )}
                           </div>
@@ -541,7 +541,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
                   <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
                     <Calendar size={13} color="var(--text-primary)" />
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Out — next 8 weeks</span>
+                    <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Out — next 8 weeks</span>
                   </div>
                   {nextWeekOut.length === 0 ? (
                     <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>None scheduled.</p>
@@ -557,8 +557,8 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                           <div key={r.id} style={{ position: 'relative' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: hasOverlap ? '#FEF5F5' : undefined }}>
                               <div style={{ minWidth: 0 }}>
-                                <span style={{ fontSize: '12px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)' }}>{r.requester?.full_name}</span>
-                                <p style={{ margin: '1px 0 0', fontSize: '11px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)' }}>
+                                <span style={{ fontSize: '13px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)' }}>{r.requester?.full_name}</span>
+                                <p style={{ margin: '1px 0 0', fontSize: '12px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)' }}>
                                   {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
                                 </p>
                               </div>
@@ -566,13 +566,13 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                                 {tripleInfo ? (
                                   <button onClick={() => setOverlapWarning(warningOpen ? null : `vac_${r.id}`)}
                                     title="3+ members overlapping — click for details"
-                                    style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '1px 7px', fontSize: 10, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer' }}>
+                                    style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '1px 7px', fontSize: 11, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer' }}>
                                     ⚠ {tripleInfo.length + 1} overlap
                                   </button>
                                 ) : hasOverlap ? (
-                                  <span style={{ fontSize: 9, fontWeight: 700, color: '#E74C3C', background: '#FDEDEC', padding: '1px 5px', borderRadius: 6, border: '1px solid #F1948A' }}>OVERLAP</span>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: '#E74C3C', background: '#FDEDEC', padding: '1px 5px', borderRadius: 6, border: '1px solid #F1948A' }}>OVERLAP</span>
                                 ) : null}
-                                <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.text }}>
+                                <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '12px', fontWeight: 600, background: s.bg, color: s.text }}>
                                   {r.status === 'pending' ? 'Pending' : r.status.charAt(0).toUpperCase() + r.status.slice(1)}
                                 </span>
                               </div>
@@ -586,7 +586,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                                     <span style={{ fontSize: 11, color: '#92400E', whiteSpace: 'nowrap' }}>{formatDate(o.start)}–{formatDate(o.end)}</span>
                                   </div>
                                 ))}
-                                <button onClick={() => setOverlapWarning(null)} style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Dismiss</button>
+                                <button onClick={() => setOverlapWarning(null)} style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Dismiss</button>
                               </div>
                             )}
                           </div>
@@ -602,7 +602,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
                   <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
                     <Calendar size={13} color="var(--text-primary)" />
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Lab meetings</span>
+                    <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Lab meetings</span>
                   </div>
                   {labMeetings.length === 0 ? (
                     <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>None scheduled.</p>
@@ -611,11 +611,11 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                       {labMeetings.map(m => (
                         <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
                           <div>
-                            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                               {new Date(m.meeting_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })}
                               {m.is_sof && <Star size={10} color="#7B3FA0" fill="#7B3FA0" />}
                             </div>
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '1px' }}>{m.presenter?.full_name || m.guest_name || <em>TBD</em>}</div>
+                            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '1px' }}>{m.presenter?.full_name || m.guest_name || <em>TBD</em>}</div>
                           </div>
                           {m.is_sof && <span style={{ padding: '1px 6px', borderRadius: '8px', fontSize: '9px', fontWeight: 700, background: 'var(--purple-faint)', color: 'var(--text-primary)', flexShrink: 0 }}>SOF</span>}
                         </div>
@@ -626,7 +626,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
                   <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '7px' }}>
                     <Calendar size={13} color="var(--text-primary)" />
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Ad hoc meetings</span>
+                    <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Ad hoc meetings</span>
                   </div>
                   {adhocMeetings.length === 0 ? (
                     <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>None scheduled.</p>
@@ -635,10 +635,10 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                       {adhocMeetings.map(m => (
                         <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
                           <div>
-                            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
                               {new Date(m.meeting_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })}
                             </div>
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '1px' }}>{m.presenter?.full_name || m.guest_name || m.notes || <em>TBD</em>}</div>
+                            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '1px' }}>{m.presenter?.full_name || m.guest_name || m.notes || <em>TBD</em>}</div>
                           </div>
                         </div>
                       ))}
@@ -661,7 +661,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                   <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
                     <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 7 }}>
                       <DollarSign size={13} color="#1A7F4B" />
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Grants</span>
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Grants</span>
                     </div>
                     {grants.length === 0 ? (
                       <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No grants on file.</p>
@@ -670,7 +670,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                         {/* Header row */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 90px 100px', gap: 8, padding: '6px 14px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
                           {['Grant', 'Balance', 'Remaining', 'Expires'].map(h => (
-                            <span key={h} style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</span>
+                            <span key={h} style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</span>
                           ))}
                         </div>
                         {grants.map((g, i) => {
@@ -689,7 +689,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                                     <div style={{ height: 6, borderRadius: 3, background: '#E5E5EA', overflow: 'hidden', marginBottom: 3 }}>
                                       <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: pct < 10 ? '#E74C3C' : pct < 25 ? '#F39C12' : '#27AE60', borderRadius: 3, transition: 'width 0.3s ease' }} />
                                     </div>
-                                    <span style={{ fontSize: 10, color: lowBalance ? '#E74C3C' : 'var(--text-muted)' }}>
+                                    <span style={{ fontSize: 11, color: lowBalance ? '#E74C3C' : 'var(--text-muted)' }}>
                                       ${g.remaining_balance?.toLocaleString()} / ${g.total_amount?.toLocaleString()}
                                     </span>
                                   </>
@@ -727,18 +727,18 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                       onMouseLeave={e => e.currentTarget.style.background = 'none'}
                     >
                       <UserX size={13} color="#E74C3C" />
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>Unassigned tasks</span>
-                      <span style={{ fontSize: 10, color: 'var(--purple-primary)', fontWeight: 600 }}>View →</span>
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>Unassigned tasks</span>
+                      <span style={{ fontSize: 11, color: 'var(--purple-primary)', fontWeight: 600 }}>View →</span>
                     </button>
                     {/* Stat pills */}
                     <div style={{ display: 'flex', gap: 10, padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
                       <div style={{ flex: 1, background: unassigned7.length > 0 ? '#FDEDEC' : '#EAF7F0', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
                         <div style={{ fontSize: 22, fontWeight: 800, color: unassigned7.length > 0 ? '#E74C3C' : '#27AE60' }}>{unassigned7.length}</div>
-                        <div style={{ fontSize: 10, fontWeight: 600, color: unassigned7.length > 0 ? '#E74C3C' : '#27AE60', marginTop: 2 }}>Next 7 days</div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: unassigned7.length > 0 ? '#E74C3C' : '#27AE60', marginTop: 2 }}>Next 7 days</div>
                       </div>
                       <div style={{ flex: 1, background: unassigned30.length > 0 ? '#FEF9E7' : '#EAF7F0', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
                         <div style={{ fontSize: 22, fontWeight: 800, color: unassigned30.length > 0 ? '#F39C12' : '#27AE60' }}>{unassigned30.length}</div>
-                        <div style={{ fontSize: 10, fontWeight: 600, color: unassigned30.length > 0 ? '#F39C12' : '#27AE60', marginTop: 2 }}>Next 30 days</div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: unassigned30.length > 0 ? '#F39C12' : '#27AE60', marginTop: 2 }}>Next 30 days</div>
                       </div>
                     </div>
                     {/* Next 7 days task list */}
@@ -759,7 +759,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                                     style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', flex: 1, minWidth: 0, textAlign: 'left' }}
                                     title="Click to view full task"
                                   >
-                                    <span style={{ fontSize: 12, color: overdue ? '#C0392B' : 'var(--text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                                    <span style={{ fontSize: 13, color: overdue ? '#C0392B' : 'var(--text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
                                       {(() => { const title = t.task_def?.title || '(no title)'; return title.length > 38 ? title.slice(0, 38) + '…' : title; })()}
                                     </span>
                                   </button>
@@ -779,17 +779,17 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                                     ))}
                                   </select>
                                   {t.due_date && (
-                                    <span style={{ fontSize: 10, color: overdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: overdue ? 600 : 400 }}>{formatDate(t.due_date)}</span>
+                                    <span style={{ fontSize: 11, color: overdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: overdue ? 600 : 400 }}>{formatDate(t.due_date)}</span>
                                   )}
                                 </div>
                                 {isExpanded && (
                                   <div style={{ padding: '6px 14px 10px', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)' }}>
-                                    <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 6px' }}>{t.task_def?.title || '(no title)'}</p>
+                                    <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 6px' }}>{t.task_def?.title || '(no title)'}</p>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                      {t.task_def?.category && <span style={{ fontSize: 10, background: '#EDE7F6', color: '#6A1B9A', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{t.task_def.category}</span>}
-                                      {t.task_def?.frequency && <span style={{ fontSize: 10, background: '#E3F2FD', color: '#1565C0', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{t.task_def.frequency}</span>}
-                                      {t.task_def?.audit_area && <span style={{ fontSize: 10, background: '#E8F5E9', color: '#2E7D32', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{t.task_def.audit_area}</span>}
-                                      {t.task_def?.group_name && <span style={{ fontSize: 10, background: '#FFF3E0', color: '#E65100', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{t.task_def.group_name}</span>}
+                                      {t.task_def?.category && <span style={{ fontSize: 11, background: '#EDE7F6', color: '#6A1B9A', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{t.task_def.category}</span>}
+                                      {t.task_def?.frequency && <span style={{ fontSize: 11, background: '#E3F2FD', color: '#1565C0', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{t.task_def.frequency}</span>}
+                                      {t.task_def?.audit_area && <span style={{ fontSize: 11, background: '#E8F5E9', color: '#2E7D32', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{t.task_def.audit_area}</span>}
+                                      {t.task_def?.group_name && <span style={{ fontSize: 11, background: '#FFF3E0', color: '#E65100', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{t.task_def.group_name}</span>}
                                     </div>
                                   </div>
                                 )}
@@ -815,7 +815,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
               <div style={{ background: '#FEF9E7', border: '1px solid #FAD7A0', borderRadius: 'var(--radius-md)', padding: '14px 16px', marginBottom: '14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
                   <AlertTriangle size={14} color="#F39C12" />
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#F39C12', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Grant Alerts</span>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#F39C12', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Grant Alerts</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {alertGrants.map(g => {
@@ -826,8 +826,8 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                       <div key={g.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                         <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{g.name}</span>
                         <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                          {pct !== null && pct < 25 && <span style={{ padding: '2px 7px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: '#FDEDEC', color: '#E74C3C' }}>{pct.toFixed(0)}% remaining</span>}
-                          {daysLeft !== null && daysLeft <= 90 && <span style={{ padding: '2px 7px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: urgent ? '#FDEDEC' : '#FEF9E7', color: urgent ? '#E74C3C' : '#F39C12' }}>Expires in {daysLeft}d</span>}
+                          {pct !== null && pct < 25 && <span style={{ padding: '2px 7px', borderRadius: '10px', fontSize: '12px', fontWeight: 600, background: '#FDEDEC', color: '#E74C3C' }}>{pct.toFixed(0)}% remaining</span>}
+                          {daysLeft !== null && daysLeft <= 90 && <span style={{ padding: '2px 7px', borderRadius: '10px', fontSize: '12px', fontWeight: 600, background: urgent ? '#FDEDEC' : '#FEF9E7', color: urgent ? '#E74C3C' : '#F39C12' }}>Expires in {daysLeft}d</span>}
                         </div>
                       </div>
                     );
@@ -865,7 +865,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
               <div style={{ flex: '1 1 0', minWidth: 0 }}>
                 <Card icon={<Palmtree size={13} color="#F39C12" />} title="My time off">
                   {myTimeOff.length === 0 ? (
-                    <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No time off requests.</p>
+                    <p style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>No time off requests.</p>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       {myTimeOff.map((r, i) => {
@@ -880,7 +880,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: hasOverlap ? '#FEF5F5' : undefined }}>
                               <div style={{ minWidth: 0 }}>
                                 <span style={{ fontSize: '13px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)' }}>{label}</span>
-                                <p style={{ margin: '1px 0 0', fontSize: '11px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)' }}>
+                                <p style={{ margin: '1px 0 0', fontSize: '12px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)' }}>
                                   {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
                                 </p>
                               </div>
@@ -888,11 +888,11 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                                 {tripleInfo ? (
                                   <button onClick={() => setOverlapWarning(warningOpen ? null : `req_${r.id}`)}
                                     title="3+ members overlapping — click for details"
-                                    style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '1px 7px', fontSize: 10, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer' }}>
+                                    style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '1px 7px', fontSize: 11, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer' }}>
                                     ⚠ {tripleInfo.length + 1} overlap
                                   </button>
                                 ) : hasOverlap ? (
-                                  <span style={{ fontSize: 9, fontWeight: 700, color: '#E74C3C', background: '#FDEDEC', padding: '1px 5px', borderRadius: 6, border: '1px solid #F1948A' }}>OVERLAP</span>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: '#E74C3C', background: '#FDEDEC', padding: '1px 5px', borderRadius: 6, border: '1px solid #F1948A' }}>OVERLAP</span>
                                 ) : null}
                                 <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.text }}>
                                   {r.status === 'pending' ? 'Pending approval' : r.status.charAt(0).toUpperCase() + r.status.slice(1)}
@@ -908,7 +908,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                                     <span style={{ fontSize: 11, color: '#92400E', whiteSpace: 'nowrap' }}>{formatDate(o.start)}–{formatDate(o.end)}</span>
                                   </div>
                                 ))}
-                                <button onClick={() => setOverlapWarning(null)} style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Dismiss</button>
+                                <button onClick={() => setOverlapWarning(null)} style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Dismiss</button>
                               </div>
                             )}
                           </div>
