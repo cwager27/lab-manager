@@ -449,27 +449,26 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                         const cls = classifyAdhocTask(task);
                         const noDate = cls === 2;
                         const statusColor = cls === 0 ? '#E74C3C' : noDate ? 'var(--text-primary)' : '#F39C12';
-                        const statusBg   = cls === 0 ? '#FDEDEC' : noDate ? 'var(--purple-faint)' : '#FEF9E7';
-                        const statusLabel = cls === 0 ? 'Overdue' : noDate ? 'Assigned' : 'Upcoming';
                         const dateStr = noDate
                           ? (task.created_at ? formatDate(task.created_at.slice(0, 10)) : null)
                           : task.due_date ? formatDate(task.due_date) : null;
                         const isOverdue = cls === 0;
                         return (
-                          <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderTop: i > 0 ? (isOverdue ? '1px solid #FCCACA' : '1px solid var(--border)') : 'none', background: isOverdue ? '#FEF5F5' : undefined }}>
+                          <div key={task.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 14px', borderTop: i > 0 ? (isOverdue ? '1px solid #FCCACA' : '1px solid var(--border)') : 'none', background: isOverdue ? '#FEF5F5' : undefined }}>
                             {isOverdue ? (
-                              <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#FDEDEC', border: '1.5px solid #E74C3C', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#FDEDEC', border: '1.5px solid #E74C3C', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
                                 <span style={{ fontSize: 13, fontWeight: 900, color: '#E74C3C', lineHeight: 1 }}>!</span>
                               </div>
                             ) : (
-                              <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
+                              <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0, marginTop: 4 }} />
                             )}
-                            <span style={{ fontSize: 13, color: isOverdue ? '#C0392B' : 'var(--text-primary)', fontWeight: isOverdue ? 600 : 400, flex: 1, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
-                            {(() => { const name = (task.assignee?.full_name || teamMembers.find(m => m.id === task.assigned_to)?.full_name || ''); return name ? <span style={{ fontSize: 12, color: isOverdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: 500 }}>{name.split(' ')[0]}</span> : null; })()}
-                            {dateStr && (
-                              <span style={{ fontSize: 11, color: isOverdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: isOverdue ? 600 : 400 }}>{dateStr}</span>
-                            )}
-                            <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 8, background: statusBg, color: statusColor, flexShrink: 0, whiteSpace: 'nowrap' }}>{statusLabel}</span>
+                            <span style={{ fontSize: 13, color: isOverdue ? '#C0392B' : 'var(--text-primary)', fontWeight: isOverdue ? 600 : 400, flex: 1, lineHeight: 1.4 }}>{task.title}</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
+                              {(() => { const name = (task.assignee?.full_name || teamMembers.find(m => m.id === task.assigned_to)?.full_name || ''); return name ? <span style={{ fontSize: 12, color: isOverdue ? '#E74C3C' : 'var(--text-muted)', whiteSpace: 'nowrap', fontWeight: 500 }}>{name.split(' ')[0]}</span> : null; })()}
+                              {dateStr && (
+                                <span style={{ fontSize: 11, color: isOverdue ? '#E74C3C' : 'var(--text-muted)', whiteSpace: 'nowrap', fontWeight: isOverdue ? 600 : 400 }}>{dateStr}</span>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
