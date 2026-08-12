@@ -4100,8 +4100,13 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   }
 
   async function handleCreateOneOff() {
+    const titleWords = oneOffForm.title.trim().split(/\s+/).filter(Boolean).length;
     if (!oneOffForm.title.trim() || oneOffForm.assigneeIds.length === 0) {
       setOneOffError('Please enter a title and assign to at least one person.');
+      return;
+    }
+    if (titleWords > 8) {
+      setOneOffError('Title must be 8 words or fewer.');
       return;
     }
     setOneOffSaving(true);
@@ -4210,7 +4215,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             <div style={{ gridColumn: '1 / -1' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
                 <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Task Name</label>
-                {(() => { const wc = oneOffForm.title.trim() ? oneOffForm.title.trim().split(/\s+/).length : 0; return wc > 8 ? <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>⚠ {wc}/8 words — keep it short</span> : wc > 0 ? <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{wc}/8 words</span> : null; })()}
+                {(() => { const wc = oneOffForm.title.trim() ? oneOffForm.title.trim().split(/\s+/).filter(Boolean).length : 0; return wc > 8 ? <span style={{ fontSize: 11, color: '#E74C3C', fontWeight: 600 }}>✕ {wc}/8 words — exceeds limit</span> : wc > 0 ? <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{wc}/8 words</span> : null; })()}
               </div>
               <input value={oneOffForm.title} onChange={e => setOneOffForm(p => ({ ...p, title: e.target.value }))}
                 placeholder="Short task name (8 words max)"
@@ -4254,7 +4259,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             </div>
           </div>
           {oneOffError && <div style={{ fontSize: 12, color: 'var(--danger)', marginBottom: 10 }}>{oneOffError}</div>}
-          <button onClick={handleCreateOneOff} disabled={oneOffSaving} style={{ ...btn('primary'), display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button onClick={handleCreateOneOff} disabled={oneOffSaving || oneOffForm.title.trim().split(/\s+/).filter(Boolean).length > 8} style={{ ...btn('primary'), display: 'flex', alignItems: 'center', gap: 6 }}>
             <Plus size={14} /> {oneOffSaving ? 'Creating…' : 'Create Task'}
           </button>
         </div>
