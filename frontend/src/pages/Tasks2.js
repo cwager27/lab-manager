@@ -1702,10 +1702,13 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                 {threeMoTotal === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 8 }}>No completed tasks in the last 3 months.</div>}
               </div>
               {prodDetail3MoFilter && (
+                <div style={{ position: 'relative' }}>
                 <div style={{ maxHeight: 260, overflowY: 'auto' }}>
                   {threeMoFiltered.length === 0
                     ? <div style={{ padding: '16px 18px', fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No tasks.</div>
                     : threeMoFiltered.map(occ => <TaskRow key={occ.id} occ={occ} />)}
+                </div>
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none' }} />
                 </div>
               )}
             </div>
@@ -1719,6 +1722,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
               {upcomingTasks.length === 0
                 ? <div style={{ padding: '16px 18px', fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No upcoming tasks.</div>
                 : (
+                  <div style={{ position: 'relative' }}>
                   <div style={{ maxHeight: 280, overflowY: 'auto' }}>
                     {upcomingTasks.map(occ => (
                       <div key={occ.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
@@ -1731,6 +1735,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                         <div style={{ padding: '2px 9px', borderRadius: 12, background: '#f5eefb', color: 'var(--purple-primary)', fontSize: 11, fontWeight: 600, border: '1px solid #d4b8f0', whiteSpace: 'nowrap' }}>Upcoming</div>
                       </div>
                     ))}
+                  </div>
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none' }} />
                   </div>
                 )}
             </div>
@@ -1786,8 +1792,11 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
               {historyTasks.length === 0
                 ? <div style={{ padding: '16px 18px', fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No tasks for this period / filter.</div>
                 : (
+                  <div style={{ position: 'relative' }}>
                   <div style={{ maxHeight: 400, overflowY: 'auto' }}>
                     {historyTasks.map(occ => <TaskRow key={occ.id} occ={occ} />)}
+                  </div>
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none' }} />
                   </div>
                 )}
             </div>
@@ -3281,6 +3290,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           </div>
         </div>
 
+        <div style={{ position: 'relative' }}>
         <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', maxHeight: 440, overflowY: 'auto' }}>
           {groups.length === 0 && (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
@@ -3329,6 +3339,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             );
           })}
         </div>
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 10px 10px' }} />
+        </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
           <button onClick={() => setStep(1)} style={btn('ghost')}>← Back</button>
@@ -3367,7 +3379,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         </div>
 
         {/* Add from list */}
-        <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', maxHeight: 200, overflowY: 'auto', marginBottom: 20 }}>
+        <div style={{ position: 'relative', marginBottom: 20 }}>
+        <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', maxHeight: 200, overflowY: 'auto' }}>
           {available.map(p => {
             const pto = hasVacation(p.id);
             return (
@@ -3379,6 +3392,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             );
           })}
           {available.length === 0 && <div style={{ padding: 12, fontSize: 13, color: 'var(--text-muted)' }}>All lab members added</div>}
+        </div>
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 8px 8px' }} />
         </div>
 
         {/* Rotate every N */}
@@ -3543,6 +3558,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         )}
 
         {occs.length > 0 && (
+          <div style={{ position: 'relative' }}>
           <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', maxHeight: 420, overflowY: 'auto' }}>
             {taskGroupOrder.map((taskId, gi) => {
               const groupOccs = taskGroupMap[taskId];
@@ -3596,6 +3612,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                 </div>
               );
             })}
+          </div>
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 10px 10px' }} />
           </div>
         )}
 
@@ -3663,6 +3681,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         </div>
 
         {/* Preview table */}
+        <div style={{ position: 'relative' }}>
         <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', maxHeight: 380, overflowY: 'auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 1fr 1fr auto', gap: 0 }}>
             {['Date', 'Task', 'Assigned to', 'Previous', ''].map(h => (
@@ -3689,6 +3708,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
               ];
             })}
           </div>
+        </div>
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 10px 10px' }} />
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
@@ -3887,7 +3908,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
               {/* Day panel */}
               {panelDate && (
-                <div style={{ width: 320, flexShrink: 0 }}>
+                <div style={{ width: 320, flexShrink: 0, position: 'relative' }}>
                   <div style={{ ...card, padding: 16, maxHeight: '70vh', overflowY: 'auto' }}>
                     {/* Header */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
@@ -3974,6 +3995,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                       </div>
                     )}
                   </div>
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)' }} />
                 </div>
               )}
             </div>

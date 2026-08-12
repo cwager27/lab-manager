@@ -1587,7 +1587,8 @@ export default function Finance({ userRole }) {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                  <div style={{ flex: '1 1 0', minWidth: '240px', maxHeight: '340px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px' }}>
+                  <div style={{ position: 'relative', flex: '1 1 0', minWidth: '240px' }}>
+                  <div style={{ maxHeight: '340px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                         <tr style={{ background: '#9DA9C7' }}>
@@ -1613,6 +1614,8 @@ export default function Finance({ userRole }) {
                         </tr>
                       </tfoot>
                     </table>
+                  </div>
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)' }} />
                   </div>
                 </div>
               </div>
@@ -1669,7 +1672,8 @@ export default function Finance({ userRole }) {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                  <div style={{ flex: '1 1 0', minWidth: '220px', maxHeight: '420px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px' }}>
+                  <div style={{ position: 'relative', flex: '1 1 0', minWidth: '220px' }}>
+                  <div style={{ maxHeight: '420px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                         <tr style={{ background: '#9DA9C7' }}>
@@ -1698,6 +1702,8 @@ export default function Finance({ userRole }) {
                         </tr>
                       </tfoot>
                     </table>
+                  </div>
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)' }} />
                   </div>
                 </div>
               </div>
@@ -1794,7 +1800,8 @@ export default function Finance({ userRole }) {
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
-                  <div style={{ flex: '1 1 0', minWidth: '240px', maxHeight: '420px', overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+                  <div style={{ position: 'relative', flex: '1 1 0', minWidth: '240px' }}>
+                  <div style={{ maxHeight: '420px', overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
                     <table style={{ borderCollapse: 'collapse', fontSize: '11px', minWidth: '280px' }}>
                       <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                         <tr style={{ background: '#9DA9C7' }}>
@@ -1834,6 +1841,8 @@ export default function Finance({ userRole }) {
                         </tr>
                       </tfoot>
                     </table>
+                  </div>
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)' }} />
                   </div>
                 </div>
               </div>
@@ -1973,7 +1982,8 @@ export default function Finance({ userRole }) {
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
-                    <div style={{ flex: '0 0 auto', minWidth: '260px', maxHeight: '340px', overflowX: 'auto', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '11px' }}>
+                    <div style={{ position: 'relative', flex: '0 0 auto', minWidth: '260px' }}>
+                    <div style={{ maxHeight: '340px', overflowX: 'auto', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '11px' }}>
                       <table style={{ borderCollapse: 'collapse', minWidth: '200px' }}>
                         <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                           <tr style={{ background: '#9DA9C7' }}>
@@ -2001,6 +2011,8 @@ export default function Finance({ userRole }) {
                         </tfoot>
                       </table>
                     </div>
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)' }} />
+                    </div>
                   </div>
                 </div>
 
@@ -2022,7 +2034,8 @@ export default function Finance({ userRole }) {
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
-                    <div style={{ flex: '0 0 auto', minWidth: '260px', maxHeight: '440px', overflowX: 'auto', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '11px' }}>
+                    <div style={{ position: 'relative', flex: '0 0 auto', minWidth: '260px' }}>
+                    <div style={{ maxHeight: '440px', overflowX: 'auto', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '11px' }}>
                       <table style={{ borderCollapse: 'collapse', minWidth: '220px' }}>
                         <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                           <tr style={{ background: '#9DA9C7' }}>
@@ -2049,6 +2062,8 @@ export default function Finance({ userRole }) {
                           </tr>
                         </tfoot>
                       </table>
+                    </div>
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)' }} />
                     </div>
                   </div>
                 </div>

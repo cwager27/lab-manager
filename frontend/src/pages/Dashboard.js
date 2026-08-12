@@ -763,6 +763,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                       <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No unassigned tasks in next 7 days.</p>
                     ) : (
                       <>
+                        <div style={{ position: 'relative' }}>
                         <div style={{ maxHeight: 280, overflowY: 'auto' }}>
                           {unassigned7.map((t, i) => {
                             const overdue = t.due_date && t.due_date < today;
@@ -813,6 +814,8 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                               </div>
                             );
                           })}
+                        </div>
+                        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none' }} />
                         </div>
                       </>
                     )}
