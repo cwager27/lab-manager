@@ -3786,7 +3786,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           {calSummaryLoading ? (
             <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
           ) : (
-            <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+            <div style={{ position: 'relative', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: '100%' }}>
                 <thead>
@@ -3829,6 +3829,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                 </tbody>
               </table>
             </div>
+            <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 40, background: 'linear-gradient(to right, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none' }} />
             </div>
           )}
         </div>
