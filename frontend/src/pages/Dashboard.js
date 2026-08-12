@@ -42,19 +42,29 @@ function TaskStatusCard({ icon, title, tasks, getTitle, dateKey, upcomingLabel =
           {isMissed && <AlertTriangle size={11} color="#E74C3C" />}
           <span style={{ fontSize: 11, fontWeight: 700, color: isMissed ? '#E74C3C' : headColor, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
         </div>
-        {items.map(t => (
-          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderTop: isMissed ? '1px solid #FCCACA' : '1px solid var(--border)', background: isMissed ? '#FEF5F5' : undefined }}>
-            {isMissed && (
-              <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#FDEDEC', border: '1.5px solid #E74C3C', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <span style={{ fontSize: 13, fontWeight: 900, color: '#E74C3C', lineHeight: 1 }}>!</span>
-              </div>
-            )}
-            <span style={{ fontSize: 13, color: isMissed ? '#C0392B' : 'var(--text-primary)', fontWeight: isMissed ? 600 : 400, flex: 1, lineHeight: 1.3 }}>{getTitle(t)}</span>
-            {t[dateKey] && (
-              <span style={{ fontSize: 11, color: isMissed ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: isMissed ? 600 : 400 }}>{formatDate(t[dateKey])}</span>
-            )}
-          </div>
-        ))}
+        {items.map(t => {
+          const daysOverdue = isMissed && t[dateKey]
+            ? Math.ceil((new Date(todayStr) - new Date(t[dateKey])) / 86400000)
+            : 0;
+          return (
+            <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderTop: '1px solid var(--border)' }}>
+              {isMissed && (
+                <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#FDEDEC', border: '1.5px solid #E74C3C', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 900, color: '#E74C3C', lineHeight: 1 }}>!</span>
+                </div>
+              )}
+              <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: isMissed ? 600 : 400, flex: 1, lineHeight: 1.3 }}>{getTitle(t)}</span>
+              {t[dateKey] && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, flexShrink: 0 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{formatDate(t[dateKey])}</span>
+                  {isMissed && daysOverdue > 0 && (
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{daysOverdue === 1 ? '1d overdue' : `${daysOverdue}d overdue`}</span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -144,6 +154,8 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
   const [myRecurOccs, setMyRecurOccs] = useState([]);
   const [grants, setGrants] = useState([]);
   const [unassignedTasks, setUnassignedTasks] = useState([]);
+  const [pendingVacations, setPendingVacations] = useState([]);
+  const [vacActioning, setVacActioning] = useState(null);
   const [loading, setLoading] = useState(true);
   const [overlapWarning, setOverlapWarning] = useState(null);
   const [expandedUnassignedId, setExpandedUnassignedId] = useState(null);
@@ -182,17 +194,19 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
       supabase.from('vacation_requests')
         .select('*, requester:profiles!vacation_requests_requested_by_fkey(full_name)')
         .eq('status', 'approved').lte('start_date', next8Weeks).gte('end_date', today).order('start_date'),
-      // all requests: Mia/PM see everyone's, others see only their own (pending+approved only)
+      // personal time off — always only the current user's own requests
+      supabase.from('vacation_requests')
+        .select('*, requester:profiles!vacation_requests_requested_by_fkey(full_name)')
+        .eq('requested_by', profile.id)
+        .in('status', ['pending', 'approved'])
+        .order('start_date', { ascending: false }),
+      // pending approvals — leadership only
       showGrantAlert
         ? supabase.from('vacation_requests')
             .select('*, requester:profiles!vacation_requests_requested_by_fkey(full_name)')
-            .in('status', ['pending', 'approved'])
-            .order('start_date', { ascending: false })
-        : supabase.from('vacation_requests')
-            .select('*, requester:profiles!vacation_requests_requested_by_fkey(full_name)')
-            .eq('requested_by', profile.id)
-            .in('status', ['pending', 'approved'])
-            .order('start_date', { ascending: false }),
+            .eq('status', 'pending')
+            .order('start_date')
+        : Promise.resolve({ data: [] }),
       // meetings — both types live in lab_meetings, split by meeting_type
       supabase.from('lab_meetings')
         .select('*, presenter:profiles!lab_meetings_presenter_id_fkey(full_name)')
@@ -227,6 +241,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
     const [
       { data: vacData },
       { data: myVacData },
+      { data: pendingVacData },
       { data: allMeetingData },
       { data: sporData },
       { data: myRecurData },
@@ -248,6 +263,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
     setTeamMembers(memberData || []);
     setGrants(grantData || []);
     setUnassignedTasks(unassignedData || []);
+    setPendingVacations(pendingVacData || []);
     const todayForProd = new Date().toISOString().split('T')[0];
     const byPersonInit = {};
     (initRecurOccData || []).forEach(o => { if (!byPersonInit[o.assigned_to]) byPersonInit[o.assigned_to] = []; byPersonInit[o.assigned_to].push(o); });
@@ -294,6 +310,13 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
     setRecurLoading(false);
   }
 
+  async function handleVacationAction(id, newStatus) {
+    setVacActioning(id);
+    await supabase.from('vacation_requests').update({ status: newStatus }).eq('id', id);
+    setPendingVacations(prev => prev.filter(r => r.id !== id));
+    setVacActioning(null);
+  }
+
   const today = new Date().toISOString().split('T')[0];
   const myPersonalAdhocTasks = myTasks.filter(t => t.assigned_to === profile?.id);
 
@@ -327,32 +350,6 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
     return result;
   })();
 
-  const vacRequestOverlapIds = showGrantAlert ? (() => {
-    const ids = new Set();
-    for (let i = 0; i < myTimeOff.length; i++) {
-      for (let j = i + 1; j < myTimeOff.length; j++) {
-        const a = myTimeOff[i], b = myTimeOff[j];
-        if (a.start_date <= b.end_date && b.start_date <= a.end_date) { ids.add(a.id); ids.add(b.id); }
-      }
-    }
-    return ids;
-  })() : new Set();
-
-  // 3+ member overlap info for the "My time off" requests card
-  const tripleVacRequestOverlapInfo = showGrantAlert ? (() => {
-    const result = {};
-    myTimeOff.forEach(r => {
-      const others = myTimeOff.filter(o => o.id !== r.id && o.start_date <= r.end_date && r.start_date <= o.end_date);
-      if (others.length >= 2) {
-        result[r.id] = others.map(o => ({
-          name: o.requester?.full_name || 'Unknown',
-          start: o.start_date > r.start_date ? o.start_date : r.start_date,
-          end: o.end_date < r.end_date ? o.end_date : r.end_date,
-        }));
-      }
-    });
-    return result;
-  })() : {};
 
   // 0=overdue, 1=upcoming with date, 2=no due date (assigned), 3=done
   const classifyAdhocTask = t => (t.status === 'done' || t.status === 'submitted') ? 3 : (t.due_date && t.due_date < today) ? 0 : t.due_date ? 1 : 2;
@@ -818,6 +815,55 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                   </div>
                 </div>
 
+                {/* Pending time off approvals */}
+                <div style={{ flex: '2 1 0', minWidth: 0 }}>
+                  <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                    <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <Palmtree size={13} color="#F39C12" />
+                        <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Time off approvals</span>
+                        {pendingVacations.length > 0 && (
+                          <span style={{ fontSize: 11, fontWeight: 700, background: '#FEF9E7', color: '#B7950B', border: '1px solid #F9E79F', borderRadius: 10, padding: '1px 7px' }}>{pendingVacations.length}</span>
+                        )}
+                      </div>
+                      <button onClick={() => setCurrentPage('vacation')} style={{ fontSize: 11, color: 'var(--purple-primary)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>View all →</button>
+                    </div>
+                    {pendingVacations.length === 0 ? (
+                      <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No pending requests.</p>
+                    ) : (
+                      <div style={{ position: 'relative' }}>
+                        <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                          {pendingVacations.map((r, i) => (
+                            <div key={r.id} style={{ padding: '9px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{r.requester?.full_name || 'Unknown'}</span>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                                  {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <button
+                                  onClick={() => handleVacationAction(r.id, 'approved')}
+                                  disabled={vacActioning === r.id}
+                                  style={{ flex: 1, padding: '4px 0', fontSize: 11, fontWeight: 600, background: '#EAF7F0', color: '#1A7F4B', border: '1px solid #A9DFC3', borderRadius: 6, cursor: 'pointer', opacity: vacActioning === r.id ? 0.5 : 1 }}>
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleVacationAction(r.id, 'denied')}
+                                  disabled={vacActioning === r.id}
+                                  style={{ flex: 1, padding: '4px 0', fontSize: 11, fontWeight: 600, background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', opacity: vacActioning === r.id ? 0.5 : 1 }}>
+                                  Deny
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none' }} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
               </div>
             </div>
           )}
@@ -873,60 +919,30 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                   tasks={myPersonalAdhocTasks}
                   getTitle={t => t.title}
                   dateKey="due_date"
-                  upcomingLabel="Upcoming"
+                  upcomingLabel="Upcoming — next 30 days"
                 />
               </div>
 
-              {/* Col 3 — My time off / Team time off */}
+              {/* Col 3 — My time off */}
               <div style={{ flex: '1 1 0', minWidth: 0 }}>
-                <Card icon={<Palmtree size={13} color="#F39C12" />} title={showGrantAlert ? 'Team time off' : 'My time off'}>
+                <Card icon={<Palmtree size={13} color="#F39C12" />} title="My time off">
                   {myTimeOff.length === 0 ? (
                     <p style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>No time off requests.</p>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       {myTimeOff.map((r, i) => {
                         const s = STATUS_COLORS[r.status] || STATUS_COLORS.pending;
-                        const hasOverlap = showGrantAlert && vacRequestOverlapIds.has(r.id);
-                        const tripleInfo = showGrantAlert ? tripleVacRequestOverlapInfo[r.id] : null;
-                        const warningOpen = overlapWarning === `req_${r.id}`;
-                        const openUpward = i >= Math.ceil(myTimeOff.length / 2);
-                        const label = showGrantAlert ? (r.requester?.full_name || 'Unknown') : (r.leave_type || 'Time off');
                         return (
-                          <div key={r.id} style={{ position: 'relative' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
-                              <div style={{ minWidth: 0 }}>
-                                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{label}</span>
-                                <p style={{ margin: '1px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
-                                  {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
-                                </p>
-                              </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-                                {tripleInfo ? (
-                                  <button onClick={() => setOverlapWarning(warningOpen ? null : `req_${r.id}`)}
-                                    title="3+ members overlapping — click for details"
-                                    style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '1px 7px', fontSize: 11, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer' }}>
-                                    ⚠ {tripleInfo.length + 1} overlap
-                                  </button>
-                                ) : hasOverlap ? (
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: '#92400E', background: '#FEF3C7', padding: '1px 5px', borderRadius: 6, border: '1px solid #F59E0B' }}>⚠ overlap</span>
-                                ) : null}
-                                <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.text }}>
-                                  {r.status === 'pending' ? 'Pending approval' : r.status.charAt(0).toUpperCase() + r.status.slice(1)}
-                                </span>
-                              </div>
+                          <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
+                            <div style={{ minWidth: 0 }}>
+                              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{r.leave_type || 'Time off'}</span>
+                              <p style={{ margin: '1px 0 0', fontSize: '12px', color: 'var(--text-primary)' }}>
+                                {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
+                              </p>
                             </div>
-                            {warningOpen && tripleInfo && (
-                              <div style={{ position: 'absolute', right: 14, ...(openUpward ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }), zIndex: 50, background: 'white', border: '1px solid #F59E0B', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.12)', padding: '10px 14px', minWidth: 230 }}>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: '#92400E', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>⚠ Overlapping with {label}</div>
-                                {tripleInfo.map((o, idx) => (
-                                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '4px 0', borderTop: idx > 0 ? '1px solid #FEF3C7' : 'none' }}>
-                                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{o.name}</span>
-                                    <span style={{ fontSize: 11, color: '#92400E', whiteSpace: 'nowrap' }}>{formatDate(o.start)}–{formatDate(o.end)}</span>
-                                  </div>
-                                ))}
-                                <button onClick={() => setOverlapWarning(null)} style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Dismiss</button>
-                              </div>
-                            )}
+                            <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.text, flexShrink: 0 }}>
+                              {r.status === 'pending' ? 'Pending approval' : r.status.charAt(0).toUpperCase() + r.status.slice(1)}
+                            </span>
                           </div>
                         );
                       })}
