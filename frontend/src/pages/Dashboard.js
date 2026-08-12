@@ -506,30 +506,28 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                         const hasOverlap = vacOverlapIds.has(r.id);
                         const tripleInfo = tripleVacOverlapInfo[r.id];
                         const warningOpen = overlapWarning === `vac_${r.id}`;
-                        const s = STATUS_COLORS[r.status] || STATUS_COLORS.pending;
                         return (
                           <div key={r.id} style={{ position: 'relative' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: hasOverlap ? '#FEF5F5' : undefined }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
                               <div style={{ minWidth: 0 }}>
-                                <span style={{ fontSize: '13px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)' }}>{r.requester?.full_name}</span>
-                                <p style={{ margin: '1px 0 0', fontSize: '12px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)' }}>
+                                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{r.requester?.full_name}</span>
+                                <p style={{ margin: '1px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
                                   {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
                                 </p>
                               </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-                                {tripleInfo ? (
-                                  <button onClick={() => setOverlapWarning(warningOpen ? null : `vac_${r.id}`)}
-                                    title="3+ members overlapping — click for details"
-                                    style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '1px 7px', fontSize: 11, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer' }}>
-                                    ⚠ {tripleInfo.length + 1} overlap
-                                  </button>
-                                ) : hasOverlap ? (
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: '#E74C3C', background: '#FDEDEC', padding: '1px 5px', borderRadius: 6, border: '1px solid #F1948A' }}>OVERLAP</span>
-                                ) : null}
-                                <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '12px', fontWeight: 600, background: s.bg, color: s.text }}>
-                                  {r.status === 'pending' ? 'Pending' : r.status.charAt(0).toUpperCase() + r.status.slice(1)}
-                                </span>
-                              </div>
+                              {(tripleInfo || hasOverlap) && (
+                                <div style={{ flexShrink: 0 }}>
+                                  {tripleInfo ? (
+                                    <button onClick={() => setOverlapWarning(warningOpen ? null : `vac_${r.id}`)}
+                                      title="3+ members overlapping — click for details"
+                                      style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '1px 7px', fontSize: 11, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer' }}>
+                                      ⚠ {tripleInfo.length + 1} overlap
+                                    </button>
+                                  ) : (
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: '#92400E', background: '#FEF3C7', padding: '1px 5px', borderRadius: 6, border: '1px solid #F59E0B' }}>⚠ overlap</span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                             {warningOpen && tripleInfo && (
                               <div style={{ position: 'absolute', right: 14, top: '100%', marginTop: 4, zIndex: 50, background: 'white', border: '1px solid #F59E0B', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.12)', padding: '10px 14px', minWidth: 230 }}>
@@ -567,30 +565,28 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                         const tripleInfo = tripleVacOverlapInfo[r.id];
                         const warningOpen = overlapWarning === `vac_${r.id}`;
                         const openUpward = i >= Math.ceil(nextWeekOut.length / 2);
-                        const s = STATUS_COLORS[r.status] || STATUS_COLORS.pending;
                         return (
                           <div key={r.id} style={{ position: 'relative' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: hasOverlap ? '#FEF5F5' : undefined }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
                               <div style={{ minWidth: 0 }}>
-                                <span style={{ fontSize: '13px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)' }}>{r.requester?.full_name}</span>
-                                <p style={{ margin: '1px 0 0', fontSize: '12px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)' }}>
+                                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{r.requester?.full_name}</span>
+                                <p style={{ margin: '1px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
                                   {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
                                 </p>
                               </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-                                {tripleInfo ? (
-                                  <button onClick={() => setOverlapWarning(warningOpen ? null : `vac_${r.id}`)}
-                                    title="3+ members overlapping — click for details"
-                                    style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '1px 7px', fontSize: 11, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer' }}>
-                                    ⚠ {tripleInfo.length + 1} overlap
-                                  </button>
-                                ) : hasOverlap ? (
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: '#E74C3C', background: '#FDEDEC', padding: '1px 5px', borderRadius: 6, border: '1px solid #F1948A' }}>OVERLAP</span>
-                                ) : null}
-                                <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '12px', fontWeight: 600, background: s.bg, color: s.text }}>
-                                  {r.status === 'pending' ? 'Pending' : r.status.charAt(0).toUpperCase() + r.status.slice(1)}
-                                </span>
-                              </div>
+                              {(tripleInfo || hasOverlap) && (
+                                <div style={{ flexShrink: 0 }}>
+                                  {tripleInfo ? (
+                                    <button onClick={() => setOverlapWarning(warningOpen ? null : `vac_${r.id}`)}
+                                      title="3+ members overlapping — click for details"
+                                      style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '1px 7px', fontSize: 11, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer' }}>
+                                      ⚠ {tripleInfo.length + 1} overlap
+                                    </button>
+                                  ) : (
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: '#92400E', background: '#FEF3C7', padding: '1px 5px', borderRadius: 6, border: '1px solid #F59E0B' }}>⚠ overlap</span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                             {warningOpen && tripleInfo && (
                               <div style={{ position: 'absolute', right: 14, ...(openUpward ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }), zIndex: 50, background: 'white', border: '1px solid #F59E0B', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.12)', padding: '10px 14px', minWidth: 230 }}>
