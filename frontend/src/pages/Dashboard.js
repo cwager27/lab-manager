@@ -877,26 +877,26 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                 />
               </div>
 
-              {/* Col 3 — My time off */}
+              {/* Col 3 — My time off / Team time off */}
               <div style={{ flex: '1 1 0', minWidth: 0 }}>
-                <Card icon={<Palmtree size={13} color="#F39C12" />} title="My time off">
+                <Card icon={<Palmtree size={13} color="#F39C12" />} title={showGrantAlert ? 'Team time off' : 'My time off'}>
                   {myTimeOff.length === 0 ? (
                     <p style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>No time off requests.</p>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       {myTimeOff.map((r, i) => {
                         const s = STATUS_COLORS[r.status] || STATUS_COLORS.pending;
-                        const hasOverlap = vacRequestOverlapIds.has(r.id);
-                        const tripleInfo = tripleVacRequestOverlapInfo[r.id];
+                        const hasOverlap = showGrantAlert && vacRequestOverlapIds.has(r.id);
+                        const tripleInfo = showGrantAlert ? tripleVacRequestOverlapInfo[r.id] : null;
                         const warningOpen = overlapWarning === `req_${r.id}`;
                         const openUpward = i >= Math.ceil(myTimeOff.length / 2);
-                        const label = showGrantAlert ? (r.requester?.full_name || 'Unknown') : r.leave_type;
+                        const label = showGrantAlert ? (r.requester?.full_name || 'Unknown') : (r.leave_type || 'Time off');
                         return (
                           <div key={r.id} style={{ position: 'relative' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: hasOverlap ? '#FEF5F5' : undefined }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
                               <div style={{ minWidth: 0 }}>
-                                <span style={{ fontSize: '13px', fontWeight: 600, color: hasOverlap ? '#E74C3C' : 'var(--text-primary)' }}>{label}</span>
-                                <p style={{ margin: '1px 0 0', fontSize: '12px', color: hasOverlap ? '#E74C3C' : 'var(--text-muted)' }}>
+                                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{label}</span>
+                                <p style={{ margin: '1px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
                                   {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
                                 </p>
                               </div>
@@ -908,7 +908,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                                     ⚠ {tripleInfo.length + 1} overlap
                                   </button>
                                 ) : hasOverlap ? (
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: '#E74C3C', background: '#FDEDEC', padding: '1px 5px', borderRadius: 6, border: '1px solid #F1948A' }}>OVERLAP</span>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: '#92400E', background: '#FEF3C7', padding: '1px 5px', borderRadius: 6, border: '1px solid #F59E0B' }}>⚠ overlap</span>
                                 ) : null}
                                 <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.text }}>
                                   {r.status === 'pending' ? 'Pending approval' : r.status.charAt(0).toUpperCase() + r.status.slice(1)}
