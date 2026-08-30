@@ -833,7 +833,7 @@ function CustomTabContent({ tabId, storagePrefix, canEdit }) {
       style={{ minHeight: 120 }}
     >
       {sections.length === 0 && canEdit && (
-        <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, border: '2px dashed var(--border)', borderRadius: 'var(--radius-md)' }}>
+        <div contentEditable={false} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, border: '2px dashed var(--border)', borderRadius: 'var(--radius-md)', userSelect: 'none' }}>
           Right-click to add a section
         </div>
       )}
