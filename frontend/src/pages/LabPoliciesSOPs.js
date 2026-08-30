@@ -397,6 +397,140 @@ function EditableCell({ html, onChange, onFocus, style, tag: Tag = 'div' }) {
   );
 }
 
+// ── Context menu for adding blocks (section or table) ────────────────────────
+function AddBlockMenu({ x, y, onAddSection, onAddTable, onDelete, onClose }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const down = e => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    const key  = e => { if (e.key === 'Escape') onClose(); };
+    setTimeout(() => document.addEventListener('mousedown', down), 0);
+    document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('mousedown', down); document.removeEventListener('keydown', key); };
+  }, [onClose]);
+
+  const menuBtn = (onClick, label, danger) => (
+    <button onClick={onClick}
+      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+      style={{ display: 'block', width: '100%', padding: '7px 16px', background: 'none', border: 'none', textAlign: 'left', fontSize: 13, cursor: 'pointer', color: danger ? '#e74c3c' : 'var(--text-primary)' }}>
+      {label}
+    </button>
+  );
+
+  return (
+    <div ref={ref} contentEditable={false} onMouseDown={e => e.stopPropagation()}
+      style={{ position: 'fixed', left: x, top: y, zIndex: 9000, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: '4px 0', minWidth: 160 }}>
+      {onAddSection && menuBtn(() => { onAddSection(); onClose(); }, 'Add text section')}
+      {onAddTable && menuBtn(() => { onAddTable(); onClose(); }, 'Add table')}
+      {onDelete && (
+        <>
+          <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+          {menuBtn(() => { onDelete(); onClose(); }, 'Delete', true)}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Reusable table block editor ───────────────────────────────────────────────
+function BlockTableEditor({ block, canEdit, onUpdate, onDelete }) {
+  const [selectedCell, setSelectedCell] = useState(null);
+  const [contextMenu, setContextMenu]   = useState(null);
+  const cellRefs = useRef({});
+  const tableRef = useRef(null);
+
+  const cols = block.columns || ['Item', 'Description'];
+  const rows = block.rows || [];
+
+  function updateCell(ri, ci, val)  { onUpdate({ ...block, rows: rows.map((r, i) => i === ri ? r.map((c, j) => j === ci ? val : c) : r) }); }
+  function updateHeader(ci, val)    { onUpdate({ ...block, columns: cols.map((c, i) => i === ci ? val : c) }); }
+  function insertRowAt(ri)          { onUpdate({ ...block, rows: [...rows.slice(0, ri), cols.map(() => ''), ...rows.slice(ri)] }); }
+  function deleteRowAt(ri)          { onUpdate({ ...block, rows: rows.filter((_, i) => i !== ri) }); }
+  function insertColAt(ci)          { onUpdate({ ...block, columns: [...cols.slice(0, ci), 'New column', ...cols.slice(ci)], rows: rows.map(r => [...r.slice(0, ci), '', ...r.slice(ci)]) }); }
+  function deleteColAt(ci)          { if (cols.length <= 1) return; onUpdate({ ...block, columns: cols.filter((_, i) => i !== ci), rows: rows.map(r => r.filter((_, i) => i !== ci)) }); }
+  function clearCell(ri, ci)        { updateCell(ri, ci, ''); if (cellRefs.current[`${ri}-${ci}`]) cellRefs.current[`${ri}-${ci}`].innerHTML = ''; }
+
+  function handleCellContextMenu(e, ri, ci) {
+    e.preventDefault();
+    setSelectedCell({ ri, ci });
+    setContextMenu({ x: e.clientX, y: e.clientY, ri, ci });
+  }
+
+  const ctxItems = (ri, ci) => [
+    { icon: <Plus size={13} />, label: 'Insert 1 row above',    action: () => insertRowAt(ri) },
+    { icon: <Plus size={13} />, label: 'Insert 1 row below',    action: () => insertRowAt(ri + 1) },
+    { icon: <Plus size={13} />, label: 'Insert 1 column left',  action: () => insertColAt(ci) },
+    { icon: <Plus size={13} />, label: 'Insert 1 column right', action: () => insertColAt(ci + 1) },
+    '---',
+    { icon: <Trash2 size={13} />, label: 'Delete row',    action: () => deleteRowAt(ri),    danger: true },
+    { icon: <Trash2 size={13} />, label: 'Delete column', action: () => deleteColAt(ci),    danger: true },
+    { icon: <X size={13} />,      label: 'Clear cell',    action: () => clearCell(ri, ci) },
+  ];
+
+  const tdStyle = (ri, ci) => ({
+    padding: '8px 12px', fontSize: 13, color: 'var(--text-secondary)',
+    borderBottom: '1px solid var(--border)', borderRight: '1px solid var(--border)',
+    verticalAlign: 'top',
+    background: selectedCell?.ri === ri && selectedCell?.ci === ci ? '#EEF2FF' : selectedCell?.ri === ri ? '#F5F7FF' : undefined,
+    outline: selectedCell?.ri === ri && selectedCell?.ci === ci ? '2px solid #4F8EF7' : undefined,
+    outlineOffset: -2,
+  });
+
+  return (
+    <div onMouseDown={e => { if (!e.target.closest('td') && !e.target.closest('button')) setSelectedCell(null); }}>
+      <SOPToolbar editorRef={tableRef} canEdit={canEdit} />
+      {canEdit && (
+        <div style={{ display: 'flex', gap: 6, margin: '8px 0' }}>
+          <button onClick={() => insertRowAt(rows.length)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', fontSize: 12, border: '1px solid var(--border)', background: 'var(--bg-card)', borderRadius: 6, cursor: 'pointer', color: 'var(--text-secondary)' }}><Plus size={12} /> Add row</button>
+          <button onClick={() => insertColAt(cols.length)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', fontSize: 12, border: '1px solid var(--border)', background: 'var(--bg-card)', borderRadius: 6, cursor: 'pointer', color: 'var(--text-secondary)' }}><Plus size={12} /> Add column</button>
+          {onDelete && <button onClick={onDelete} style={{ padding: '5px 10px', fontSize: 12, border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', borderRadius: 6, cursor: 'pointer' }}>Delete table</button>}
+        </div>
+      )}
+      <div ref={tableRef} style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'auto' }}
+        onKeyDown={e => {
+          if ((e.key === 'Delete' || e.key === 'Backspace') && selectedCell && document.activeElement?.dataset?.cell !== `${selectedCell.ri}-${selectedCell.ci}`) {
+            e.preventDefault(); clearCell(selectedCell.ri, selectedCell.ci);
+          }
+          if (e.key === 'Escape') setSelectedCell(null);
+        }}
+        tabIndex={-1}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+          <thead>
+            <tr style={{ background: 'var(--purple-primary)' }}>
+              {cols.map((col, ci) => (
+                <th key={ci} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: 'white', borderRight: '1px solid rgba(255,255,255,0.2)' }}>
+                  {canEdit ? <EditableCell html={col} onChange={v => updateHeader(ci, v)} style={{ color: 'white', fontSize: 12, fontWeight: 700 }} /> : col}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr><td colSpan={cols.length} style={{ textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic', padding: '24px', borderBottom: '1px solid var(--border)' }}>
+                No rows yet.{canEdit ? ' Click "Add row" to get started.' : ''}
+              </td></tr>
+            )}
+            {rows.map((row, ri) => (
+              <tr key={ri}>
+                {row.map((cellVal, ci) => (
+                  <td key={ci} style={tdStyle(ri, ci)}
+                    onClick={() => setSelectedCell({ ri, ci })}
+                    onContextMenu={canEdit ? e => handleCellContextMenu(e, ri, ci) : undefined}>
+                    {canEdit
+                      ? <EditableCell html={cellVal} onChange={v => updateCell(ri, ci, v)} style={{ minHeight: 24, lineHeight: 1.5 }} tag="div" />
+                      : <span dangerouslySetInnerHTML={{ __html: cellVal || '' }} />}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {contextMenu && <TableContextMenu x={contextMenu.x} y={contextMenu.y} items={ctxItems(contextMenu.ri, contextMenu.ci)} onClose={() => setContextMenu(null)} />}
+    </div>
+  );
+}
+
 // ── Reagent Categorization SOP ────────────────────────────────────────────────
 const DEFAULT_QUARTZY = [
   { name: 'Proteins and enzymes',         def: '',                                                                                                                                                                                                                                                                                                                                                                                                                  examples: 'Individual purified biological macromolecules, including proteins and enzymes, that are themselves the material being used (e.g. catalytic, binding, or structural activity), not small-molecule inhibitors, buffers, or chemical modifiers. This category includes recombinant, purified, or native proteins supplied as discrete entities.' },
@@ -789,14 +923,17 @@ function CustomTabContent({ tabId, storagePrefix, canEdit }) {
     try { localStorage.setItem(storageKey, JSON.stringify(sections)); } catch {}
   }, [sections, storageKey]);
 
-  const addSection = useCallback((afterIdx) => {
+  const addBlock = useCallback((afterIdx, type) => {
     const id = `sec_${Date.now()}`;
+    const newBlock = type === 'table'
+      ? { id, type: 'table', columns: ['Item', 'Description'], rows: [] }
+      : { id, type: 'section', label: '', content: '', subsections: [] };
     setSections(prev => {
       const next = [...prev];
-      next.splice(afterIdx + 1, 0, { id, label: '', content: '' });
+      next.splice(afterIdx + 1, 0, newBlock);
       return next;
     });
-    setTimeout(() => inputRefs.current[id]?.focus(), 50);
+    if (type === 'section') setTimeout(() => inputRefs.current[id]?.focus(), 50);
   }, []);
 
   const deleteSection = useCallback((idx) => {
@@ -821,6 +958,10 @@ function CustomTabContent({ tabId, storagePrefix, canEdit }) {
     setSections(prev => prev.map(s => s.id === id ? { ...s, content } : s));
   }, []);
 
+  const updateTableBlock = useCallback((id, updated) => {
+    setSections(prev => prev.map(s => s.id === id ? { ...s, ...updated } : s));
+  }, []);
+
   const { addSubsection, deleteSubsection, updateSubsectionContent, updateSubsectionBgColor, updateSectionBgColor } = makeSubsectionHandlers(setSections);
 
   const secCard = { marginBottom: 16, padding: '16px 20px', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' };
@@ -829,50 +970,66 @@ function CustomTabContent({ tabId, storagePrefix, canEdit }) {
   return (
     <div
       onMouseDown={() => setCtxMenu(null)}
-      onContextMenu={canEdit ? e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, idx: -1 }); } : undefined}
+      onContextMenu={canEdit ? e => {
+        if (!e.target.closest('[data-tab-block]')) { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, idx: -1 }); }
+      } : undefined}
       style={{ minHeight: 120 }}
     >
       {sections.length === 0 && canEdit && (
         <div contentEditable={false} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, border: '2px dashed var(--border)', borderRadius: 'var(--radius-md)', userSelect: 'none' }}>
-          Right-click to add a section
+          Right-click to add a section or table
         </div>
       )}
-      {sections.map((sec, idx) => (
-        <div key={sec.id}
-          style={{ ...secCard, background: sec.bgColor || 'var(--bg-card)' }}
-          onContextMenu={canEdit ? e => { e.stopPropagation(); e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, idx }); } : undefined}
-        >
-          {canEdit
-            ? <input ref={el => { inputRefs.current[sec.id] = el; }} value={sec.label} onChange={e => updateLabel(sec.id, e.target.value)} placeholder={`Section ${idx + 1}`}
-                style={{ ...secH1, background: 'none', border: 'none', borderBottom: '1px solid var(--purple-primary)', outline: 'none', width: '100%', cursor: 'text', boxSizing: 'border-box', display: 'block', marginBottom: 12 }} />
-            : <div style={secH1}>{sec.label || <span style={{ fontStyle: 'italic', opacity: 0.5 }}>Section {idx + 1}</span>}</div>
-          }
-          <CustomTabSectionContent sectionId={sec.id} initialContent={sec.content} onContentChange={content => updateContent(sec.id, content)} />
-          {(sec.subsections || []).map(sub => (
-            <SubsectionBlock key={sub.id} sub={sub} canEdit={canEdit}
-              onContentChange={content => updateSubsectionContent(sec.id, sub.id, content)}
-              onChangeBgColor={color => updateSubsectionBgColor(sec.id, sub.id, color)}
-              onDelete={() => deleteSubsection(sec.id, sub.id)} />
-          ))}
-        </div>
-      ))}
+      {sections.map((sec, idx) => {
+        const isTable = sec.type === 'table';
+        return (
+          <div key={sec.id} data-tab-block={sec.id}
+            style={isTable ? { marginBottom: 20 } : { ...secCard, background: sec.bgColor || 'var(--bg-card)' }}
+            onContextMenu={canEdit ? e => { e.stopPropagation(); e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, idx, blockType: sec.type || 'section' }); } : undefined}
+          >
+            {isTable ? (
+              <BlockTableEditor
+                block={sec} canEdit={canEdit}
+                onUpdate={updated => updateTableBlock(sec.id, updated)}
+                onDelete={canEdit ? () => deleteSection(idx) : undefined}
+              />
+            ) : (
+              <>
+                {canEdit
+                  ? <input ref={el => { inputRefs.current[sec.id] = el; }} value={sec.label || ''} onChange={e => updateLabel(sec.id, e.target.value)} placeholder={`Section ${idx + 1}`}
+                      style={{ ...secH1, background: 'none', border: 'none', borderBottom: '1px solid var(--purple-primary)', outline: 'none', width: '100%', cursor: 'text', boxSizing: 'border-box', display: 'block', marginBottom: 12 }} />
+                  : <div style={secH1}>{sec.label || <span style={{ fontStyle: 'italic', opacity: 0.5 }}>Section {idx + 1}</span>}</div>
+                }
+                <CustomTabSectionContent sectionId={sec.id} initialContent={sec.content} onContentChange={content => updateContent(sec.id, content)} />
+                {(sec.subsections || []).map(sub => (
+                  <SubsectionBlock key={sub.id} sub={sub} canEdit={canEdit}
+                    onContentChange={content => updateSubsectionContent(sec.id, sub.id, content)}
+                    onChangeBgColor={color => updateSubsectionBgColor(sec.id, sub.id, color)}
+                    onDelete={() => deleteSubsection(sec.id, sub.id)} />
+                ))}
+              </>
+            )}
+          </div>
+        );
+      })}
       {ctxMenu && ctxMenu.idx === -1 && (
-        <div contentEditable={false} onMouseDown={e => e.stopPropagation()}
-          style={{ position: 'fixed', left: ctxMenu.x, top: ctxMenu.y, zIndex: 9000, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: '4px 0', minWidth: 160 }}>
-          <button
-            onClick={() => { addSection(-1); setCtxMenu(null); }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-secondary)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-            style={{ display: 'block', width: '100%', padding: '7px 16px', background: 'none', border: 'none', textAlign: 'left', fontSize: 13, cursor: 'pointer', color: 'var(--text-primary)' }}>
-            Add section
-          </button>
-        </div>
+        <AddBlockMenu x={ctxMenu.x} y={ctxMenu.y}
+          onAddSection={() => { addBlock(sections.length - 1, 'section'); setCtxMenu(null); }}
+          onAddTable={() => { addBlock(sections.length - 1, 'table'); setCtxMenu(null); }}
+          onClose={() => setCtxMenu(null)} />
       )}
-      {ctxMenu && ctxMenu.idx >= 0 && (
+      {ctxMenu && ctxMenu.idx >= 0 && ctxMenu.blockType === 'table' && (
+        <AddBlockMenu x={ctxMenu.x} y={ctxMenu.y}
+          onAddSection={() => { addBlock(ctxMenu.idx, 'section'); setCtxMenu(null); }}
+          onAddTable={() => { addBlock(ctxMenu.idx, 'table'); setCtxMenu(null); }}
+          onDelete={() => { deleteSection(ctxMenu.idx); setCtxMenu(null); }}
+          onClose={() => setCtxMenu(null)} />
+      )}
+      {ctxMenu && ctxMenu.idx >= 0 && ctxMenu.blockType !== 'table' && (
         <SectionContextMenu
           x={ctxMenu.x} y={ctxMenu.y}
-          onAddAbove={() => addSection(ctxMenu.idx - 1)}
-          onAddBelow={() => addSection(ctxMenu.idx)}
+          onAddAbove={() => addBlock(ctxMenu.idx - 1, 'section')}
+          onAddBelow={() => addBlock(ctxMenu.idx, 'section')}
           onMoveUp={ctxMenu.idx > 0 ? () => moveSection(ctxMenu.idx, -1) : null}
           onMoveDown={ctxMenu.idx < sections.length - 1 ? () => moveSection(ctxMenu.idx, 1) : null}
           onDelete={() => deleteSection(ctxMenu.idx)}
@@ -1134,13 +1291,140 @@ function saveCustomSOPs(list) {
   try { localStorage.setItem(CUSTOM_SOPs_KEY, JSON.stringify(list)); } catch {}
 }
 
-function CustomSOPView({ sop, canEdit, onDelete, onUpdate }) {
-  // Hooks must be unconditional — declared before any early return
-  const [selectedCell, setSelectedCell] = useState(null);
-  const [contextMenu, setContextMenu]   = useState(null);
-  const cellRefs = useRef({});
-  const tableRef = useRef(null);
+// ── Block-based blank SOP view ────────────────────────────────────────────────
+function CustomSOPBlankView({ sop, canEdit, onDelete, onUpdate }) {
+  const [blocks, setBlocks] = useState(() => {
+    if (Array.isArray(sop.blocks)) return sop.blocks;
+    // Legacy migration: single table block from old columns/rows format
+    if (sop.columns) return [{ id: `blk_${Date.now()}`, type: 'table', columns: sop.columns, rows: sop.rows || [] }];
+    return [];
+  });
+  const [ctxMenu, setCtxMenu] = useState(null);
+  const inputRefs = useRef({});
 
+  // Persist changes back to parent
+  useEffect(() => {
+    onUpdate({ ...sop, blocks });
+  }, [blocks]); // eslint-disable-line
+
+  const { addSubsection, deleteSubsection, updateSubsectionContent, updateSubsectionBgColor, updateSectionBgColor } = makeSubsectionHandlers(setBlocks);
+
+  const addBlock = useCallback((afterIdx, type) => {
+    const id = `blk_${Date.now()}`;
+    const newBlock = type === 'table'
+      ? { id, type: 'table', columns: ['Item', 'Description'], rows: [] }
+      : { id, type: 'section', label: '', content: '', subsections: [] };
+    setBlocks(prev => {
+      const next = [...prev];
+      next.splice(afterIdx + 1, 0, newBlock);
+      return next;
+    });
+    if (type === 'section') setTimeout(() => inputRefs.current[id]?.focus(), 50);
+  }, []);
+
+  const deleteBlock = useCallback((idx) => setBlocks(prev => prev.filter((_, i) => i !== idx)), []);
+
+  const moveBlock = useCallback((idx, dir) => {
+    setBlocks(prev => {
+      const next = [...prev];
+      const t = idx + dir;
+      if (t < 0 || t >= next.length) return prev;
+      [next[idx], next[t]] = [next[t], next[idx]];
+      return next;
+    });
+  }, []);
+
+  const updateBlockLabel   = useCallback((id, label)   => setBlocks(prev => prev.map(b => b.id === id ? { ...b, label }   : b)), []);
+  const updateBlockContent = useCallback((id, content) => setBlocks(prev => prev.map(b => b.id === id ? { ...b, content } : b)), []);
+  const updateBlockTable   = useCallback((id, updated) => setBlocks(prev => prev.map(b => b.id === id ? { ...b, ...updated } : b)), []);
+
+  const secCard = { marginBottom: 16, padding: '16px 20px', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' };
+  const secH1   = { fontSize: 14, fontWeight: 700, color: 'var(--purple-primary)', textTransform: 'uppercase', letterSpacing: '0.03em', margin: '0 0 10px' };
+
+  return (
+    <div
+      onMouseDown={() => setCtxMenu(null)}
+      onContextMenu={canEdit ? e => {
+        if (!e.target.closest('[data-sop-block]')) { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, idx: -1 }); }
+      } : undefined}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+          {canEdit ? 'Right-click free space to add blocks' : sop.name}
+        </p>
+        {canEdit && <button onClick={onDelete} style={{ padding: '5px 10px', fontSize: 12, border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', borderRadius: 6, cursor: 'pointer' }}>Delete SOP</button>}
+      </div>
+
+      {blocks.length === 0 && canEdit && (
+        <div contentEditable={false} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, border: '2px dashed var(--border)', borderRadius: 'var(--radius-md)', userSelect: 'none' }}>
+          Right-click to add a section or table
+        </div>
+      )}
+
+      {blocks.map((block, idx) => {
+        const isTable = block.type === 'table';
+        return (
+          <div key={block.id} data-sop-block={block.id}
+            style={isTable ? { marginBottom: 20 } : { ...secCard, background: block.bgColor || 'var(--bg-card)' }}
+            onContextMenu={canEdit ? e => { e.stopPropagation(); e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, idx, blockType: block.type }); } : undefined}
+          >
+            {isTable ? (
+              <BlockTableEditor
+                block={block} canEdit={canEdit}
+                onUpdate={updated => updateBlockTable(block.id, updated)}
+                onDelete={canEdit ? () => deleteBlock(idx) : undefined}
+              />
+            ) : (
+              <>
+                {canEdit
+                  ? <input ref={el => { inputRefs.current[block.id] = el; }} value={block.label || ''} onChange={e => updateBlockLabel(block.id, e.target.value)} placeholder={`Section ${idx + 1}`}
+                      style={{ ...secH1, background: 'none', border: 'none', borderBottom: '1px solid var(--purple-primary)', outline: 'none', width: '100%', cursor: 'text', boxSizing: 'border-box', display: 'block', marginBottom: 12 }} />
+                  : <div style={secH1}>{block.label || <span style={{ fontStyle: 'italic', opacity: 0.5 }}>Section {idx + 1}</span>}</div>
+                }
+                <CustomTabSectionContent sectionId={block.id} initialContent={block.content} onContentChange={content => updateBlockContent(block.id, content)} />
+                {(block.subsections || []).map(sub => (
+                  <SubsectionBlock key={sub.id} sub={sub} canEdit={canEdit}
+                    onContentChange={content => updateSubsectionContent(block.id, sub.id, content)}
+                    onChangeBgColor={color => updateSubsectionBgColor(block.id, sub.id, color)}
+                    onDelete={() => deleteSubsection(block.id, sub.id)} />
+                ))}
+              </>
+            )}
+          </div>
+        );
+      })}
+
+      {ctxMenu && ctxMenu.idx === -1 && (
+        <AddBlockMenu x={ctxMenu.x} y={ctxMenu.y}
+          onAddSection={() => { addBlock(blocks.length - 1, 'section'); setCtxMenu(null); }}
+          onAddTable={() => { addBlock(blocks.length - 1, 'table'); setCtxMenu(null); }}
+          onClose={() => setCtxMenu(null)} />
+      )}
+      {ctxMenu && ctxMenu.idx >= 0 && ctxMenu.blockType === 'table' && (
+        <AddBlockMenu x={ctxMenu.x} y={ctxMenu.y}
+          onAddSection={() => { addBlock(ctxMenu.idx, 'section'); setCtxMenu(null); }}
+          onAddTable={() => { addBlock(ctxMenu.idx, 'table'); setCtxMenu(null); }}
+          onDelete={() => { deleteBlock(ctxMenu.idx); setCtxMenu(null); }}
+          onClose={() => setCtxMenu(null)} />
+      )}
+      {ctxMenu && ctxMenu.idx >= 0 && ctxMenu.blockType !== 'table' && (
+        <SectionContextMenu
+          x={ctxMenu.x} y={ctxMenu.y}
+          onAddAbove={() => addBlock(ctxMenu.idx - 1, 'section')}
+          onAddBelow={() => addBlock(ctxMenu.idx, 'section')}
+          onMoveUp={ctxMenu.idx > 0 ? () => moveBlock(ctxMenu.idx, -1) : null}
+          onMoveDown={ctxMenu.idx < blocks.length - 1 ? () => moveBlock(ctxMenu.idx, 1) : null}
+          onDelete={() => deleteBlock(ctxMenu.idx)}
+          onAddSubsection={() => addSubsection(blocks[ctxMenu.idx]?.id)}
+          onChangeBgColor={color => updateSectionBgColor(blocks[ctxMenu.idx]?.id, color)}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function CustomSOPView({ sop, canEdit, onDelete, onUpdate }) {
   if (sop.type === 'doc') {
     const previewUrl = sop.url.includes('/preview') ? sop.url : sop.url.replace('/edit', '/preview').replace('/view', '/preview');
     return (
@@ -1160,110 +1444,7 @@ function CustomSOPView({ sop, canEdit, onDelete, onUpdate }) {
     );
   }
 
-  // ── Editable table SOP ────────────────────────────────────────────────────
-  const cols = sop.columns || ['Item', 'Description'];
-  const rows = sop.rows || [];
-
-  function updateCell(ri, ci, val) { onUpdate({ ...sop, rows: rows.map((r, i) => i === ri ? r.map((c, j) => j === ci ? val : c) : r) }); }
-  function updateHeader(ci, val) { onUpdate({ ...sop, columns: cols.map((c, i) => i === ci ? val : c) }); }
-  function insertRowAt(ri) { onUpdate({ ...sop, rows: [...rows.slice(0, ri), cols.map(() => ''), ...rows.slice(ri)] }); }
-  function deleteRowAt(ri) { onUpdate({ ...sop, rows: rows.filter((_, i) => i !== ri) }); }
-  function insertColAt(ci) { onUpdate({ ...sop, columns: [...cols.slice(0, ci), 'New column', ...cols.slice(ci)], rows: rows.map(r => [...r.slice(0, ci), '', ...r.slice(ci)]) }); }
-  function deleteColAt(ci) { if (cols.length <= 1) return; onUpdate({ ...sop, columns: cols.filter((_, i) => i !== ci), rows: rows.map(r => r.filter((_, i) => i !== ci)) }); }
-  function clearCell(ri, ci) { updateCell(ri, ci, ''); if (cellRefs.current[`${ri}-${ci}`]) cellRefs.current[`${ri}-${ci}`].innerHTML = ''; }
-
-  function handleCellContextMenu(e, ri, ci) {
-    e.preventDefault();
-    setSelectedCell({ ri, ci });
-    setContextMenu({ x: e.clientX, y: e.clientY, ri, ci });
-  }
-
-  const ctxItems = (ri, ci) => [
-    { icon: <Plus size={13} />, label: 'Insert 1 row above', action: () => insertRowAt(ri) },
-    { icon: <Plus size={13} />, label: 'Insert 1 row below', action: () => insertRowAt(ri + 1) },
-    { icon: <Plus size={13} />, label: 'Insert 1 column left', action: () => insertColAt(ci) },
-    { icon: <Plus size={13} />, label: 'Insert 1 column right', action: () => insertColAt(ci + 1) },
-    '---',
-    { icon: <Trash2 size={13} />, label: 'Delete row', action: () => deleteRowAt(ri), danger: true },
-    { icon: <Trash2 size={13} />, label: 'Delete column', action: () => deleteColAt(ci), danger: true },
-    { icon: <X size={13} />, label: 'Clear cell', action: () => clearCell(ri, ci) },
-  ];
-
-  const tdStyle = (ri, ci) => ({
-    padding: '8px 12px', fontSize: 13, color: 'var(--text-secondary)',
-    borderBottom: '1px solid var(--border)', borderRight: '1px solid var(--border)',
-    verticalAlign: 'top',
-    background: selectedCell?.ri === ri && selectedCell?.ci === ci
-      ? '#EEF2FF'
-      : selectedCell?.ri === ri ? '#F5F7FF' : undefined,
-    outline: selectedCell?.ri === ri && selectedCell?.ci === ci ? '2px solid #4F8EF7' : undefined,
-    outlineOffset: -2,
-  });
-
-  return (
-    <div onMouseDown={e => { if (!e.target.closest('td') && !e.target.closest('button')) setSelectedCell(null); }}>
-      <SOPToolbar editorRef={tableRef} canEdit={canEdit} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '10px 0' }}>
-        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-          {canEdit ? 'Click to select · right-click for options · Delete key clears cell' : sop.name}
-        </p>
-        {canEdit && (
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={() => insertRowAt(rows.length)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', fontSize: 12, border: '1px solid var(--border)', background: 'var(--bg-card)', borderRadius: 6, cursor: 'pointer', color: 'var(--text-secondary)' }}><Plus size={12} /> Add row</button>
-            <button onClick={() => insertColAt(cols.length)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', fontSize: 12, border: '1px solid var(--border)', background: 'var(--bg-card)', borderRadius: 6, cursor: 'pointer', color: 'var(--text-secondary)' }}><Plus size={12} /> Add column</button>
-            <button onClick={onDelete} style={{ padding: '5px 10px', fontSize: 12, border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', borderRadius: 6, cursor: 'pointer' }}>Delete SOP</button>
-          </div>
-        )}
-      </div>
-
-      <div ref={tableRef} style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'auto' }}
-        onKeyDown={e => {
-          if ((e.key === 'Delete' || e.key === 'Backspace') && selectedCell && document.activeElement?.dataset?.cell !== `${selectedCell.ri}-${selectedCell.ci}`) {
-            e.preventDefault(); clearCell(selectedCell.ri, selectedCell.ci);
-          }
-          if (e.key === 'Escape') setSelectedCell(null);
-        }}
-        tabIndex={-1}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-          <thead>
-            <tr style={{ background: 'var(--purple-primary)' }}>
-              {cols.map((col, ci) => (
-                <th key={ci} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: 'white', borderRight: '1px solid rgba(255,255,255,0.2)' }}>
-                  {canEdit
-                    ? <EditableCell html={col} onChange={v => updateHeader(ci, v)} style={{ color: 'white', fontSize: 12, fontWeight: 700 }} />
-                    : col}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 && (
-              <tr><td colSpan={cols.length} style={{ textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic', padding: '24px', borderBottom: '1px solid var(--border)' }}>
-                No rows yet.{canEdit ? ' Click "Add row" to get started.' : ''}
-              </td></tr>
-            )}
-            {rows.map((row, ri) => (
-              <tr key={ri}>
-                {row.map((cellVal, ci) => (
-                  <td key={ci} style={tdStyle(ri, ci)}
-                    onClick={() => setSelectedCell({ ri, ci })}
-                    onContextMenu={canEdit ? e => handleCellContextMenu(e, ri, ci) : undefined}>
-                    {canEdit
-                      ? <EditableCell html={cellVal} onChange={v => updateCell(ri, ci, v)}
-                          style={{ minHeight: 24, lineHeight: 1.5 }}
-                          tag="div"
-                        />
-                      : <span dangerouslySetInnerHTML={{ __html: cellVal || '' }} />}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {contextMenu && <TableContextMenu x={contextMenu.x} y={contextMenu.y} items={ctxItems(contextMenu.ri, contextMenu.ci)} onClose={() => setContextMenu(null)} />}
-    </div>
-  );
+  return <CustomSOPBlankView sop={sop} canEdit={canEdit} onDelete={onDelete} onUpdate={onUpdate} />;
 }
 
 // ── Placeholder ───────────────────────────────────────────────────────────────
@@ -1295,7 +1476,7 @@ function AddSOPModal({ onSave, onClose }) {
     const id = `custom_${Date.now()}`;
     const sop = { id, name: name.trim(), type, label: name.trim() };
     if (type === 'doc') sop.url = url.trim();
-    if (type === 'table') { sop.columns = ['Item', 'Description']; sop.rows = []; }
+    if (type === 'table') { sop.blocks = []; }
     onSave(sop);
   }
 
@@ -1313,7 +1494,7 @@ function AddSOPModal({ onSave, onClose }) {
         <div style={{ marginBottom: 14 }}>
           <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Type</label>
           <div style={{ display: 'flex', gap: 8 }}>
-            {[{ id: 'doc', label: 'Google Doc / Sheet' }, { id: 'table', label: 'Blank table' }].map(t => (
+            {[{ id: 'doc', label: 'Google Doc / Sheet' }, { id: 'table', label: 'Blank SOP' }].map(t => (
               <button key={t.id} onClick={() => setType(t.id)}
                 style={{ flex: 1, padding: '8px 0', fontSize: 13, fontWeight: type === t.id ? 600 : 400, border: `2px solid ${type === t.id ? 'var(--purple-primary)' : 'var(--border)'}`, borderRadius: 6, background: type === t.id ? 'var(--purple-faint)' : 'transparent', color: type === t.id ? 'var(--purple-primary)' : 'var(--text-secondary)', cursor: 'pointer' }}>
                 {t.label}
