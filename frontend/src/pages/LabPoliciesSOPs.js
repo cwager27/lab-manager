@@ -1359,6 +1359,7 @@ export default function LabPoliciesSOPs({ userRole, userId, profile, permissions
   const [tab, setTab] = useState(() => localStorage.getItem('sops_tab') || 'policies');
   const [customSOPs, setCustomSOPs] = useState(loadCustomSOPs);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [deleteModal, setDeleteModal] = useState(null);
 
   const canEdit = userRole === 'admin' || userRole === 'pm' || !!permissions?.can_edit_sops;
 
@@ -1376,11 +1377,15 @@ export default function LabPoliciesSOPs({ userRole, userId, profile, permissions
   }
 
   function handleDeleteCustomSOP(id) {
-    if (!window.confirm('Delete this SOP?')) return;
+    setDeleteModal(id);
+  }
+
+  function confirmDeleteCustomSOP(id) {
     const updated = customSOPs.filter(s => s.id !== id);
     setCustomSOPs(updated);
     saveCustomSOPs(updated);
     setTabAndSave('policies');
+    setDeleteModal(null);
   }
 
   function handleUpdateCustomSOP(sop) {
@@ -1448,6 +1453,7 @@ export default function LabPoliciesSOPs({ userRole, userId, profile, permissions
       </div>
 
       {showAddModal && <AddSOPModal onSave={handleAddSOP} onClose={() => setShowAddModal(false)} />}
+      {deleteModal && <TabConfirmModal message="Delete this SOP?" onConfirm={() => confirmDeleteCustomSOP(deleteModal)} onClose={() => setDeleteModal(null)} />}
     </div>
   );
 }
