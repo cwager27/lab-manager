@@ -2145,48 +2145,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                       );
     };
 
-    // ── Compact renderers for future buckets ──────────────────────────────
-    const CAT_COLORS = { MISC: { bg: '#f5eefb', fg: '#8b5cf6' }, PM: { bg: '#eff6ff', fg: '#3b82f6' }, Equipment: { bg: '#fffbeb', fg: '#f59e0b' } };
-
-    const renderCompactGroup = g => {
-      const isDone = isGroupComplete(g.tasks, g.groupName, g.dueDate);
-      const { bg, fg } = CAT_COLORS[g.category] || { bg: '#f3f4f6', fg: '#6b7280' };
-      return (
-        <div key={`${g.groupName || (g.tasks[0] && g.tasks[0].id)}__${g.dueDate}`} style={{ padding: '10px 12px', background: 'var(--bg-card)', border: `1px solid ${isDone ? '#A9DFBF' : 'var(--border)'}`, borderRadius: 8, marginBottom: 5, opacity: isDone ? 0.7 : 1 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-            <div style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${isDone ? '#22c55e' : 'var(--border)'}`, background: isDone ? '#22c55e' : 'transparent', flexShrink: 0, marginTop: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {isDone && <span style={{ color: 'white', fontSize: 10, lineHeight: 1 }}>✓</span>}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: isDone ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.4 }}>
-                  {g.groupName || (g.tasks[0] && g.tasks[0].title) || 'Task'}
-                </span>
-                {g.dueDate && g.dueDate !== 'none' && (
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, whiteSpace: 'nowrap' }}>
-                    · Due {fmtDate(g.dueDate)}
-                  </span>
-                )}
-              </div>
-              <div style={{ marginTop: 3 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: bg, color: fg }}>{g.category}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    };
-
-
     // ── To Do / Completed split ────────────────────────────────────────────
-    const BUCKET_CONFIG = [
-      { id: 'overdue', label: 'Overdue',        headColor: '#C0392B',              headBg: '#FEF2F2',             isActive: true },
-      { id: 'week',    label: 'This Week',       headColor: '#B7770D',              headBg: '#FFFBEB',             isActive: true },
-      { id: 'month',   label: 'This Month',      headColor: 'var(--text-primary)',  headBg: 'var(--bg-secondary)', isActive: true },
-      { id: 'three',   label: 'Next 3 Months',   headColor: 'var(--text-secondary)', headBg: 'var(--bg-secondary)', isActive: true },
-      { id: 'beyond',  label: 'Beyond',           headColor: 'var(--text-muted)',    headBg: 'var(--bg-secondary)', isActive: true },
-      { id: 'nodate',  label: 'No Due Date',      headColor: 'var(--text-muted)',    headBg: 'var(--bg-secondary)', isActive: true },
-    ];
 
     // Split recurrent groups into todo vs completed
     const todoGroups = allGroups.filter(g => !isGroupComplete(g.tasks, g.groupName, g.dueDate));
@@ -2221,40 +2180,48 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       setMyTaskOccs(prev => prev.map(o => occIds.includes(o.id) ? { ...o, status: 'assigned', completed_at: null } : o));
     };
 
+    const UNIFIED_BUCKETS = [
+      { id: 'overdue', label: 'Overdue',    headColor: '#C0392B', headBg: '#FEF2F2', border: '#fca5a5', icon: 'alert' },
+      { id: 'week',    label: 'This Week',  headColor: '#B7770D', headBg: '#FFFBEB', border: '#FDE68A', icon: 'clock' },
+      { id: 'month',   label: 'This Month', headColor: 'var(--text-primary)', headBg: 'var(--bg-secondary)', border: 'transparent' },
+      { id: 'later',   label: 'Later',      headColor: 'var(--text-muted)',   headBg: 'var(--bg-secondary)', border: 'transparent' },
+      { id: 'nodate',  label: 'No Due Date',headColor: 'var(--text-muted)',   headBg: 'var(--bg-secondary)', border: 'transparent' },
+    ];
+
+    const getMergedBucket = id => {
+      const srcIds = id === 'later' ? ['three', 'beyond'] : [id];
+      const recs   = srcIds.flatMap(b => todoBuckets[b]      || []);
+      const adhocs = srcIds.flatMap(b => todoAdhocBuckets[b] || []);
+      return [
+        ...recs.map(g  => ({ kind: 'rec',   item: g, sortKey: g.dueDate    || '' })),
+        ...adhocs.map(t => ({ kind: 'adhoc', item: t, sortKey: t.due_date  || '' })),
+      ].sort((a, b) => {
+        if (!a.sortKey && !b.sortKey) return 0;
+        if (!a.sortKey) return 1;
+        if (!b.sortKey) return -1;
+        return a.sortKey.localeCompare(b.sortKey);
+      });
+    };
+
     const renderTodoSection = () => (
       <div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 4 }}>
-          <div style={{ padding: '6px 0 8px', fontSize: 12, fontWeight: 700, color: 'var(--purple-primary)', textTransform: 'uppercase', letterSpacing: '0.07em', borderBottom: '2px solid var(--purple-primary)' }}>
-            Recurrent Tasks
-          </div>
-          <div style={{ padding: '6px 0 8px', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', borderBottom: '2px solid var(--border)' }}>
-            Ad hoc Tasks
-          </div>
-        </div>
-        {BUCKET_CONFIG.map(({ id, label, headColor, headBg, isActive }) => {
-          const recItems = todoBuckets[id];
-          const adhocItems = todoAdhocBuckets[id];
-          if (recItems.length === 0 && adhocItems.length === 0) return null;
+        {UNIFIED_BUCKETS.map(({ id, label, headColor, headBg, border, icon }) => {
+          const items = getMergedBucket(id);
+          if (items.length === 0) return null;
+          const effectiveBucketId = id === 'later' ? 'beyond' : id;
           return (
             <div key={id} style={{ marginBottom: 24 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: headBg, borderRadius: 6, marginBottom: 10, border: `1px solid ${id === 'overdue' ? '#fca5a5' : id === 'week' ? '#FDE68A' : 'transparent'}` }}>
-                {id === 'overdue' && <AlertTriangle size={11} color="#C0392B" />}
-                {id === 'week' && <Clock size={11} color="#B7770D" />}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: headBg, borderRadius: 6, marginBottom: 10, border: `1px solid ${border}` }}>
+                {icon === 'alert' && <AlertTriangle size={11} color="#C0392B" />}
+                {icon === 'clock' && <Clock size={11} color="#B7770D" />}
                 <span style={{ fontSize: 12, fontWeight: 800, color: headColor, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
-                <span style={{ fontSize: 11, color: headColor, opacity: 0.7, fontWeight: 400 }}>({recItems.length + adhocItems.length})</span>
+                <span style={{ fontSize: 11, color: headColor, opacity: 0.7, fontWeight: 400 }}>({items.length})</span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div>
-                  {recItems.length === 0
-                    ? <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '6px 4px' }}>None</div>
-                    : recItems.map(g => isActive ? renderFullGroup(g, id) : renderCompactGroup(g))}
-                </div>
-                <div>
-                  {adhocItems.length === 0
-                    ? <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '6px 4px' }}>None</div>
-                    : adhocItems.map(t => renderOneOffTask(t, id))}
-                </div>
-              </div>
+              {items.map(({ kind, item }) =>
+                kind === 'rec'
+                  ? renderFullGroup(item, effectiveBucketId)
+                  : renderOneOffTask(item, effectiveBucketId)
+              )}
             </div>
           );
         })}
