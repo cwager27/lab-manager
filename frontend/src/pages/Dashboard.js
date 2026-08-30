@@ -33,10 +33,10 @@ const PROD_PERIODS = [{ id: '30d', label: 'Last 30d' }, { id: '3m', label: 'Last
 
 function PeriodPicker({ value, onChange }) {
   return (
-    <div style={{ display: 'flex', gap: 4 }}>
+    <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap' }}>
       {PROD_PERIODS.map(({ id, label }) => (
         <button key={id} onClick={() => onChange(id)}
-          style={{ padding: '3px 10px', borderRadius: 12, border: `1.5px solid ${value === id ? 'var(--purple-primary)' : 'var(--border)'}`, background: value === id ? 'var(--purple-primary)' : 'transparent', color: value === id ? '#fff' : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+          style={{ padding: '3px 10px', borderRadius: 12, border: `1.5px solid ${value === id ? 'var(--purple-primary)' : 'var(--border)'}`, background: value === id ? 'var(--purple-primary)' : 'transparent', color: value === id ? '#fff' : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
           {label}
         </button>
       ))}
@@ -420,12 +420,14 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
               {/* Col 1 — Recurrent lab task productivity */}
               <div style={{ flex: '26 1 0', minWidth: 0 }}>
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-                  <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                      <ClipboardList size={13} color="var(--text-primary)" />
+                  <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                      <span style={{ flexShrink: 0, display: 'flex' }}><ClipboardList size={13} color="var(--text-primary)" /></span>
                       <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Recurrent lab task productivity</span>
                     </div>
-                    <PeriodPicker value={recurPeriod} onChange={setRecurPeriod} />
+                    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                      <PeriodPicker value={recurPeriod} onChange={setRecurPeriod} />
+                    </div>
                   </div>
                   <div style={{ padding: '5px 14px', display: 'flex', gap: 10, borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', gap: 10 }}>
