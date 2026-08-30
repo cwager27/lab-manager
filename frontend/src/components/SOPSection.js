@@ -35,7 +35,7 @@ export function TableCellContextMenu({ x, y, onPickColor, onClose }) {
   }, [onClose]);
 
   return (
-    <div ref={ref} onMouseDown={e => e.stopPropagation()}
+    <div ref={ref} contentEditable={false} onMouseDown={e => e.stopPropagation()}
       style={{ position: 'fixed', left: x, top: y, zIndex: 9002, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: '8px 12px', minWidth: 196 }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Cell background color</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 22px)', gap: 4 }}>
@@ -142,7 +142,7 @@ export function SectionContextMenu({ x, y, onAddAbove, onAddBelow, onMoveUp, onM
   const Sep = () => <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />;
 
   return (
-    <div ref={ref} onMouseDown={e => e.stopPropagation()}
+    <div ref={ref} contentEditable={false} onMouseDown={e => e.stopPropagation()}
       style={{ position: 'fixed', left: x, top: y, zIndex: 9000, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: '4px 0', minWidth: 210 }}>
       <Btn label="Add section above" action={onAddAbove} />
       <Btn label="Add section below" action={onAddBelow} />
@@ -199,7 +199,7 @@ function SubsectionCtxMenu({ x, y, onChangeBgColor, onDelete, onClose }) {
   const Sep = () => <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />;
 
   return (
-    <div ref={ref} onMouseDown={e => e.stopPropagation()}
+    <div ref={ref} contentEditable={false} onMouseDown={e => e.stopPropagation()}
       style={{ position: 'fixed', left: x, top: y, zIndex: 9001, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: '4px 0', minWidth: 210 }}>
       <button
         onClick={() => setShowColors(v => !v)}
@@ -360,7 +360,7 @@ export function TabContextMenu({ x, y, onAddLeft, onAddRight, onRename, onDelete
   );
 
   return (
-    <div ref={ref} onMouseDown={e => e.stopPropagation()}
+    <div ref={ref} contentEditable={false} onMouseDown={e => e.stopPropagation()}
       style={{ position: 'fixed', left: x, top: y, zIndex: 9010, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: '4px 0', minWidth: 190 }}>
       <Btn label="Add tab to left"  action={onAddLeft} />
       <Btn label="Add tab to right" action={onAddRight} />
