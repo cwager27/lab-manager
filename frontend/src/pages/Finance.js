@@ -88,6 +88,59 @@ function getFiscalYear(dateStr) {
   return `fy${String(fyYear).slice(2)}`;
 }
 
+// Custom autocomplete input: filtered dropdown positioned directly below the field
+function AutocompleteInput({ value, onChange, onBlur, options, placeholder, style }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  const filtered = value.trim() === ''
+    ? options.slice(0, 20)
+    : options.filter(o => o.toLowerCase().startsWith(value.toLowerCase()));
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = e => { if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative' }}>
+      <input
+        value={value}
+        onChange={e => { onChange(e); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={e => { setOpen(false); if (onBlur) onBlur(e); }}
+        placeholder={placeholder}
+        style={style}
+      />
+      {open && filtered.length > 0 && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0, zIndex: 9999,
+          background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 6,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.15)', maxHeight: 200, overflowY: 'auto',
+        }}>
+          {filtered.map(opt => (
+            <div key={opt}
+              onMouseDown={e => {
+                e.preventDefault();
+                onChange({ target: { value: opt } });
+                setOpen(false);
+                if (onBlur) onBlur({ target: { value: opt } });
+              }}
+              style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', color: 'var(--text-primary)', borderBottom: '1px solid var(--border)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Finance({ userRole }) {
   const [grants, setGrants] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -2487,39 +2540,35 @@ export default function Finance({ userRole }) {
               </div>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-              {/* Item Name — datalist populated from catalog number match */}
+              {/* Item Name */}
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Item Name *</label>
-                <input
-                  list="order-item-list"
+                <AutocompleteInput
                   value={newOrder.item}
+                  options={
+                    (catalogToItems[newOrder.catalog_number.trim()]?.items || []).length > 0
+                      ? catalogToItems[newOrder.catalog_number.trim()].items
+                      : [...new Set(orders.filter(o => o.status !== 'deleted' && o.item).map(o => o.item.trim()))]
+                  }
                   onChange={e => { setNewOrder(p => ({ ...p, item: e.target.value })); setDupWarning(null); setDupConfirmed(false); }}
                   onBlur={e => { const item = e.target.value; if (item && newOrder.catalog_number) checkConflictsLive(item, newOrder.catalog_number); }}
-                  style={{ width: '100%', padding: '8px 10px', border: `1px solid ${dupWarning?.catalogConflicts?.length > 0 || dupWarning?.nameConflicts?.length > 0 ? '#E67E22' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 10px', border: `1px solid ${dupWarning ? '#E67E22' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
                 />
-                <datalist id="order-item-list">
-                  {(catalogToItems[newOrder.catalog_number.trim()]?.items || []).length > 0
-                    ? catalogToItems[newOrder.catalog_number.trim()].items.map(it => <option key={it} value={it} />)
-                    : [...new Set(orders.filter(o => o.status !== 'deleted' && o.item).map(o => o.item.trim()))].map(it => <option key={it} value={it} />)
-                  }
-                </datalist>
               </div>
-              {/* Catalog Number — datalist of known catalog numbers; auto-fills item/vendor on blur */}
+              {/* Catalog Number — auto-fills item/vendor on selection */}
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Catalog Number *</label>
-                <input
-                  list="order-catalog-list"
+                <AutocompleteInput
                   value={newOrder.catalog_number}
+                  options={Object.keys(catalogToItems)}
                   onChange={e => { setNewOrder(p => ({ ...p, catalog_number: e.target.value })); setDupWarning(null); setDupConfirmed(false); }}
                   onBlur={e => {
                     const cat = e.target.value.trim();
                     if (!cat) return;
                     const existing = catalogToItems[cat];
-                    // Auto-fill item/vendor/etc from known catalog entry
                     let effectiveItem = newOrder.item;
                     if (existing) {
-                      const autoItem = !newOrder.item && existing.items.length === 1 ? existing.items[0] : newOrder.item;
-                      effectiveItem = autoItem;
+                      effectiveItem = newOrder.item || (existing.items.length === 1 ? existing.items[0] : newOrder.item);
                       setNewOrder(p => ({
                         ...p,
                         item: p.item || (existing.items.length === 1 ? existing.items[0] : p.item),
@@ -2528,14 +2577,10 @@ export default function Finance({ userRole }) {
                         unit_price: p.unit_price || (existing.unit_price != null ? String(existing.unit_price) : p.unit_price),
                       }));
                     }
-                    // Check for conflicts after auto-fill resolves the item name
                     if (effectiveItem) checkConflictsLive(effectiveItem, cat);
                   }}
                   style={{ width: '100%', padding: '8px 10px', border: `1px solid ${dupWarning?.catalogConflicts?.length > 0 ? '#E67E22' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
                 />
-                <datalist id="order-catalog-list">
-                  {Object.keys(catalogToItems).map(cat => <option key={cat} value={cat} />)}
-                </datalist>
               </div>
               {[{label:'Requisition ID *',key:'requisition_id'},{label:'Unit Description *',key:'unit_description'},{label:'Unit Price ($) *',key:'unit_price',type:'number'},{label:'Units (n) *',key:'units',type:'number'},{label:'Order Date *',key:'order_date',type:'date'}].map(field => (
                 <div key={field.key}>
