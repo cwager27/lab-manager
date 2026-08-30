@@ -338,10 +338,10 @@ export default function Finance({ userRole }) {
     }
     const toInsert = {
       ...newOrder,
-      unit_price: parseFloat(newOrder.unit_price) || null,
-      units: parseInt(newOrder.units) || null,
+      unit_price:  parseFloat(newOrder.unit_price) || null,
+      units:       parseInt(newOrder.units) || null,
       total_price: parseFloat(newOrder.unit_price) * parseInt(newOrder.units),
-      order_date: newOrder.order_date || null,
+      order_date:  newOrder.order_date || null,
     };
     const { data, error } = await supabase.from('orders').insert([toInsert]).select().single();
     if (!error && data) {
@@ -353,6 +353,25 @@ export default function Finance({ userRole }) {
       setNewOrder({ item: '', vendor: '', catalog_number: '', category: '', grant_name: '', requisition_id: '', unit_description: '', unit_price: '', units: '', order_date: '', requestor: '', status: 'pending', notes: '' });
     } else if (error) {
       setAddOrderError(error.message);
+    }
+  }
+
+  function checkConflictsLive(item, catalog_number) {
+    const norm = v => (v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const normCat = norm(catalog_number);
+    const normItem = norm(item);
+    if (!normCat || !normItem) { setDupWarning(null); return; }
+    const catalogConflicts = orders.filter(o =>
+      o.status !== 'deleted' && norm(o.catalog_number) === normCat && norm(o.item) !== normItem
+    );
+    const nameConflicts = orders.filter(o =>
+      o.status !== 'deleted' && norm(o.item) === normItem && norm(o.catalog_number) !== normCat
+    );
+    if (catalogConflicts.length > 0 || nameConflicts.length > 0) {
+      setDupWarning({ catalogConflicts, nameConflicts });
+      setDupConfirmed(false);
+    } else {
+      setDupWarning(null);
     }
   }
 
@@ -2474,8 +2493,9 @@ export default function Finance({ userRole }) {
                 <input
                   list="order-item-list"
                   value={newOrder.item}
-                  onChange={e => setNewOrder(p => ({ ...p, item: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
+                  onChange={e => { setNewOrder(p => ({ ...p, item: e.target.value })); setDupWarning(null); setDupConfirmed(false); }}
+                  onBlur={e => { const item = e.target.value; if (item && newOrder.catalog_number) checkConflictsLive(item, newOrder.catalog_number); }}
+                  style={{ width: '100%', padding: '8px 10px', border: `1px solid ${dupWarning?.catalogConflicts?.length > 0 || dupWarning?.nameConflicts?.length > 0 ? '#E67E22' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
                 />
                 <datalist id="order-item-list">
                   {(catalogToItems[newOrder.catalog_number.trim()]?.items || []).length > 0
@@ -2490,23 +2510,28 @@ export default function Finance({ userRole }) {
                 <input
                   list="order-catalog-list"
                   value={newOrder.catalog_number}
-                  onChange={e => setNewOrder(p => ({ ...p, catalog_number: e.target.value }))}
+                  onChange={e => { setNewOrder(p => ({ ...p, catalog_number: e.target.value })); setDupWarning(null); setDupConfirmed(false); }}
                   onBlur={e => {
                     const cat = e.target.value.trim();
                     if (!cat) return;
                     const existing = catalogToItems[cat];
-                    if (!existing) return;
-                    setNewOrder(p => ({
-                      ...p,
-                      item: p.item || (existing.items.length === 1 ? existing.items[0] : p.item),
-                      vendor: p.vendor || existing.vendor,
-                      unit_description: p.unit_description || existing.unit_description,
-                      unit_price: p.unit_price || (existing.unit_price != null ? String(existing.unit_price) : p.unit_price),
-                    }));
-                    setDupWarning(null);
-                    setDupConfirmed(false);
+                    // Auto-fill item/vendor/etc from known catalog entry
+                    let effectiveItem = newOrder.item;
+                    if (existing) {
+                      const autoItem = !newOrder.item && existing.items.length === 1 ? existing.items[0] : newOrder.item;
+                      effectiveItem = autoItem;
+                      setNewOrder(p => ({
+                        ...p,
+                        item: p.item || (existing.items.length === 1 ? existing.items[0] : p.item),
+                        vendor: p.vendor || existing.vendor,
+                        unit_description: p.unit_description || existing.unit_description,
+                        unit_price: p.unit_price || (existing.unit_price != null ? String(existing.unit_price) : p.unit_price),
+                      }));
+                    }
+                    // Check for conflicts after auto-fill resolves the item name
+                    if (effectiveItem) checkConflictsLive(effectiveItem, cat);
                   }}
-                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 10px', border: `1px solid ${dupWarning?.catalogConflicts?.length > 0 ? '#E67E22' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
                 />
                 <datalist id="order-catalog-list">
                   {Object.keys(catalogToItems).map(cat => <option key={cat} value={cat} />)}
@@ -2562,36 +2587,51 @@ export default function Finance({ userRole }) {
               </div>
             </div>
             {dupWarning && (
-              <div style={{ background: '#FEF9E7', border: '1px solid #FAD7A0', borderRadius: 'var(--radius-md)', padding: '14px 16px', marginBottom: '16px' }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: '#E67E22', marginBottom: '8px' }}>Potential duplicate detected</div>
+              <div style={{ background: '#FEF9E7', border: '1px solid #F39C12', borderRadius: 'var(--radius-md)', padding: '14px 16px', marginBottom: '16px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#E67E22', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  ⚠ Possible duplicate — please review before submitting
+                </div>
+
                 {dupWarning.catalogConflicts.length > 0 && (
-                  <div style={{ marginBottom: '8px' }}>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-                      Catalog number <strong>{newOrder.catalog_number}</strong> was previously entered under different item name(s):
+                  <div style={{ marginBottom: '10px' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                      Catalog # <strong>{newOrder.catalog_number}</strong> was previously used with a different item name. Is your entry a typo/formatting variant of one of these?
                     </div>
                     {[...new Map(dupWarning.catalogConflicts.map(o => [o.item, o])).values()].map(o => (
-                      <div key={o.id} style={{ fontSize: '11px', color: 'var(--text-primary)', padding: '3px 8px', background: 'rgba(230,126,34,0.08)', borderRadius: '4px', marginBottom: '2px' }}>
-                        "{o.item}" — {o.vendor} ({o.order_date})
+                      <div key={o.item} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-primary)', padding: '5px 10px', background: 'rgba(230,126,34,0.09)', borderRadius: '5px', marginBottom: '4px', gap: 8 }}>
+                        <span>"{o.item}" <span style={{ color: 'var(--text-muted)' }}>— {o.vendor} ({o.order_date})</span></span>
+                        <button
+                          onClick={() => { setNewOrder(p => ({ ...p, item: o.item })); setDupWarning(null); setDupConfirmed(false); }}
+                          style={{ flexShrink: 0, padding: '2px 10px', fontSize: '11px', fontWeight: 600, border: '1px solid #E67E22', borderRadius: 4, background: 'transparent', color: '#E67E22', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                          Use this name
+                        </button>
                       </div>
                     ))}
                   </div>
                 )}
+
                 {dupWarning.nameConflicts.length > 0 && (
-                  <div style={{ marginBottom: '8px' }}>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-                      Item name <strong>{newOrder.item}</strong> was previously entered with different catalog number(s):
+                  <div style={{ marginBottom: '10px' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                      Item name <strong>"{newOrder.item}"</strong> was previously entered with a different catalog #. Is your entry the same item under a different cat #?
                     </div>
                     {[...new Map(dupWarning.nameConflicts.map(o => [o.catalog_number, o])).values()].map(o => (
-                      <div key={o.id} style={{ fontSize: '11px', color: 'var(--text-primary)', padding: '3px 8px', background: 'rgba(230,126,34,0.08)', borderRadius: '4px', marginBottom: '2px' }}>
-                        Cat# {o.catalog_number} — {o.vendor} ({o.order_date})
+                      <div key={o.catalog_number} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-primary)', padding: '5px 10px', background: 'rgba(230,126,34,0.09)', borderRadius: '5px', marginBottom: '4px', gap: 8 }}>
+                        <span>Cat# <strong>{o.catalog_number}</strong> <span style={{ color: 'var(--text-muted)' }}>— {o.vendor} ({o.order_date})</span></span>
+                        <button
+                          onClick={() => { setNewOrder(p => ({ ...p, catalog_number: o.catalog_number })); setDupWarning(null); setDupConfirmed(false); }}
+                          style={{ flexShrink: 0, padding: '2px 10px', fontSize: '11px', fontWeight: 600, border: '1px solid #E67E22', borderRadius: 4, background: 'transparent', color: '#E67E22', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                          Use this cat #
+                        </button>
                       </div>
                     ))}
                   </div>
                 )}
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginTop: '8px' }}>
-                  <input type="checkbox" checked={dupConfirmed} onChange={e => setDupConfirmed(e.target.checked)} />
+
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #FAD7A0' }}>
+                  <input type="checkbox" checked={dupConfirmed} onChange={e => setDupConfirmed(e.target.checked)} style={{ marginTop: 2, flexShrink: 0 }} />
                   <span style={{ fontSize: '12px', color: 'var(--text-primary)', fontWeight: 500 }}>
-                    I confirm this is not a duplicate — item and catalog number are genuinely different
+                    I confirm this is genuinely a different item / catalog number — not a typo or formatting difference
                   </span>
                 </label>
               </div>
