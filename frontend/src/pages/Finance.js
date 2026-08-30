@@ -305,6 +305,8 @@ export default function Finance({ userRole }) {
   const [editingReagent, setEditingReagent] = useState(null);
   const [editReagentForm, setEditReagentForm] = useState({});
   const [confirmDeleteReagent, setConfirmDeleteReagent] = useState(false);
+  const [inlineQtyId, setInlineQtyId] = useState(null);
+  const [inlineQtyVal, setInlineQtyVal] = useState('');
   const [dupWarning, setDupWarning] = useState(null);
   const [dupConfirmed, setDupConfirmed] = useState(false);
   const [itemSuggestion, setItemSuggestion] = useState(null);
@@ -522,8 +524,13 @@ export default function Finance({ userRole }) {
       r.total += units;
     });
     const reagentCats = new Set(reagents.map(r => (r.catalog_number || '').trim()).filter(Boolean));
-    return Object.values(map).map(r => ({ ...r, is_standardized: reagentCats.has(r.catalog_number) }));
-  }, [orders, reagents]);
+    const nanoseqCodes = new Set(nanoseq.map(r => (r.code || '').trim()).filter(Boolean));
+    return Object.values(map).map(r => {
+      const cat = r.catalog_number;
+      const stType = reagentCats.has(cat) ? 'misc' : nanoseqCodes.has(cat) ? 'nanoseq' : 'none';
+      return { ...r, is_standardized: reagentCats.has(cat), st_reagent_type: stType };
+    });
+  }, [orders, reagents, nanoseq]);
 
   const catalogByNum = useMemo(() => {
     const m = {};
@@ -821,6 +828,37 @@ export default function Finance({ userRole }) {
     await supabase.from('reagents').delete().eq('id', editingReagent.id);
     setReagents(prev => prev.filter(r => r.id !== editingReagent.id));
     setEditingReagent(null); setConfirmDeleteReagent(false);
+  }
+
+  async function handleStReagentChange(row, newType) {
+    const cat = row.catalog_number;
+    const curType = row.st_reagent_type;
+    if (newType === curType) return;
+    if (curType === 'misc' || newType !== 'misc') {
+      await supabase.from('reagents').delete().eq('catalog_number', cat);
+      setReagents(prev => prev.filter(r => (r.catalog_number || '').trim() !== cat));
+    }
+    if (curType === 'nanoseq' || newType !== 'nanoseq') {
+      await supabase.from('nanoseq_reagents').delete().eq('code', cat);
+      setNanoseq(prev => prev.filter(r => (r.code || '').trim() !== cat));
+    }
+    if (newType === 'misc') {
+      const payload = { name: row.item, vendor: row.vendor || null, catalog_number: cat, category: row.category || null, unit_description: row.unit_description || null, unit_price: row.unit_price ?? null, units: row.units ?? null };
+      const { data } = await supabase.from('reagents').insert([payload]).select().single();
+      if (data) setReagents(prev => [...prev, data]);
+    }
+    if (newType === 'nanoseq') {
+      const payload = { name: row.item, company: row.vendor || null, code: cat, protocol: null, amount: row.unit_description || null };
+      const { data } = await supabase.from('nanoseq_reagents').insert([payload]).select().single();
+      if (data) setNanoseq(prev => [...prev, data]);
+    }
+  }
+
+  async function handleInlineQtySave(reagentId, val) {
+    const qty = val.trim() === '' ? null : parseFloat(val);
+    await supabase.from('reagents').update({ quantity_in_lab: isNaN(qty) ? null : qty }).eq('id', reagentId);
+    setReagents(prev => prev.map(r => r.id === reagentId ? { ...r, quantity_in_lab: isNaN(qty) ? null : qty } : r));
+    setInlineQtyId(null);
   }
 
   const REAGENT_DRAFT_HEADERS = ['Category', 'Item (name)', 'Vendor', 'Cat number', 'Units', "FY'24", "FY'25", "FY'26", 'In Lab'];
@@ -1546,7 +1584,12 @@ export default function Finance({ userRole }) {
                             <td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{r.catalog_number || '—'}</td>
                             <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'normal', wordBreak: 'break-word' }}>{r.unit_description || '—'}</td>
                             <td style={{ padding: '10px 12px', fontSize: '12px', color: sinceOpened ? 'var(--text-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: sinceOpened ? 600 : 400 }}>{sinceOpened || '—'}</td>
-                            <td style={{ padding: '10px 12px', fontSize: '12px', color: r.quantity_in_lab != null ? 'var(--text-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: r.quantity_in_lab != null ? 600 : 400 }}>{r.quantity_in_lab ?? '—'}</td>
+                            <td style={{ padding: '6px 12px', textAlign: 'center' }} onClick={e => { e.stopPropagation(); setInlineQtyId(r.id); setInlineQtyVal(r.quantity_in_lab ?? ''); }}>
+                              {inlineQtyId === r.id
+                                ? <input autoFocus type="number" value={inlineQtyVal} onChange={e => setInlineQtyVal(e.target.value)} onBlur={() => handleInlineQtySave(r.id, inlineQtyVal)} onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setInlineQtyId(null); }} style={{ width: 60, padding: '3px 6px', border: '1px solid var(--purple-primary)', borderRadius: 4, fontSize: '12px', textAlign: 'center', outline: 'none' }} />
+                                : <span style={{ fontSize: '12px', color: r.quantity_in_lab != null ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: r.quantity_in_lab != null ? 600 : 400, cursor: 'pointer', padding: '4px 8px', borderRadius: 4, display: 'inline-block' }} title="Click to edit">{r.quantity_in_lab ?? '—'}</span>
+                              }
+                            </td>
                             {fyCell(r.fy24_purchases)}
                             {fyCell(r.fy25_purchases)}
                             {fyCell(r.fy26_purchases)}
@@ -2422,7 +2465,7 @@ export default function Finance({ userRole }) {
                         {sortHeader('unit_description', 'Unit description')}
                         {sortHeader('unit_price', 'Unit price')}
                         {sortHeader('units', 'Units (n)')}
-                        {sortHeader('is_standardized', 'Std. Reagent')}
+                        <th style={{ padding: '8px 10px', textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', fontWeight: 600 }}>St. Reagents</th>
                         {allFYs.map(fy => sortHeader(fy, fyLabel(fy)))}
                         {sortHeader('total', 'Total')}
                       </tr>
@@ -2440,7 +2483,18 @@ export default function Finance({ userRole }) {
                           <td style={tdStyle()}>{r.unit_description || '—'}</td>
                           <td style={tdStyle({ center: true })}>{r.unit_price != null ? `$${Number(r.unit_price).toLocaleString()}` : '—'}</td>
                           <td style={tdStyle({ center: true })}>{r.units ?? '—'}</td>
-                          <td style={{ ...tdStyle({ center: true }), color: r.is_standardized ? '#27AE60' : 'var(--text-muted)', fontWeight: r.is_standardized ? 600 : 400 }}>{r.is_standardized ? 'Yes' : 'No'}</td>
+                          <td style={{ ...tdStyle({ center: true }) }}>
+                            <select
+                              value={r.st_reagent_type || 'none'}
+                              onChange={e => handleStReagentChange(r, e.target.value)}
+                              onClick={e => e.stopPropagation()}
+                              style={{ fontSize: '11px', padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)', background: r.st_reagent_type === 'misc' ? '#EAF7F0' : r.st_reagent_type === 'nanoseq' ? '#EBF5FB' : 'var(--bg-secondary)', color: r.st_reagent_type === 'misc' ? '#27AE60' : r.st_reagent_type === 'nanoseq' ? '#2980B9' : 'var(--text-muted)', fontWeight: 600, cursor: 'pointer', outline: 'none' }}
+                            >
+                              <option value="none">None</option>
+                              <option value="misc">Misc</option>
+                              <option value="nanoseq">Nanoseq</option>
+                            </select>
+                          </td>
                           {allFYs.map(fy => <td key={fy} style={tdStyle({ center: true, color: r.fyCounts[fy] ? 'var(--purple-primary)' : 'var(--text-muted)', bold: !!r.fyCounts[fy] })}>{r.fyCounts[fy] || '—'}</td>)}
                           <td style={tdStyle({ center: true, bold: true, color: 'var(--text-primary)' })}>{r.total}</td>
                         </tr>
