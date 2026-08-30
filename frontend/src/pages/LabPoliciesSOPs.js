@@ -856,16 +856,28 @@ function CustomTabContent({ tabId, storagePrefix, canEdit }) {
           ))}
         </div>
       ))}
-      {ctxMenu && (
+      {ctxMenu && ctxMenu.idx === -1 && (
+        <div contentEditable={false} onMouseDown={e => e.stopPropagation()}
+          style={{ position: 'fixed', left: ctxMenu.x, top: ctxMenu.y, zIndex: 9000, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: '4px 0', minWidth: 160 }}>
+          <button
+            onClick={() => { addSection(-1); setCtxMenu(null); }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-secondary)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+            style={{ display: 'block', width: '100%', padding: '7px 16px', background: 'none', border: 'none', textAlign: 'left', fontSize: 13, cursor: 'pointer', color: 'var(--text-primary)' }}>
+            Add section
+          </button>
+        </div>
+      )}
+      {ctxMenu && ctxMenu.idx >= 0 && (
         <SectionContextMenu
           x={ctxMenu.x} y={ctxMenu.y}
-          onAddAbove={ctxMenu.idx >= 0 ? () => addSection(ctxMenu.idx - 1) : null}
+          onAddAbove={() => addSection(ctxMenu.idx - 1)}
           onAddBelow={() => addSection(ctxMenu.idx)}
           onMoveUp={ctxMenu.idx > 0 ? () => moveSection(ctxMenu.idx, -1) : null}
-          onMoveDown={ctxMenu.idx >= 0 && ctxMenu.idx < sections.length - 1 ? () => moveSection(ctxMenu.idx, 1) : null}
-          onDelete={ctxMenu.idx >= 0 ? () => deleteSection(ctxMenu.idx) : null}
-          onAddSubsection={ctxMenu.idx >= 0 ? () => addSubsection(sections[ctxMenu.idx]?.id) : null}
-          onChangeBgColor={ctxMenu.idx >= 0 ? color => updateSectionBgColor(sections[ctxMenu.idx]?.id, color) : null}
+          onMoveDown={ctxMenu.idx < sections.length - 1 ? () => moveSection(ctxMenu.idx, 1) : null}
+          onDelete={() => deleteSection(ctxMenu.idx)}
+          onAddSubsection={() => addSubsection(sections[ctxMenu.idx]?.id)}
+          onChangeBgColor={color => updateSectionBgColor(sections[ctxMenu.idx]?.id, color)}
           onClose={() => setCtxMenu(null)}
         />
       )}
