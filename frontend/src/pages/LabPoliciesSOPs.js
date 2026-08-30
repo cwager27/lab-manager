@@ -456,7 +456,12 @@ function BlockTableEditor({ block, canEdit, onUpdate, onDelete }) {
     setContextMenu({ x: e.clientX, y: e.clientY, ri, ci });
   }
 
-  const ctxItems = (ri, ci) => [
+  const ctxItems = (ri, ci) => ri === -1 ? [
+    { icon: <Plus size={13} />, label: 'Insert row',           action: () => insertRowAt(0) },
+    { icon: <Plus size={13} />, label: 'Insert 1 column left', action: () => insertColAt(ci) },
+    { icon: <Plus size={13} />, label: 'Insert 1 column right',action: () => insertColAt(ci + 1) },
+    ...(onDelete ? ['---', { icon: <Trash2 size={13} />, label: 'Delete table', action: onDelete, danger: true }] : []),
+  ] : [
     { icon: <Plus size={13} />, label: 'Insert 1 row above',    action: () => insertRowAt(ri) },
     { icon: <Plus size={13} />, label: 'Insert 1 row below',    action: () => insertRowAt(ri + 1) },
     { icon: <Plus size={13} />, label: 'Insert 1 column left',  action: () => insertColAt(ci) },
@@ -465,6 +470,7 @@ function BlockTableEditor({ block, canEdit, onUpdate, onDelete }) {
     { icon: <Trash2 size={13} />, label: 'Delete row',    action: () => deleteRowAt(ri),    danger: true },
     { icon: <Trash2 size={13} />, label: 'Delete column', action: () => deleteColAt(ci),    danger: true },
     { icon: <X size={13} />,      label: 'Clear cell',    action: () => clearCell(ri, ci) },
+    ...(onDelete ? ['---', { icon: <Trash2 size={13} />, label: 'Delete table', action: onDelete, danger: true }] : []),
   ];
 
   const tdStyle = (ri, ci) => ({
@@ -477,14 +483,7 @@ function BlockTableEditor({ block, canEdit, onUpdate, onDelete }) {
   });
 
   return (
-    <div onMouseDown={e => { if (!e.target.closest('td') && !e.target.closest('button')) setSelectedCell(null); }}>
-      {canEdit && (
-        <div style={{ display: 'flex', gap: 6, margin: '8px 0' }}>
-          <button onClick={() => insertRowAt(rows.length)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', fontSize: 12, border: '1px solid var(--border)', background: 'var(--bg-card)', borderRadius: 6, cursor: 'pointer', color: 'var(--text-secondary)' }}><Plus size={12} /> Add row</button>
-          <button onClick={() => insertColAt(cols.length)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', fontSize: 12, border: '1px solid var(--border)', background: 'var(--bg-card)', borderRadius: 6, cursor: 'pointer', color: 'var(--text-secondary)' }}><Plus size={12} /> Add column</button>
-          {onDelete && <button onClick={onDelete} style={{ padding: '5px 10px', fontSize: 12, border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', borderRadius: 6, cursor: 'pointer' }}>Delete table</button>}
-        </div>
-      )}
+    <div onMouseDown={e => { if (!e.target.closest('td') && !e.target.closest('th') && !e.target.closest('button')) setSelectedCell(null); }}>
       <div ref={tableRef} style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'auto' }}
         onKeyDown={e => {
           if ((e.key === 'Delete' || e.key === 'Backspace') && selectedCell && document.activeElement?.dataset?.cell !== `${selectedCell.ri}-${selectedCell.ci}`) {
@@ -495,7 +494,8 @@ function BlockTableEditor({ block, canEdit, onUpdate, onDelete }) {
         tabIndex={-1}>
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <thead>
-            <tr style={{ background: 'var(--purple-primary)' }}>
+            <tr style={{ background: 'var(--purple-primary)' }}
+              onContextMenu={canEdit ? e => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, ri: -1, ci: 0 }); } : undefined}>
               {cols.map((col, ci) => (
                 <th key={ci} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: 'white', borderRight: '1px solid rgba(255,255,255,0.2)' }}>
                   {canEdit ? <EditableCell html={col} onChange={v => updateHeader(ci, v)} style={{ color: 'white', fontSize: 12, fontWeight: 700 }} /> : col}
@@ -505,8 +505,10 @@ function BlockTableEditor({ block, canEdit, onUpdate, onDelete }) {
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={cols.length} style={{ textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic', padding: '24px', borderBottom: '1px solid var(--border)' }}>
-                No rows yet.{canEdit ? ' Click "Add row" to get started.' : ''}
+              <tr><td colSpan={cols.length}
+                onContextMenu={canEdit ? e => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, ri: -1, ci: 0 }); } : undefined}
+                style={{ textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic', padding: '24px', borderBottom: '1px solid var(--border)' }}>
+                No rows yet.{canEdit ? ' Right-click to add a row.' : ''}
               </td></tr>
             )}
             {rows.map((row, ri) => (
@@ -1352,12 +1354,11 @@ function CustomSOPBlankView({ sop, canEdit, onDelete, onUpdate }) {
       } : undefined}
     >
       <SOPToolbar editorRef={containerRef} canEdit={canEdit} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-          {canEdit ? 'Right-click free space to add blocks' : sop.name}
-        </p>
-        {canEdit && <button onClick={onDelete} style={{ padding: '5px 10px', fontSize: 12, border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', borderRadius: 6, cursor: 'pointer' }}>Delete SOP</button>}
-      </div>
+      {canEdit && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <button onClick={onDelete} style={{ padding: '5px 10px', fontSize: 12, border: '1px solid #FADBD8', background: '#FEF0F0', color: 'var(--danger)', borderRadius: 6, cursor: 'pointer' }}>Delete SOP</button>
+        </div>
+      )}
 
       {blocks.length === 0 && canEdit && (
         <div contentEditable={false} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, border: '2px dashed var(--border)', borderRadius: 'var(--radius-md)', userSelect: 'none' }}>
