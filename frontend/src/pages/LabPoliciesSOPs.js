@@ -889,7 +889,8 @@ function ReagentCategoryLocations({ canEdit }) {
   );
 }
 
-function CustomTabSectionContent({ sectionId, initialContent, onContentChange }) {
+// Section content editor with SOPToolbar — used in block-based layouts
+function SectionBlockContent({ sectionId, initialContent, onContentChange, canEdit }) {
   const ref = useRef(null);
   const timer = useRef(null);
   const cbRef = useRef(onContentChange);
@@ -906,8 +907,11 @@ function CustomTabSectionContent({ sectionId, initialContent, onContentChange })
     return () => { obs.disconnect(); clearTimeout(timer.current); };
   }, []); // eslint-disable-line
   return (
-    <div ref={ref} contentEditable suppressContentEditableWarning
-      style={{ outline: 'none', minHeight: 40, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75 }} />
+    <>
+      <SOPToolbar editorRef={ref} canEdit={canEdit} />
+      <div ref={ref} contentEditable suppressContentEditableWarning
+        style={{ outline: 'none', minHeight: 40, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75, marginTop: 6 }} />
+    </>
   );
 }
 
@@ -1000,7 +1004,7 @@ function CustomTabContent({ tabId, storagePrefix, canEdit }) {
                       style={{ ...secH1, background: 'none', border: 'none', borderBottom: '1px solid var(--purple-primary)', outline: 'none', width: '100%', cursor: 'text', boxSizing: 'border-box', display: 'block', marginBottom: 12 }} />
                   : <div style={secH1}>{sec.label || <span style={{ fontStyle: 'italic', opacity: 0.5 }}>Section {idx + 1}</span>}</div>
                 }
-                <CustomTabSectionContent sectionId={sec.id} initialContent={sec.content} onContentChange={content => updateContent(sec.id, content)} />
+                <SectionBlockContent sectionId={sec.id} initialContent={sec.content} onContentChange={content => updateContent(sec.id, content)} canEdit={canEdit} />
                 {(sec.subsections || []).map(sub => (
                   <SubsectionBlock key={sub.id} sub={sub} canEdit={canEdit}
                     onContentChange={content => updateSubsectionContent(sec.id, sub.id, content)}
@@ -1381,7 +1385,7 @@ function CustomSOPBlankView({ sop, canEdit, onDelete, onUpdate }) {
                       style={{ ...secH1, background: 'none', border: 'none', borderBottom: '1px solid var(--purple-primary)', outline: 'none', width: '100%', cursor: 'text', boxSizing: 'border-box', display: 'block', marginBottom: 12 }} />
                   : <div style={secH1}>{block.label || <span style={{ fontStyle: 'italic', opacity: 0.5 }}>Section {idx + 1}</span>}</div>
                 }
-                <CustomTabSectionContent sectionId={block.id} initialContent={block.content} onContentChange={content => updateBlockContent(block.id, content)} />
+                <SectionBlockContent sectionId={block.id} initialContent={block.content} onContentChange={content => updateBlockContent(block.id, content)} canEdit={canEdit} />
                 {(block.subsections || []).map(sub => (
                   <SubsectionBlock key={sub.id} sub={sub} canEdit={canEdit}
                     onContentChange={content => updateSubsectionContent(block.id, sub.id, content)}
