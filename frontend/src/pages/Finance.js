@@ -88,6 +88,18 @@ function getFiscalYear(dateStr) {
   return `fy${String(fyYear).slice(2)}`;
 }
 
+// Levenshtein distance for fuzzy "Did you mean?" matching
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, (_, i) =>
+    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+  );
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+  return dp[m][n];
+}
+
 // Custom autocomplete input: filtered dropdown positioned directly below the field
 function AutocompleteInput({ value, onChange, onBlur, options, placeholder, style }) {
   const [open, setOpen] = useState(false);
@@ -295,6 +307,7 @@ export default function Finance({ userRole }) {
   const [confirmDeleteReagent, setConfirmDeleteReagent] = useState(false);
   const [dupWarning, setDupWarning] = useState(null);
   const [dupConfirmed, setDupConfirmed] = useState(false);
+  const [itemSuggestion, setItemSuggestion] = useState(null);
 
   const allFYs = useMemo(() => {
     const cur = getCurrentFY();
@@ -521,13 +534,18 @@ export default function Finance({ userRole }) {
       if (!o.catalog_number || o.status === 'deleted') return;
       const cat = o.catalog_number.trim();
       if (!cat) return;
-      if (!map[cat]) map[cat] = { items: [], vendor: '', unit_description: '', unit_price: null };
+      if (!map[cat]) map[cat] = { items: [], freq: {}, vendor: '', unit_description: '', unit_price: null };
       const item = (o.item || '').trim();
-      if (item && !map[cat].items.includes(item)) map[cat].items.push(item);
+      if (item) {
+        if (!map[cat].items.includes(item)) map[cat].items.push(item);
+        map[cat].freq[item] = (map[cat].freq[item] || 0) + 1;
+      }
       if (o.vendor && !map[cat].vendor) map[cat].vendor = o.vendor;
       if (o.unit_description && !map[cat].unit_description) map[cat].unit_description = o.unit_description;
       if (o.unit_price != null && map[cat].unit_price == null) map[cat].unit_price = o.unit_price;
     });
+    // Sort each catalog's items by usage frequency (most used first)
+    Object.values(map).forEach(e => e.items.sort((a, b) => (e.freq[b] || 0) - (e.freq[a] || 0)));
     return map;
   }, [orders]);
 
@@ -2540,28 +2558,16 @@ export default function Finance({ userRole }) {
               </div>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-              {/* Item Name */}
+              {/* Catalog Number — first; auto-fills item/vendor on selection */}
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Item Name *</label>
-                <AutocompleteInput
-                  value={newOrder.item}
-                  options={
-                    (catalogToItems[newOrder.catalog_number.trim()]?.items || []).length > 0
-                      ? catalogToItems[newOrder.catalog_number.trim()].items
-                      : [...new Set(orders.filter(o => o.status !== 'deleted' && o.item).map(o => o.item.trim()))]
-                  }
-                  onChange={e => { setNewOrder(p => ({ ...p, item: e.target.value })); setDupWarning(null); setDupConfirmed(false); }}
-                  onBlur={e => { const item = e.target.value; if (item && newOrder.catalog_number) checkConflictsLive(item, newOrder.catalog_number); }}
-                  style={{ width: '100%', padding: '8px 10px', border: `1px solid ${dupWarning ? '#E67E22' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
-                />
-              </div>
-              {/* Catalog Number — auto-fills item/vendor on selection */}
-              <div>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Catalog Number *</label>
                 <AutocompleteInput
                   value={newOrder.catalog_number}
-                  options={Object.keys(catalogToItems)}
-                  onChange={e => { setNewOrder(p => ({ ...p, catalog_number: e.target.value })); setDupWarning(null); setDupConfirmed(false); }}
+                  options={Object.keys(catalogToItems).sort()}
+                  onChange={e => {
+                    setNewOrder(p => ({ ...p, catalog_number: e.target.value }));
+                    setDupWarning(null); setDupConfirmed(false); setItemSuggestion(null);
+                  }}
                   onBlur={e => {
                     const cat = e.target.value.trim();
                     if (!cat) return;
@@ -2581,6 +2587,59 @@ export default function Finance({ userRole }) {
                   }}
                   style={{ width: '100%', padding: '8px 10px', border: `1px solid ${dupWarning?.catalogConflicts?.length > 0 ? '#E67E22' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
                 />
+              </div>
+              {/* Item Name — second; options sorted by frequency for this catalog number */}
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Item Name *</label>
+                <AutocompleteInput
+                  value={newOrder.item}
+                  options={
+                    (catalogToItems[newOrder.catalog_number.trim()]?.items || []).length > 0
+                      ? catalogToItems[newOrder.catalog_number.trim()].items
+                      : [...new Set(orders.filter(o => o.status !== 'deleted' && o.item).map(o => o.item.trim()))]
+                  }
+                  onChange={e => {
+                    setNewOrder(p => ({ ...p, item: e.target.value }));
+                    setDupWarning(null); setDupConfirmed(false); setItemSuggestion(null);
+                  }}
+                  onBlur={e => {
+                    const item = e.target.value.trim();
+                    setItemSuggestion(null);
+                    if (!item) return;
+                    const cat = newOrder.catalog_number.trim();
+                    if (cat) checkConflictsLive(item, cat);
+                    // Fuzzy "Did you mean?" check against known names for this catalog #
+                    const known = catalogToItems[cat]?.items || [];
+                    if (known.length === 0) return;
+                    const normTyped = item.toLowerCase();
+                    const exactMatch = known.find(k => k.toLowerCase() === normTyped);
+                    if (exactMatch && exactMatch !== item) {
+                      setItemSuggestion({ typed: item, suggestion: exactMatch });
+                    } else if (!exactMatch) {
+                      let best = null, bestDist = Infinity;
+                      for (const k of known) {
+                        const d = levenshtein(normTyped, k.toLowerCase());
+                        if (d < bestDist) { bestDist = d; best = k; }
+                      }
+                      const threshold = Math.min(3, Math.max(1, Math.floor(item.length / 4)));
+                      if (best && bestDist > 0 && bestDist <= threshold) setItemSuggestion({ typed: item, suggestion: best });
+                    }
+                  }}
+                  style={{ width: '100%', padding: '8px 10px', border: `1px solid ${dupWarning ? '#E67E22' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
+                />
+                {itemSuggestion && (
+                  <div style={{ marginTop: 6, padding: '8px 12px', background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: 6, fontSize: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <span>Did you mean <strong>"{itemSuggestion.suggestion}"</strong>?</span>
+                    <button onMouseDown={e => e.preventDefault()} onClick={() => { setNewOrder(p => ({ ...p, item: itemSuggestion.suggestion })); setItemSuggestion(null); setDupWarning(null); setDupConfirmed(false); }}
+                      style={{ padding: '3px 10px', fontSize: 12, fontWeight: 600, border: '1px solid #818CF8', borderRadius: 4, background: 'transparent', color: '#4F46E5', cursor: 'pointer' }}>
+                      Use this
+                    </button>
+                    <button onMouseDown={e => e.preventDefault()} onClick={() => setItemSuggestion(null)}
+                      style={{ padding: '3px 10px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                      Keep mine
+                    </button>
+                  </div>
+                )}
               </div>
               {[{label:'Requisition ID *',key:'requisition_id'},{label:'Unit Description *',key:'unit_description'},{label:'Unit Price ($) *',key:'unit_price',type:'number'},{label:'Units (n) *',key:'units',type:'number'},{label:'Order Date *',key:'order_date',type:'date'}].map(field => (
                 <div key={field.key}>
