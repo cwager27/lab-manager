@@ -1006,10 +1006,6 @@ export default function Finance({ userRole }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <div />
-      </div>
-
       <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', alignItems: 'stretch' }}>
         <div style={{ flex: 1, background: alertGrants.length > 0 ? '#FEF9E7' : 'var(--bg-primary)', border: `1px solid ${alertGrants.length > 0 ? '#FAD7A0' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', padding: '14px 16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: alertGrants.length > 0 ? '8px' : 0 }}>
@@ -1030,13 +1026,15 @@ export default function Finance({ userRole }) {
             );
           })}
         </div>
-        <div onClick={() => setActiveTab('charts')} style={{ background: 'var(--purple-faint)', borderRadius: 'var(--radius-md)', padding: '16px 24px', textAlign: 'center', cursor: 'pointer', minWidth: '140px' }}>
-          <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--purple-primary)' }}>${Math.round(curFYSpend).toLocaleString()}</div>
-          <div style={{ fontSize: '12px', color: 'var(--purple-primary)', marginTop: '2px', opacity: 0.8 }}>{curFY.toUpperCase()} Spend</div>
-        </div>
-        <div onClick={() => setActiveTab('grants')} style={{ background: 'var(--purple-faint)', borderRadius: 'var(--radius-md)', padding: '16px 24px', textAlign: 'center', cursor: 'pointer', minWidth: '140px' }}>
-          <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--purple-primary)' }}>{grants.length}</div>
-          <div style={{ fontSize: '12px', color: 'var(--purple-primary)', marginTop: '2px', opacity: 0.8 }}>Active Grants</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', minWidth: '150px' }}>
+          <div onClick={() => setActiveTab('charts')} style={{ flex: 1, background: 'var(--purple-faint)', borderRadius: 'var(--radius-md)', padding: '12px 20px', textAlign: 'center', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--purple-primary)' }}>${Math.round(curFYSpend).toLocaleString()}</div>
+            <div style={{ fontSize: '11px', color: 'var(--purple-primary)', marginTop: '2px', opacity: 0.8 }}>{curFY.toUpperCase()} Spend</div>
+          </div>
+          <div onClick={() => setActiveTab('grants')} style={{ flex: 1, background: 'var(--purple-faint)', borderRadius: 'var(--radius-md)', padding: '12px 20px', textAlign: 'center', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--purple-primary)' }}>{grants.length}</div>
+            <div style={{ fontSize: '11px', color: 'var(--purple-primary)', marginTop: '2px', opacity: 0.8 }}>Active Grants</div>
+          </div>
         </div>
       </div>
 
