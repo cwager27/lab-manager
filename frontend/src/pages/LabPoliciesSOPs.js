@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { TabInputModal, TabConfirmModal, PillTabs, TabContextMenu } from '../components/SOPSection';
+import { TabInputModal, TabConfirmModal, PillTabs, TabContextMenu, SectionContextMenu, SubsectionBlock, makeSubsectionHandlers } from '../components/SOPSection';
 import { useResizableColumns, ColResizer } from '../lib/useResizableColumns';
 import { FileText, Clock, Printer, X, Plus, ExternalLink, Trash2, Link, Search } from 'lucide-react';
 import LabPolicies from './LabPolicies';
@@ -755,26 +755,120 @@ function ReagentCategoryLocations({ canEdit }) {
   );
 }
 
-function CustomTabContent({ tabId, storagePrefix }) {
+function CustomTabSectionContent({ sectionId, initialContent, onContentChange }) {
   const ref = useRef(null);
   const timer = useRef(null);
-  const storageKey = `${storagePrefix}_${tabId}`;
-  const [init] = useState(() => { try { return localStorage.getItem(storageKey) || ''; } catch { return ''; } });
-  useEffect(() => { if (ref.current) ref.current.innerHTML = init; }, []); // eslint-disable-line
+  const cbRef = useRef(onContentChange);
+  useEffect(() => { cbRef.current = onContentChange; });
+  useEffect(() => { if (ref.current) ref.current.innerHTML = initialContent || ''; }, []); // eslint-disable-line
   useEffect(() => {
     if (!ref.current) return;
     const el = ref.current;
     const obs = new MutationObserver(() => {
       clearTimeout(timer.current);
-      timer.current = setTimeout(() => { try { localStorage.setItem(storageKey, el.innerHTML); } catch {} }, 600);
+      timer.current = setTimeout(() => cbRef.current(el.innerHTML), 600);
     });
-    obs.observe(el, { childList: true, subtree: true, characterData: true });
+    obs.observe(el, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['style'] });
     return () => { obs.disconnect(); clearTimeout(timer.current); };
-  }, [storageKey]); // eslint-disable-line
+  }, []); // eslint-disable-line
   return (
-    <div contentEditable={false}>
-      <div ref={ref} contentEditable suppressContentEditableWarning
-        style={{ outline: 'none', minHeight: 200, padding: '8px 4px', fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.75 }} />
+    <div ref={ref} contentEditable suppressContentEditableWarning
+      style={{ outline: 'none', minHeight: 40, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75 }} />
+  );
+}
+
+function CustomTabContent({ tabId, storagePrefix, canEdit }) {
+  const storageKey = `${storagePrefix}_sections_${tabId}`;
+  const [sections, setSections] = useState(() => {
+    try { const s = JSON.parse(localStorage.getItem(storageKey)); return Array.isArray(s) ? s : []; } catch { return []; }
+  });
+  const [ctxMenu, setCtxMenu] = useState(null);
+  const inputRefs = useRef({});
+
+  useEffect(() => {
+    try { localStorage.setItem(storageKey, JSON.stringify(sections)); } catch {}
+  }, [sections, storageKey]);
+
+  const addSection = useCallback((afterIdx) => {
+    const id = `sec_${Date.now()}`;
+    setSections(prev => {
+      const next = [...prev];
+      next.splice(afterIdx + 1, 0, { id, label: '', content: '' });
+      return next;
+    });
+    setTimeout(() => inputRefs.current[id]?.focus(), 50);
+  }, []);
+
+  const deleteSection = useCallback((idx) => {
+    setSections(prev => prev.filter((_, i) => i !== idx));
+  }, []);
+
+  const moveSection = useCallback((idx, dir) => {
+    setSections(prev => {
+      const next = [...prev];
+      const t = idx + dir;
+      if (t < 0 || t >= next.length) return prev;
+      [next[idx], next[t]] = [next[t], next[idx]];
+      return next;
+    });
+  }, []);
+
+  const updateLabel = useCallback((id, label) => {
+    setSections(prev => prev.map(s => s.id === id ? { ...s, label } : s));
+  }, []);
+
+  const updateContent = useCallback((id, content) => {
+    setSections(prev => prev.map(s => s.id === id ? { ...s, content } : s));
+  }, []);
+
+  const { addSubsection, deleteSubsection, updateSubsectionContent, updateSubsectionBgColor, updateSectionBgColor } = makeSubsectionHandlers(setSections);
+
+  const secCard = { marginBottom: 16, padding: '16px 20px', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' };
+  const secH1   = { fontSize: 14, fontWeight: 700, color: 'var(--purple-primary)', textTransform: 'uppercase', letterSpacing: '0.03em', margin: '0 0 10px' };
+
+  return (
+    <div
+      onMouseDown={() => setCtxMenu(null)}
+      onContextMenu={canEdit ? e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, idx: -1 }); } : undefined}
+      style={{ minHeight: 120 }}
+    >
+      {sections.length === 0 && canEdit && (
+        <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, border: '2px dashed var(--border)', borderRadius: 'var(--radius-md)' }}>
+          Right-click to add a section
+        </div>
+      )}
+      {sections.map((sec, idx) => (
+        <div key={sec.id}
+          style={{ ...secCard, background: sec.bgColor || 'var(--bg-card)' }}
+          onContextMenu={canEdit ? e => { e.stopPropagation(); e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, idx }); } : undefined}
+        >
+          {canEdit
+            ? <input ref={el => { inputRefs.current[sec.id] = el; }} value={sec.label} onChange={e => updateLabel(sec.id, e.target.value)} placeholder={`Section ${idx + 1}`}
+                style={{ ...secH1, background: 'none', border: 'none', borderBottom: '1px solid var(--purple-primary)', outline: 'none', width: '100%', cursor: 'text', boxSizing: 'border-box', display: 'block', marginBottom: 12 }} />
+            : <div style={secH1}>{sec.label || <span style={{ fontStyle: 'italic', opacity: 0.5 }}>Section {idx + 1}</span>}</div>
+          }
+          <CustomTabSectionContent sectionId={sec.id} initialContent={sec.content} onContentChange={content => updateContent(sec.id, content)} />
+          {(sec.subsections || []).map(sub => (
+            <SubsectionBlock key={sub.id} sub={sub} canEdit={canEdit}
+              onContentChange={content => updateSubsectionContent(sec.id, sub.id, content)}
+              onChangeBgColor={color => updateSubsectionBgColor(sec.id, sub.id, color)}
+              onDelete={() => deleteSubsection(sec.id, sub.id)} />
+          ))}
+        </div>
+      ))}
+      {ctxMenu && (
+        <SectionContextMenu
+          x={ctxMenu.x} y={ctxMenu.y}
+          onAddAbove={ctxMenu.idx >= 0 ? () => addSection(ctxMenu.idx - 1) : null}
+          onAddBelow={() => addSection(ctxMenu.idx)}
+          onMoveUp={ctxMenu.idx > 0 ? () => moveSection(ctxMenu.idx, -1) : null}
+          onMoveDown={ctxMenu.idx >= 0 && ctxMenu.idx < sections.length - 1 ? () => moveSection(ctxMenu.idx, 1) : null}
+          onDelete={ctxMenu.idx >= 0 ? () => deleteSection(ctxMenu.idx) : null}
+          onAddSubsection={ctxMenu.idx >= 0 ? () => addSubsection(sections[ctxMenu.idx]?.id) : null}
+          onChangeBgColor={ctxMenu.idx >= 0 ? color => updateSectionBgColor(sections[ctxMenu.idx]?.id, color) : null}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1006,7 +1100,7 @@ function SequencingNomenclatureSOP({ canEdit }) {
       {sub === 'non_cell_line' && <SampleNamingNomenclature canEdit={canEdit} />}
       {sub === 'cell_line' && <NomenclaturePanel key="cell_line" sub="cell_line" />}
       {!builtinIds.has(sub) && subs.find(s => s.id === sub) && (
-        <CustomTabContent key={sub} tabId={sub} storagePrefix="naming_custom_tab" />
+        <CustomTabContent key={sub} tabId={sub} storagePrefix="naming_custom_tab" canEdit={canEdit} />
       )}
     </div>
   );
