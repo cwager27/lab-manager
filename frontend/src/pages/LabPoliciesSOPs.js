@@ -478,7 +478,6 @@ function BlockTableEditor({ block, canEdit, onUpdate, onDelete }) {
 
   return (
     <div onMouseDown={e => { if (!e.target.closest('td') && !e.target.closest('button')) setSelectedCell(null); }}>
-      <SOPToolbar editorRef={tableRef} canEdit={canEdit} />
       {canEdit && (
         <div style={{ display: 'flex', gap: 6, margin: '8px 0' }}>
           <button onClick={() => insertRowAt(rows.length)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', fontSize: 12, border: '1px solid var(--border)', background: 'var(--bg-card)', borderRadius: 6, cursor: 'pointer', color: 'var(--text-secondary)' }}><Plus size={12} /> Add row</button>
@@ -889,8 +888,8 @@ function ReagentCategoryLocations({ canEdit }) {
   );
 }
 
-// Section content editor with SOPToolbar — used in block-based layouts
-function SectionBlockContent({ sectionId, initialContent, onContentChange, canEdit }) {
+// Bare contentEditable section body — toolbar is shared at the parent level
+function SectionBlockContent({ sectionId, initialContent, onContentChange }) {
   const ref = useRef(null);
   const timer = useRef(null);
   const cbRef = useRef(onContentChange);
@@ -907,11 +906,8 @@ function SectionBlockContent({ sectionId, initialContent, onContentChange, canEd
     return () => { obs.disconnect(); clearTimeout(timer.current); };
   }, []); // eslint-disable-line
   return (
-    <>
-      <SOPToolbar editorRef={ref} canEdit={canEdit} />
-      <div ref={ref} contentEditable suppressContentEditableWarning
-        style={{ outline: 'none', minHeight: 40, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75, marginTop: 6 }} />
-    </>
+    <div ref={ref} contentEditable suppressContentEditableWarning
+      style={{ outline: 'none', minHeight: 40, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75 }} />
   );
 }
 
@@ -967,18 +963,20 @@ function CustomTabContent({ tabId, storagePrefix, canEdit }) {
   }, []);
 
   const { addSubsection, deleteSubsection, updateSubsectionContent, updateSubsectionBgColor, updateSectionBgColor } = makeSubsectionHandlers(setSections);
+  const containerRef = useRef(null);
 
   const secCard = { marginBottom: 16, padding: '16px 20px', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' };
   const secH1   = { fontSize: 14, fontWeight: 700, color: 'var(--purple-primary)', textTransform: 'uppercase', letterSpacing: '0.03em', margin: '0 0 10px' };
 
   return (
-    <div
+    <div ref={containerRef}
       onMouseDown={() => setCtxMenu(null)}
       onContextMenu={canEdit ? e => {
         if (!e.target.closest('[data-tab-block]')) { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, idx: -1 }); }
       } : undefined}
       style={{ minHeight: 120 }}
     >
+      <SOPToolbar editorRef={containerRef} canEdit={canEdit} />
       {sections.length === 0 && canEdit && (
         <div contentEditable={false} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, border: '2px dashed var(--border)', borderRadius: 'var(--radius-md)', userSelect: 'none' }}>
           Right-click to add a section or table
@@ -1004,7 +1002,7 @@ function CustomTabContent({ tabId, storagePrefix, canEdit }) {
                       style={{ ...secH1, background: 'none', border: 'none', borderBottom: '1px solid var(--purple-primary)', outline: 'none', width: '100%', cursor: 'text', boxSizing: 'border-box', display: 'block', marginBottom: 12 }} />
                   : <div style={secH1}>{sec.label || <span style={{ fontStyle: 'italic', opacity: 0.5 }}>Section {idx + 1}</span>}</div>
                 }
-                <SectionBlockContent sectionId={sec.id} initialContent={sec.content} onContentChange={content => updateContent(sec.id, content)} canEdit={canEdit} />
+                <SectionBlockContent sectionId={sec.id} initialContent={sec.content} onContentChange={content => updateContent(sec.id, content)} />
                 {(sec.subsections || []).map(sub => (
                   <SubsectionBlock key={sub.id} sub={sub} canEdit={canEdit}
                     onContentChange={content => updateSubsectionContent(sec.id, sub.id, content)}
@@ -1341,17 +1339,19 @@ function CustomSOPBlankView({ sop, canEdit, onDelete, onUpdate }) {
   const updateBlockLabel   = useCallback((id, label)   => setBlocks(prev => prev.map(b => b.id === id ? { ...b, label }   : b)), []);
   const updateBlockContent = useCallback((id, content) => setBlocks(prev => prev.map(b => b.id === id ? { ...b, content } : b)), []);
   const updateBlockTable   = useCallback((id, updated) => setBlocks(prev => prev.map(b => b.id === id ? { ...b, ...updated } : b)), []);
+  const containerRef = useRef(null);
 
   const secCard = { marginBottom: 16, padding: '16px 20px', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' };
   const secH1   = { fontSize: 14, fontWeight: 700, color: 'var(--purple-primary)', textTransform: 'uppercase', letterSpacing: '0.03em', margin: '0 0 10px' };
 
   return (
-    <div
+    <div ref={containerRef}
       onMouseDown={() => setCtxMenu(null)}
       onContextMenu={canEdit ? e => {
         if (!e.target.closest('[data-sop-block]')) { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, idx: -1 }); }
       } : undefined}
     >
+      <SOPToolbar editorRef={containerRef} canEdit={canEdit} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
           {canEdit ? 'Right-click free space to add blocks' : sop.name}
@@ -1385,7 +1385,7 @@ function CustomSOPBlankView({ sop, canEdit, onDelete, onUpdate }) {
                       style={{ ...secH1, background: 'none', border: 'none', borderBottom: '1px solid var(--purple-primary)', outline: 'none', width: '100%', cursor: 'text', boxSizing: 'border-box', display: 'block', marginBottom: 12 }} />
                   : <div style={secH1}>{block.label || <span style={{ fontStyle: 'italic', opacity: 0.5 }}>Section {idx + 1}</span>}</div>
                 }
-                <SectionBlockContent sectionId={block.id} initialContent={block.content} onContentChange={content => updateBlockContent(block.id, content)} canEdit={canEdit} />
+                <SectionBlockContent sectionId={block.id} initialContent={block.content} onContentChange={content => updateBlockContent(block.id, content)} />
                 {(block.subsections || []).map(sub => (
                   <SubsectionBlock key={sub.id} sub={sub} canEdit={canEdit}
                     onContentChange={content => updateSubsectionContent(block.id, sub.id, content)}
