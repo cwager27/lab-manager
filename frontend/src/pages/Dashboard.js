@@ -3,6 +3,25 @@ import { supabase } from '../lib/supabase';
 import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle, DollarSign, UserX } from 'lucide-react';
 
 
+function ExpandableText({ text, color, fontWeight, isOverdue }) {
+  const spanRef = useRef(null);
+  const [clamped, setClamped] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (spanRef.current) setClamped(spanRef.current.scrollHeight > spanRef.current.clientHeight + 2);
+  }, [text]);
+  return (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <span ref={spanRef} style={{ fontSize: 13, color, fontWeight, lineHeight: 1.4, display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: expanded ? 'unset' : 3, overflow: 'hidden' }}>{text}</span>
+      {(clamped || expanded) && (
+        <button onClick={() => setExpanded(v => !v)} style={{ background: 'none', border: 'none', padding: '1px 0 0', fontSize: 11, color: isOverdue ? '#C0392B' : 'var(--purple-primary)', cursor: 'pointer', fontWeight: 600, display: 'block' }}>
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function formatDate(d) {
   if (!d) return '';
   const [y, m, day] = d.split('-');
@@ -468,7 +487,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                             ) : (
                               <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0, marginTop: 4 }} />
                             )}
-                            <span style={{ fontSize: 13, color: isOverdue ? '#C0392B' : 'var(--text-primary)', fontWeight: isOverdue ? 600 : 400, flex: 1, lineHeight: 1.4 }}>{task.title}</span>
+                            <ExpandableText text={task.title} color={isOverdue ? '#C0392B' : 'var(--text-primary)'} fontWeight={isOverdue ? 600 : 400} isOverdue={isOverdue} />
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
                               {(() => { const name = (task.assignee?.full_name || teamMembers.find(m => m.id === task.assigned_to)?.full_name || ''); return name ? <span style={{ fontSize: 12, color: isOverdue ? '#E74C3C' : 'var(--text-muted)', whiteSpace: 'nowrap', fontWeight: 500 }}>{name.split(' ')[0]}</span> : null; })()}
                               {dateStr && (
@@ -816,9 +835,9 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                 </div>
 
                 {/* Pending time off approvals */}
-                <div style={{ flex: '2 1 0', minWidth: 0 }}>
-                  <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-                    <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ flex: '2 1 0', minWidth: 0, alignSelf: 'stretch', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', maxHeight: '100%' }}>
+                    <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                         <Palmtree size={13} color="#F39C12" />
                         <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Time off approvals</span>
@@ -831,8 +850,8 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                     {pendingVacations.length === 0 ? (
                       <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No pending requests.</p>
                     ) : (
-                      <div style={{ position: 'relative' }}>
-                        <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                      <div style={{ position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                        <div style={{ overflowY: 'auto', maxHeight: '100%' }}>
                           {pendingVacations.map((r, i) => (
                             <div key={r.id} style={{ padding: '9px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>

@@ -20,15 +20,15 @@ const EMPTY_CELL_LINE = {
 };
 
 const EMPTY_MOUSE = {
-  sample_id: '', mouse_id: '', tissue_type: '', collection_date: '',
+  sample_id: '', mouse_id: '', tissue_type: '', cell_type: '', collection_date: '',
   storage_location: '', freezer: '', shelf: '', box: '',
-  study: '', irb_protocol: '', status: 'present', notes: ''
+  study: '', iacuc_protocol: '', source: '', owner: '', status: 'present', notes: ''
 };
 
 const EMPTY_HUMAN = {
   sample_id: '', patient_id: '', tissue_type: '', collection_date: '',
   storage_location: '', freezer: '', shelf: '', box: '',
-  study: '', irb_protocol: '', status: 'present', notes: ''
+  study: '', irb_protocol: '', source: '', owner: '', status: 'present', notes: ''
 };
 
 function ConfirmModal({ message, onConfirm, onCancel }) {
@@ -662,8 +662,8 @@ export default function SampleInventory({ userRole, userId, profile }) {
     { key: 'name', label: 'Cell Line Name', required: true, full: true },
     { key: 'cell_type', label: 'Cell Type' },
     { key: 'passage_number', label: 'Passage Number' },
-    { key: 'freezer', label: 'Freezer' },
-    { key: 'shelf', label: 'Shelf' },
+    { key: 'freezer', label: 'Liquid Nitrogen Tank' },
+    { key: 'shelf', label: 'Position / Shelf' },
     { key: 'box', label: 'Box' },
     { key: 'storage_location', label: 'Storage Location', full: true },
     { key: 'status', label: 'Status', type: 'select', options: [
@@ -679,13 +679,16 @@ export default function SampleInventory({ userRole, userId, profile }) {
     { key: 'sample_id', label: 'Sample ID', required: true },
     { key: 'mouse_id', label: 'Mouse ID' },
     { key: 'tissue_type', label: 'Tissue Type' },
+    { key: 'cell_type', label: 'Cell Type (if applicable)' },
     { key: 'collection_date', label: 'Collection Date', type: 'date' },
+    { key: 'source', label: 'Source (collaborator or vendor)' },
+    { key: 'owner', label: 'Owner', required: true },
     { key: 'freezer', label: 'Freezer' },
     { key: 'shelf', label: 'Shelf' },
     { key: 'box', label: 'Box' },
     { key: 'storage_location', label: 'Storage Location', full: true },
     { key: 'study', label: 'Study' },
-    { key: 'irb_protocol', label: 'IRB Protocol' },
+    { key: 'iacuc_protocol', label: 'IACUC Protocol' },
     { key: 'status', label: 'Status', type: 'select', options: [
       { value: 'present', label: 'Present' },
       { value: 'absent', label: 'Absent' },
@@ -699,6 +702,8 @@ export default function SampleInventory({ userRole, userId, profile }) {
     { key: 'patient_id', label: 'Patient ID' },
     { key: 'tissue_type', label: 'Tissue Type' },
     { key: 'collection_date', label: 'Collection Date', type: 'date' },
+    { key: 'source', label: 'Source' },
+    { key: 'owner', label: 'Owner', required: true },
     { key: 'freezer', label: 'Freezer' },
     { key: 'shelf', label: 'Shelf' },
     { key: 'box', label: 'Box' },
@@ -844,8 +849,8 @@ export default function SampleInventory({ userRole, userId, profile }) {
                         </div>
                         <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                           {item.passage_number && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Passage: {item.passage_number}</span>}
-                          {item.freezer && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Freezer: {item.freezer}</span>}
-                          {item.shelf && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Shelf: {item.shelf}</span>}
+                          {item.freezer && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>LN₂ Tank: {item.freezer}</span>}
+                          {item.shelf && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Position: {item.shelf}</span>}
                           {item.box && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Box: {item.box}</span>}
                           {item.storage_location && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{item.storage_location}</span>}
                           {item.benchling_url && <a href={item.benchling_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: '#27AE60', fontWeight: 500 }}>📗 Open in Benchling</a>}
@@ -911,8 +916,8 @@ export default function SampleInventory({ userRole, userId, profile }) {
                 <thead>
                   <tr style={{ background: 'var(--bg-secondary)' }}>
                     {(activeTab === 'mouse'
-                      ? ['Sample ID', 'Mouse ID', 'Tissue', 'Collection Date', 'Freezer', 'Shelf', 'Study', 'IRB', 'Status', 'Actions']
-                      : ['Sample ID', 'Patient ID', 'Tissue', 'Collection Date', 'Freezer', 'Shelf', 'Study', 'IRB', 'Status', 'Actions']
+                      ? ['Sample ID', 'Mouse ID', 'Tissue / Cell Type', 'Source', 'Owner', 'Date', 'Storage', 'IACUC', 'Status', 'Actions']
+                      : ['Sample ID', 'Patient ID', 'Tissue', 'Source', 'Owner', 'Date', 'Storage', 'IRB', 'Status', 'Actions']
                     ).map((h, i) => (
                       <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', position: 'relative' }}>{h}<ColResizer colIdx={i} totalCols={10} onColMouseDown={sampleResize} /></th>
                     ))}
@@ -923,16 +928,21 @@ export default function SampleInventory({ userRole, userId, profile }) {
                     <tr><td colSpan={10} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>No samples found.</td></tr>
                   ) : getCurrentData().map(item => {
                     const statusStyle = STATUS_STYLES[item.status] || STATUS_STYLES.present;
+                    const storageStr = [item.freezer, item.shelf, item.box].filter(Boolean).join(' / ') || item.storage_location || '—';
+                    const protocol = activeTab === 'mouse' ? item.iacuc_protocol : item.irb_protocol;
                     return (
                       <tr key={item.id} style={{ borderTop: '1px solid var(--border)' }}>
                         <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{item.sample_id}</td>
                         <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{activeTab === 'mouse' ? item.mouse_id : item.patient_id}</td>
-                        <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{item.tissue_type}</td>
-                        <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{item.collection_date}</td>
-                        <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{item.freezer}</td>
-                        <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{item.shelf}</td>
-                        <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{item.study}</td>
-                        <td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{item.irb_protocol}</td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                          <div>{item.tissue_type || '—'}</div>
+                          {item.cell_type && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.cell_type}</div>}
+                        </td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{item.source || '—'}</td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>{item.owner || '—'}</td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{item.collection_date || '—'}</td>
+                        <td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{storageStr}</td>
+                        <td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{protocol || '—'}</td>
                         <td style={{ padding: '10px 12px' }}>
                           <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: statusStyle.bg, color: statusStyle.text }}>{statusStyle.label}</span>
                         </td>
@@ -959,6 +969,29 @@ export default function SampleInventory({ userRole, userId, profile }) {
               </table>
             </div>
           )}
+
+          {/* Inline audit log — shown at the bottom of each subsystem tab */}
+          {['cell_lines', 'mouse', 'human'].includes(activeTab) && (() => {
+            const typeKey = activeTab;
+            const filtered = auditLog.filter(l => l.sample_type === typeKey);
+            if (filtered.length === 0) return null;
+            const actionColors = { added: '#27AE60', edited: '#2980B9', deleted: '#E74C3C', taken: '#F39C12', returned: '#27AE60' };
+            return (
+              <div style={{ marginTop: 24 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Recent Activity</div>
+                <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                  {filtered.slice(0, 20).map((log, i) => (
+                    <div key={log.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
+                      <span style={{ padding: '2px 7px', borderRadius: 8, fontSize: 11, fontWeight: 600, background: `${actionColors[log.action] || '#888'}18`, color: actionColors[log.action] || 'var(--text-muted)', textTransform: 'capitalize', flexShrink: 0 }}>{log.action}</span>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', flex: 1 }}>{log.sample_name}</span>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>{log.changed_by_name}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{new Date(log.created_at).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {activeTab === 'audit' && (
             <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>

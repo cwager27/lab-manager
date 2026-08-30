@@ -1,23 +1,38 @@
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { SectionContextMenu, SubsectionBlock, makeSubsectionHandlers, TableCellContextMenu, useTableCellColors } from '../components/SOPSection';
+
 const s = {
   section: { marginBottom: 24, padding: '20px 24px', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' },
-  h2: { fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 14px', paddingBottom: 8, borderBottom: '1px solid var(--border)' },
+  h2: { fontSize: 13, fontWeight: 700, color: 'var(--purple-primary)', textDecoration: 'underline', margin: '0 0 14px', paddingBottom: 8, borderBottom: '1px solid var(--border)' },
   p: { fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75, margin: '0 0 8px' },
   li: { fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75, marginBottom: 4 },
   ul: { paddingLeft: 20, margin: '0 0 8px' },
   sub: { paddingLeft: 16, margin: '4px 0 4px' },
 };
 
-export default function BenchlingPolicy() {
-  return (
-    <div>
-      <p style={{ ...s.p, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>Guidelines for Experimental Tracking and Reporting</p>
-      <p style={{ ...s.p, fontWeight: 700, color: '#FF0000', margin: '0 0 4px' }}>The lab has put together guidelines on how to structure Benchling and notebook entries to make sure we are fully compliant with NYU institutional requirements.</p>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 24px' }}>Updated February 2025</p>
+function CustomSectionContent({ sectionId, initialContent, onContentChange }) {
+  const ref = useRef(null);
+  const timer = useRef(null);
+  const cbRef = useRef(onContentChange);
+  useEffect(() => { cbRef.current = onContentChange; });
+  useEffect(() => { if (ref.current) ref.current.innerHTML = initialContent || ''; }, []); // eslint-disable-line
+  useEffect(() => {
+    if (!ref.current) return;
+    const el = ref.current;
+    const observer = new MutationObserver(() => {
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => cbRef.current(el.innerHTML), 600);
+    });
+    observer.observe(el, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['style'] });
+    return () => { observer.disconnect(); clearTimeout(timer.current); };
+  }, []); // eslint-disable-line
+  return <div ref={ref} style={{ outline: 'none', minHeight: 48, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75 }} />;
+}
 
-      {/* Section I */}
-      <div style={s.section}>
-        <div style={s.h2}>I. <u>Types of data and reporting guidelines</u></div>
-
+function BuiltinBody({ id }) {
+  switch (id) {
+    case 'section_i': return (
+      <>
         <p style={{ ...s.p, fontWeight: 700 }}>a) Key Results:</p>
         <p style={s.p}>Defined as any <strong>conclusive</strong> positive <em>and</em> negative results i) to ever lead to or directly be used in publications, presentations, grants, patents; as well as ii) any results advancing, focusing or formulating existing or new biological and/or technical hypotheses or scientific directions.</p>
         <p style={s.p}>Require detailed recording in Benchling using the following format and sections:</p>
@@ -72,11 +87,10 @@ export default function BenchlingPolicy() {
           <li style={s.li}><strong>Irrelevant data</strong></li>
         </ul>
         <p style={s.p}>Defined as inconclusive experiments e.g. failed for any reasons that we cannot learn from (eg wrong reagents used, accidents, equipment failures, contaminations etc). Require only lab notebook annotations and no electronic recording.</p>
-      </div>
-
-      {/* Section II */}
-      <div style={s.section}>
-        <div style={s.h2}>II. <u>Lab Notebook</u> Format</div>
+      </>
+    );
+    case 'section_ii': return (
+      <>
         <ul style={s.ul}>
           <li style={s.li}>Every notebook must be ID'd by individual's initials and consecutive number (i.e. SWA #1, SWA#2, …) on spine with tape and on cover page. Sarah will ID all notebooks to maintain consistency.</li>
           <li style={s.li}>Numbered pages must be visible so can be used as cross-reference for electronic reports.</li>
@@ -84,43 +98,38 @@ export default function BenchlingPolicy() {
           <li style={s.li}>Where experiments included larger scale data, allocated orange 'data sticker' has to be used in the upper right corner of page; with file names if uploaded to Benchling and/or server annotated. Orange data stickers are in office supply drawer in lab.</li>
         </ul>
         <p style={{ ...s.p, fontSize: 12, color: 'var(--text-muted)' }}>Annotation file path example: Petljak lab folder/Isabella/subfolder/file_name</p>
-      </div>
-
-      {/* Section III */}
-      <div style={s.section}>
-        <div style={s.h2}>III. <u>Benchling</u> Format</div>
-        <ul style={s.ul}>
-          <li style={s.li}>Naming structure for projects:
-            <ul style={{ ...s.ul, ...s.sub }}>
-              <li style={s.li}>Person name (if shared project then all names)
-                <ul style={{ ...s.ul, ...s.sub }}>
-                  <li style={s.li}><strong>LAB NOTEBOOK</strong> (one folder per notebook with images of all used pages uploaded)
-                    <ul style={{ ...s.ul, ...s.sub }}>
-                      <li style={s.li}>Lab notebook ID1 (eg SWA #1)</li>
-                      <li style={s.li}>Lab notebook ID2 (eg SWA #2)</li>
-                      <li style={s.li}>etc</li>
-                    </ul>
-                  </li>
-                  <li style={s.li}>Project 1_name (eg benzene mutagenicity)
-                    <ul style={{ ...s.ul, ...s.sub }}>
-                      <li style={s.li}>Aim I (informative name eg identifying dose for sequencing)</li>
-                      <li style={s.li}>Aim II (informative name)</li>
-                    </ul>
-                  </li>
-                  <li style={s.li}>Project 2_name</li>
-                  <li style={s.li}>Project 3_name</li>
-                </ul>
-              </li>
-            </ul>
-          </li>
-          <li style={s.li}>All projects in Benchling are owned by lab not individual. This has to be changed by clicking on gear next to project name → project settings → owner.</li>
-        </ul>
-      </div>
-
-      {/* Section IV */}
-      <div style={s.section}>
-        <div style={s.h2}>IV. <u>Compliance</u> and Audit</div>
-
+      </>
+    );
+    case 'section_iii': return (
+      <ul style={s.ul}>
+        <li style={s.li}>Naming structure for projects:
+          <ul style={{ ...s.ul, ...s.sub }}>
+            <li style={s.li}>Person name (if shared project then all names)
+              <ul style={{ ...s.ul, ...s.sub }}>
+                <li style={s.li}><strong>LAB NOTEBOOK</strong> (one folder per notebook with images of all used pages uploaded)
+                  <ul style={{ ...s.ul, ...s.sub }}>
+                    <li style={s.li}>Lab notebook ID1 (eg SWA #1)</li>
+                    <li style={s.li}>Lab notebook ID2 (eg SWA #2)</li>
+                    <li style={s.li}>etc</li>
+                  </ul>
+                </li>
+                <li style={s.li}>Project 1_name (eg benzene mutagenicity)
+                  <ul style={{ ...s.ul, ...s.sub }}>
+                    <li style={s.li}>Aim I (informative name eg identifying dose for sequencing)</li>
+                    <li style={s.li}>Aim II (informative name)</li>
+                  </ul>
+                </li>
+                <li style={s.li}>Project 2_name</li>
+                <li style={s.li}>Project 3_name</li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+        <li style={s.li}>All projects in Benchling are owned by lab not individual. This has to be changed by clicking on gear next to project name → project settings → owner.</li>
+      </ul>
+    );
+    case 'section_iv': return (
+      <>
         <p style={s.p}><strong><em>Daily/weekly:</em></strong> To ensure data integrity and traceability, lab notebooks should be updated as experiments are performed and kept in a state that allows immediate review if selected for audit during the quarterly cycle.</p>
         <ul style={s.ul}>
           <li style={s.li}>Images of all laboratory notebook pages for the month are uploaded.</li>
@@ -147,7 +156,120 @@ export default function BenchlingPolicy() {
             </ul>
           </li>
         </ul>
-      </div>
+      </>
+    );
+    default: return null;
+  }
+}
+
+const INITIAL_SECTIONS = [
+  { id: 'section_i',   label: 'I. Types of data and reporting guidelines', builtin: true },
+  { id: 'section_ii',  label: 'II. Lab Notebook Format',                   builtin: true },
+  { id: 'section_iii', label: 'III. Benchling Format',                     builtin: true },
+  { id: 'section_iv',  label: 'IV. Compliance and Audit',                  builtin: true },
+];
+
+export default function BenchlingPolicy({ canEdit }) {
+  const [sections, setSections] = useState(() => {
+    try {
+      const saved = localStorage.getItem('benchling_sections');
+      if (saved) { const p = JSON.parse(saved); if (Array.isArray(p) && p.length > 0) return p; }
+    } catch {}
+    return INITIAL_SECTIONS;
+  });
+  const [ctxMenu, setCtxMenu] = useState(null);
+  const inputRefs = useRef({});
+
+  useEffect(() => {
+    try { localStorage.setItem('benchling_sections', JSON.stringify(sections)); } catch {}
+  }, [sections]);
+
+  const addSection = useCallback((afterIdx) => {
+    const id = `custom_${Date.now()}`;
+    setSections(prev => {
+      const next = [...prev];
+      next.splice(afterIdx + 1, 0, { id, label: '', builtin: false, content: '' });
+      return next;
+    });
+  }, []);
+
+  const deleteSection = useCallback((idx) => {
+    setSections(prev => prev.filter((_, i) => i !== idx));
+  }, []);
+
+  const moveSection = useCallback((idx, dir) => {
+    setSections(prev => {
+      const next = [...prev];
+      const t = idx + dir;
+      if (t < 0 || t >= next.length) return prev;
+      [next[idx], next[t]] = [next[t], next[idx]];
+      return next;
+    });
+  }, []);
+
+  const updateLabel = useCallback((id, label) => {
+    setSections(prev => prev.map(sec => sec.id === id ? { ...sec, label } : sec));
+  }, []);
+
+  const updateContent = useCallback((id, content) => {
+    setSections(prev => prev.map(sec => sec.id === id ? { ...sec, content } : sec));
+  }, []);
+
+  const { addSubsection, deleteSubsection, updateSubsectionContent, updateSubsectionBgColor, updateSectionBgColor } = makeSubsectionHandlers(setSections);
+  const containerRef = useRef(null);
+  const { cellMenu, closeCellMenu, pickCellColor } = useTableCellColors(containerRef, canEdit, 'cell_colors_benchling');
+
+  return (
+    <div ref={containerRef} onMouseDown={() => setCtxMenu(null)}>
+      <p style={{ ...s.p, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>Guidelines for Experimental Tracking and Reporting</p>
+      <p style={{ ...s.p, fontWeight: 700, color: '#FF0000', margin: '0 0 4px' }}>The lab has put together guidelines on how to structure Benchling and notebook entries to make sure we are fully compliant with NYU institutional requirements.</p>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 24px' }}>Updated February 2025</p>
+
+      {sections.map((sec, idx) => (
+        <div key={sec.id} style={{ ...s.section, background: sec.bgColor || 'var(--bg-card)' }}
+          onContextMenu={canEdit ? e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, idx }); } : undefined}>
+          {sec.builtin ? (
+            <>
+              {canEdit
+                ? <input ref={el => { inputRefs.current[sec.id] = el; }} value={sec.label} onChange={e => updateLabel(sec.id, e.target.value)}
+                    style={{ ...s.h2, background: 'none', border: 'none', borderBottom: '1px solid var(--purple-primary)', outline: 'none', width: '100%', cursor: 'text', boxSizing: 'border-box', display: 'block', textDecoration: 'underline' }} />
+                : <div style={s.h2}><u>{sec.label}</u></div>
+              }
+              <BuiltinBody id={sec.id} />
+            </>
+          ) : (
+            <>
+              {canEdit
+                ? <input ref={el => { inputRefs.current[sec.id] = el; }} value={sec.label} onChange={e => updateLabel(sec.id, e.target.value)} placeholder={`Section ${idx + 1}`}
+                    style={{ ...s.h2, background: 'none', border: 'none', borderBottom: '1px solid var(--purple-primary)', outline: 'none', width: '100%', cursor: 'text', boxSizing: 'border-box', display: 'block' }} />
+                : <div style={s.h2}>{sec.label || <span style={{ fontStyle: 'italic', opacity: 0.5 }}>Section {idx + 1}</span>}</div>
+              }
+              <CustomSectionContent sectionId={sec.id} initialContent={sec.content} onContentChange={content => updateContent(sec.id, content)} />
+            </>
+          )}
+          {(sec.subsections || []).map(sub => (
+            <SubsectionBlock key={sub.id} sub={sub} canEdit={canEdit}
+              onContentChange={content => updateSubsectionContent(sec.id, sub.id, content)}
+              onChangeBgColor={color => updateSubsectionBgColor(sec.id, sub.id, color)}
+              onDelete={() => deleteSubsection(sec.id, sub.id)} />
+          ))}
+        </div>
+      ))}
+
+      {cellMenu && <TableCellContextMenu x={cellMenu.x} y={cellMenu.y} onPickColor={pickCellColor} onClose={closeCellMenu} />}
+      {ctxMenu && (
+        <SectionContextMenu
+          x={ctxMenu.x} y={ctxMenu.y}
+          onAddAbove={() => addSection(ctxMenu.idx - 1)}
+          onAddBelow={() => addSection(ctxMenu.idx)}
+          onMoveUp={ctxMenu.idx > 0 ? () => moveSection(ctxMenu.idx, -1) : null}
+          onMoveDown={ctxMenu.idx < sections.length - 1 ? () => moveSection(ctxMenu.idx, 1) : null}
+          onDelete={!sections[ctxMenu.idx]?.builtin ? () => deleteSection(ctxMenu.idx) : null}
+          onAddSubsection={() => addSubsection(sections[ctxMenu.idx]?.id)}
+          onChangeBgColor={color => updateSectionBgColor(sections[ctxMenu.idx]?.id, color)}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
     </div>
   );
 }

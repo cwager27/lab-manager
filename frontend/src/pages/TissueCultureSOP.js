@@ -1,6 +1,7 @@
-import { useRef } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { SectionContextMenu, SubsectionBlock, makeSubsectionHandlers, TableCellContextMenu, useTableCellColors } from '../components/SOPSection';
 
-const purple = '#79469b';
+const purple = 'var(--purple-primary)';
 const red = '#ff0000';
 
 const s = {
@@ -15,7 +16,6 @@ const s = {
   alpha: { paddingLeft: 20, margin: '4px 0 4px', listStyleType: 'lower-alpha' },
 };
 
-// Numbered list item: purple number, black text. Pass red=true for all-red.
 function PLI({ children, red: isRed, style }) {
   return (
     <li style={{ ...s.pli, ...(isRed ? { color: red, fontWeight: 700 } : {}), ...style }}>
@@ -24,7 +24,6 @@ function PLI({ children, red: isRed, style }) {
   );
 }
 
-// Lettered sub-item: purple letter, black text
 function ALI({ children }) {
   return (
     <li style={{ ...s.pli, fontWeight: 400 }}>
@@ -33,78 +32,29 @@ function ALI({ children }) {
   );
 }
 
-const TOC_ITEMS = [
-  { id: 'general_rules',     label: 'General Rules' },
-  { id: 'bsc',               label: 'BioSafety Cabinet (BSC) Use' },
-  { id: 'media_prep',        label: 'Media Preparation — Cancer Lines' },
-  { id: 'freezing_media',    label: 'Freezing Media Recipe — Cancer Lines' },
-  { id: 'conditioned_media', label: 'Conditioned Media Preparation' },
-  { id: 'thawing',           label: 'Thawing Cells — Cancer Lines' },
-  { id: 'adherent',          label: 'Maintaining Adherent Cells' },
-  { id: 'suspension',        label: 'Subculturing Suspension Cells' },
-  { id: 'freezing_cells',    label: 'Freezing Cells — Cancer Lines' },
-  { id: 'counting',          label: 'Counting Cells (Demovix Cell Drop)' },
-  { id: 'mycoplasma',        label: 'Mycoplasma Testing' },
-];
+function CustomSectionContent({ sectionId, initialContent, onContentChange }) {
+  const ref = useRef(null);
+  const timer = useRef(null);
+  const cbRef = useRef(onContentChange);
+  useEffect(() => { cbRef.current = onContentChange; });
+  useEffect(() => { if (ref.current) ref.current.innerHTML = initialContent || ''; }, []); // eslint-disable-line
+  useEffect(() => {
+    if (!ref.current) return;
+    const el = ref.current;
+    const observer = new MutationObserver(() => {
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => cbRef.current(el.innerHTML), 600);
+    });
+    observer.observe(el, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['style'] });
+    return () => { observer.disconnect(); clearTimeout(timer.current); };
+  }, []); // eslint-disable-line
+  return <div ref={ref} style={{ outline: 'none', minHeight: 48, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75 }} />;
+}
 
-export default function TissueCultureSOP() {
-  const refGeneralRules = useRef(null);
-  const refBsc          = useRef(null);
-  const refMediaPrep    = useRef(null);
-  const refFreezingMedia = useRef(null);
-  const refConditionedMedia = useRef(null);
-  const refThawing      = useRef(null);
-  const refAdherent     = useRef(null);
-  const refSuspension   = useRef(null);
-  const refFreezingCells = useRef(null);
-  const refCounting     = useRef(null);
-  const refMycoplasma   = useRef(null);
-
-  const refMap = {
-    general_rules: refGeneralRules, bsc: refBsc, media_prep: refMediaPrep,
-    freezing_media: refFreezingMedia, conditioned_media: refConditionedMedia,
-    thawing: refThawing, adherent: refAdherent, suspension: refSuspension,
-    freezing_cells: refFreezingCells, counting: refCounting, mycoplasma: refMycoplasma,
-  };
-
-  const scrollTo = (id) => refMap[id]?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-  return (
-    <div>
-      {/* Lab logo */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 24 }}>
-        <img src="/dna-logo.jpg" alt="Petljak Lab" style={{ width: 64, height: 64, objectFit: 'contain' }} />
-        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
-          <span style={{ fontSize: 32, fontWeight: 700, color: '#5b3d8a', letterSpacing: '0.18em' }}>PETLJAK</span>
-          <span style={{ fontSize: 16, fontWeight: 400, color: '#5b3d8a', letterSpacing: '0.45em', marginTop: 2 }}>LAB</span>
-        </div>
-      </div>
-
-      {/* Document title */}
-      <div style={{ textAlign: 'center', marginBottom: 20 }}>
-        <h1 style={{ fontSize: 33, fontWeight: 700, color: purple, textDecoration: 'underline', margin: '0 0 4px', lineHeight: 1.2 }}>
-          TISSUE CULTURE (TC) PROTOCOLS
-        </h1>
-        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Updated December 2025</p>
-      </div>
-
-      {/* Table of Contents */}
-      <div style={s.card}>
-        <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 10px' }}>Table of Contents</p>
-        <ol style={s.ol}>
-          {TOC_ITEMS.map(item => (
-            <li key={item.id} style={{ marginBottom: 4 }}>
-              <button onClick={() => scrollTo(item.id)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: purple, fontSize: 13, textDecoration: 'underline', textAlign: 'left' }}>
-                {item.label}
-              </button>
-            </li>
-          ))}
-        </ol>
-      </div>
-
-      {/* 1. GENERAL RULES */}
-      <div ref={refGeneralRules} style={s.card}>
-        <div style={s.h1}>1. General Rules</div>
+function BuiltinBody({ id }) {
+  switch (id) {
+    case 'general_rules': return (
+      <>
         <p style={{ fontSize: 13, fontWeight: 700, color: '#3d1f1f', background: '#f2d0cc', borderRadius: 6, padding: '14px 18px', textAlign: 'center', lineHeight: 1.7, margin: '0 0 16px' }}>
           These rules were put together to minimize the risk of contamination as well as health risks. Deviation from these rules can result in access ban. If you notice any non-compliance, please email Mia directly.
         </p>
@@ -114,21 +64,18 @@ export default function TissueCultureSOP() {
           <li style={s.li}>Should never be used outside of the TC room.</li>
           <li style={s.li}>Should be replaced with a new coat and labeled each week.</li>
         </ul>
-
         <p style={{ fontSize: 13, fontWeight: 700, color: red, margin: '8px 0 4px' }}>GLOVES</p>
         <ul style={s.ul}>
           <li style={s.li}>Should be put on and disinfected with 70% ethanol immediately upon entering the TC room.</li>
           <li style={s.li}>Nothing can be touched in the TC room before the gloves are worn and disinfected.</li>
           <li style={s.li}>If bringing in labware from outside the TC, replace gloves when entering the room.</li>
         </ul>
-
         <p style={{ fontSize: 13, fontWeight: 700, color: red, margin: '8px 0 4px' }}>TC EQUIPMENT</p>
         <ul style={s.ul}>
           <li style={s.li}>Any reagents, supplies, or equipment brought to the TC should be 70% ethanol cleaned.</li>
           <li style={s.li}>The TC room has designated pipette controllers and serological pipettes. The pipette controllers are currently charged in the main lab in the bay by the microwave. Bring them into the TC room with gloves on, spray with 70% ethanol, replace gloves, and respray new gloves.</li>
           <li style={s.li}>The TC room has designated tube racks, markers, and other supplies that should not leave the room or be used for anything non-TC related.</li>
         </ul>
-
         <p style={{ fontSize: 13, fontWeight: 700, color: red, margin: '8px 0 4px' }}>REAGENTS and SUPPLIES</p>
         <ul style={s.ul}>
           <li style={s.li}>Use of autoclaved/recycled supplies in TC is strictly forbidden.</li>
@@ -138,12 +85,10 @@ export default function TissueCultureSOP() {
           <li style={s.li}>Cleaning supplies: 70% ethanol, 10% bleach, and detergent and distilled water (both using autoclaved, distilled water).</li>
           <li style={s.li}>If you notice low stocks of anything please tell Sarah.</li>
         </ul>
-
         <p style={{ fontSize: 13, fontWeight: 700, color: red, margin: '8px 0 4px' }}>WARMING BATH</p>
         <ul style={s.ul}>
           <li style={s.li}>Anything going in has to be cleaned with 70% ethanol first.</li>
         </ul>
-
         <p style={{ fontSize: 13, fontWeight: 700, color: red, margin: '8px 0 4px' }}>BIOSAFETY CABINET (BSC) USE</p>
         <ul style={s.ul}>
           <li style={s.li}>Anything entering BSC has to be cleaned with 70% ethanol first.</li>
@@ -152,11 +97,10 @@ export default function TissueCultureSOP() {
           <li style={s.li}>VacTrap is to be emptied whenever waste reaches levels designated on the VacTrap, as well as by the last user every Friday regardless of level in container.</li>
           <li style={s.li}>BSC needs to be closed by the last user every day.</li>
         </ul>
-      </div>
-
-      {/* 2. BSC USE */}
-      <div ref={refBsc} style={s.card}>
-        <div style={s.h1}>2. BioSafety Cabinets (BSC) Use</div>
+      </>
+    );
+    case 'bsc': return (
+      <>
         <p style={{ ...s.p, fontWeight: 700 }}>Note: NYU policy is explicit that UV lights may not be used in BSC so do not turn it on</p>
         <ol style={s.ol}>
           <PLI>Raise the BSC sash to the correct level, which is evident by a mark or an alarm that ceases at correct height, and run the fan for <strong>20 minutes</strong> before use.</PLI>
@@ -179,40 +123,33 @@ export default function TissueCultureSOP() {
           <PLI>Turn off the fan unless another individual is going to use BSC</PLI>
           <PLI>Check the VacTrap waste level. If the waste is at or above the first marked line (50% full), remove it and bring to the sink. Add bleach equal to 10% of the total volume, swirl to mix, dump the liquid down the sink, and rinse out the bottle. Add enough Bacdown Disinfectant soap to cover the bottom. Place the VacTrap back under the BSC with the lid loose to allow water to evaporate.</PLI>
         </ol>
-      </div>
-
-      {/* 3. MEDIA PREP */}
-      <div ref={refMediaPrep} style={s.card}>
-        <div style={s.h1}>3. Media Preparation — Cancer Lines</div>
-        <ol style={s.ol}>
-          <PLI>Bring media (DMEM:F12 or RPMI; stored at 4°C), FBS and pen/strep aliquots (both -20°C) to the TC, spray with 70% EtOH, and place in a warming bath at 37°C. <em>Note: If only preparing media and not using it immediately, you do not need to prewarm — you only need to thaw the supplements.</em></PLI>
-          <PLI>Once aliquots are thawed, spray them and a media bottle with 70% EtOH, wipe, and place in the BSC.</PLI>
-          <PLI>Bring serological pipettes and pipettor, disinfect with 70% EtOH, wipe and place in BSC.</PLI>
-          <PLI>Unscrew caps/lids from all bottles (media, supplements) but leave them on.</PLI>
-          <PLI>Add supplements to the media. Both RPMI and DMEM:F12 require:
-            <ul style={s.circle}>
-              <li style={s.li}><strong>10% FBS</strong> — add 50 mL aliquot directly to the bottle using pipette.</li>
-              <li style={s.li}><strong>1× PenStrep</strong> — add 5 mL aliquot directly to the bottle.</li>
-            </ul>
-          </PLI>
-          <PLI>Clearly mark on the bottle: your initials, date, 10% FBS, 1× pen/strep, and any other supplements/reagents added.</PLI>
-          <PLI>Once done with TC work, store the media at 4°C for later use.</PLI>
-        </ol>
-      </div>
-
-      {/* 4. FREEZING MEDIA */}
-      <div ref={refFreezingMedia} style={s.card}>
-        <div style={s.h1}>4. Freezing Media Recipe — Cancer Lines</div>
-        <ul style={s.ul}>
-          <li style={s.li}>Fetal bovine serum (FBS) or other serum (20%)</li>
-          <li style={s.li}>Dimethyl sulfoxide (DMSO) (10%)</li>
-          <li style={s.li}>RPMI or DMEM media (70%)</li>
-        </ul>
-      </div>
-
-      {/* 5. CONDITIONED MEDIA */}
-      <div ref={refConditionedMedia} style={s.card}>
-        <div style={s.h1}>5. Conditioned Media Preparation - Cancer Lines</div>
+      </>
+    );
+    case 'media_prep': return (
+      <ol style={s.ol}>
+        <PLI>Bring media (DMEM:F12 or RPMI; stored at 4°C), FBS and pen/strep aliquots (both -20°C) to the TC, spray with 70% EtOH, and place in a warming bath at 37°C. <em>Note: If only preparing media and not using it immediately, you do not need to prewarm — you only need to thaw the supplements.</em></PLI>
+        <PLI>Once aliquots are thawed, spray them and a media bottle with 70% EtOH, wipe, and place in the BSC.</PLI>
+        <PLI>Bring serological pipettes and pipettor, disinfect with 70% EtOH, wipe and place in BSC.</PLI>
+        <PLI>Unscrew caps/lids from all bottles (media, supplements) but leave them on.</PLI>
+        <PLI>Add supplements to the media. Both RPMI and DMEM:F12 require:
+          <ul style={s.circle}>
+            <li style={s.li}><strong>10% FBS</strong> — add 50 mL aliquot directly to the bottle using pipette.</li>
+            <li style={s.li}><strong>1× PenStrep</strong> — add 5 mL aliquot directly to the bottle.</li>
+          </ul>
+        </PLI>
+        <PLI>Clearly mark on the bottle: your initials, date, 10% FBS, 1× pen/strep, and any other supplements/reagents added.</PLI>
+        <PLI>Once done with TC work, store the media at 4°C for later use.</PLI>
+      </ol>
+    );
+    case 'freezing_media': return (
+      <ul style={s.ul}>
+        <li style={s.li}>Fetal bovine serum (FBS) or other serum (20%)</li>
+        <li style={s.li}>Dimethyl sulfoxide (DMSO) (10%)</li>
+        <li style={s.li}>RPMI or DMEM media (70%)</li>
+      </ul>
+    );
+    case 'conditioned_media': return (
+      <>
         <ul style={s.ul}>
           <li style={s.li}>The length of time for cells to create conditioned media is dependent on cell type</li>
           <li style={s.li}>The general recommendation is that fresh media is added to ~50-60% confluent/dense lines and left for 1-2 days (<span style={{ color: red, fontWeight: 700 }}>until turns orange but not yellow</span>) before collecting and preparing.</li>
@@ -229,11 +166,10 @@ export default function TissueCultureSOP() {
           <PLI>Leave the media in the bottle (or move to 50mL falcon); labelling with your initials, date of collection, name of the line from which collected.</PLI>
           <PLI>The collected media can be stored at 4°C. <span style={{ color: red, fontWeight: 700 }}>Do NOT store at -20C</span></PLI>
         </ol>
-      </div>
-
-      {/* 6. THAWING CELLS */}
-      <div ref={refThawing} style={s.card}>
-        <div style={s.h1}>6. Thawing Cells — Cancer Lines</div>
+      </>
+    );
+    case 'thawing': return (
+      <>
         <p style={{ ...s.p, fontStyle: 'italic' }}>To request a cell line, contact Sarah. She maintains a lab record of all cell lines and will retrieve the requested cell line from liquid nitrogen and place it in the -80°C freezer.</p>
         <ol style={s.ol}>
           <PLI><strong>New lines</strong> (newly purchased or obtained from collaborators) must be placed in the designated isolation incubator until testing negative for mycoplasma. If positive, inform Sarah immediately.</PLI>
@@ -250,11 +186,10 @@ export default function TissueCultureSOP() {
           <PLI>Once complete with all flasks, place them in the incubator and clean the BSC.</PLI>
           <PLI>Replace media with fresh media after 24 hours or once cells become adherent to remove residual DMSO. Transfer cells to larger flasks once confluent.</PLI>
         </ol>
-      </div>
-
-      {/* 7. ADHERENT CELLS */}
-      <div ref={refAdherent} style={s.card}>
-        <div style={s.h1}>7. Maintaining Adherent Cells - Cancer Lines</div>
+      </>
+    );
+    case 'adherent': return (
+      <>
         <ul style={s.ul}>
           <li style={s.li}>Work with one cell line at a time to limit cross-contamination</li>
           <li style={s.li}>Cells should be split when about 80% confluent</li>
@@ -281,11 +216,10 @@ export default function TissueCultureSOP() {
           </PLI>
           <PLI>Upon completion place all flasks in the incubator and clean the BSC.</PLI>
         </ol>
-      </div>
-
-      {/* 8. SUSPENSION CELLS */}
-      <div ref={refSuspension} style={s.card}>
-        <div style={s.h1}>8. Subculturing Suspension Cells - Cancer Lines</div>
+      </>
+    );
+    case 'suspension': return (
+      <>
         <ul style={s.ul}>
           <li style={s.li}>Work with one cell line at a time to limit cross-contamination</li>
           <li style={s.li}>Cells should be split before they reach ~80% of maximum density.</li>
@@ -312,11 +246,10 @@ export default function TissueCultureSOP() {
           </PLI>
           <PLI>Upon completion place all flasks in the incubator and clean the BSC.</PLI>
         </ol>
-      </div>
-
-      {/* 9. FREEZING CELLS */}
-      <div ref={refFreezingCells} style={s.card}>
-        <div style={s.h1}>9. Freezing Cells - Cancer Lines</div>
+      </>
+    );
+    case 'freezing_cells': return (
+      <>
         <ul style={s.ul}>
           <li style={s.li}>The general recommendation is for cells not be stored in -80°C for longer than 3 months, at which point they should be moved to liquid nitrogen</li>
           <li style={s.li}>For cells to be moved to lab's liquid nitrogen storage, three things need to be in place:
@@ -347,11 +280,10 @@ export default function TissueCultureSOP() {
           <PLI>Add 1mL of cells in freezing media to each vial to be frozen</PLI>
           <PLI>Store at -80°C</PLI>
         </ol>
-      </div>
-
-      {/* 10. COUNTING CELLS */}
-      <div ref={refCounting} style={s.card}>
-        <div style={s.h1}>10. Counting Cells (Demovix Cell Drop)</div>
+      </>
+    );
+    case 'counting': return (
+      <>
         <p style={{ ...s.p, fontStyle: 'italic' }}>Protocol assumes that BSC has been set up and cells are being subcultured following the appropriate SOPs. Work with one cell line at a time.</p>
         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
           <ul style={{ ...s.ul, flex: 1 }}>
@@ -383,11 +315,10 @@ export default function TissueCultureSOP() {
         <div style={{ marginTop: 12 }}>
           <img src="/tc-images/fig_2.jpg" alt="Figure 1: Correct focus and exposure settings" style={{ maxWidth: 220, borderRadius: 4, border: '1px solid var(--border)', display: 'block' }} />
         </div>
-      </div>
-
-      {/* 11. MYCOPLASMA TESTING */}
-      <div ref={refMycoplasma} style={s.card}>
-        <div style={s.h1}>11. Mycoplasma Testing</div>
+      </>
+    );
+    case 'mycoplasma': return (
+      <>
         <ul style={s.ul}>
           <li style={s.li}>All new cells or mycoplasma positive lines are to be kept in a separate incubator (in 'quarantine').</li>
           <li style={s.li}>Media from cells to be tested should be in contact with cells for at least 2-3 days before collection. It can be collected and stored at 4ºC for up to a week or longer at -20ºC.</li>
@@ -399,14 +330,172 @@ export default function TissueCultureSOP() {
           <PLI>Follow manufacturer's protocol: see below</PLI>
           <PLI>If cells are mycoplasma positive please report to Sarah so that the lab is aware and the cells will be either disposed of or, if essential, treated with Plasmocin or Plasmocure for 2 weeks and then retested.</PLI>
         </ol>
-
-        {/* MycoStrip protocol sheets */}
         <p style={{ ...s.p, fontWeight: 700, color: 'var(--text-primary)', marginTop: 20 }}>MycoStrip™ Manufacturer Protocol</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 8 }}>
           <img src="/tc-images/fig_1.jpg" alt="MycoStrip protocol page 1" style={{ width: '100%', borderRadius: 4, border: '1px solid var(--border)' }} />
           <img src="/tc-images/fig_4.jpg" alt="MycoStrip protocol page 2" style={{ width: '100%', borderRadius: 4, border: '1px solid var(--border)' }} />
         </div>
+      </>
+    );
+    default: return null;
+  }
+}
+
+const INITIAL_SECTIONS = [
+  { id: 'general_rules',     label: 'General Rules',                          builtin: true },
+  { id: 'bsc',               label: 'BioSafety Cabinets (BSC) Use',           builtin: true },
+  { id: 'media_prep',        label: 'Media Preparation — Cancer Lines',        builtin: true },
+  { id: 'freezing_media',    label: 'Freezing Media Recipe — Cancer Lines',    builtin: true },
+  { id: 'conditioned_media', label: 'Conditioned Media Preparation - Cancer Lines', builtin: true },
+  { id: 'thawing',           label: 'Thawing Cells — Cancer Lines',            builtin: true },
+  { id: 'adherent',          label: 'Maintaining Adherent Cells - Cancer Lines', builtin: true },
+  { id: 'suspension',        label: 'Subculturing Suspension Cells - Cancer Lines', builtin: true },
+  { id: 'freezing_cells',    label: 'Freezing Cells - Cancer Lines',           builtin: true },
+  { id: 'counting',          label: 'Counting Cells (Demovix Cell Drop)',      builtin: true },
+  { id: 'mycoplasma',        label: 'Mycoplasma Testing',                     builtin: true },
+];
+
+export default function TissueCultureSOP({ canEdit }) {
+  const [sections, setSections] = useState(() => {
+    try {
+      const saved = localStorage.getItem('tc_sections');
+      if (saved) {
+        const p = JSON.parse(saved);
+        if (Array.isArray(p) && p.length > 0) {
+          // Migrate: strip leading "N. " number prefixes from builtin labels
+          return p.map(sec => sec.builtin ? { ...sec, label: sec.label.replace(/^\d+\.\s*/, '') } : sec);
+        }
+      }
+    } catch {}
+    return INITIAL_SECTIONS;
+  });
+  const [ctxMenu, setCtxMenu] = useState(null);
+  const sectionRefs = useRef({});
+  const inputRefs = useRef({});
+
+  useEffect(() => {
+    try { localStorage.setItem('tc_sections', JSON.stringify(sections)); } catch {}
+  }, [sections]);
+
+  const addSection = useCallback((afterIdx) => {
+    const id = `custom_${Date.now()}`;
+    setSections(prev => {
+      const next = [...prev];
+      next.splice(afterIdx + 1, 0, { id, label: '', builtin: false, content: '' });
+      return next;
+    });
+  }, []);
+
+  const deleteSection = useCallback((idx) => {
+    setSections(prev => prev.filter((_, i) => i !== idx));
+  }, []);
+
+  const moveSection = useCallback((idx, dir) => {
+    setSections(prev => {
+      const next = [...prev];
+      const t = idx + dir;
+      if (t < 0 || t >= next.length) return prev;
+      [next[idx], next[t]] = [next[t], next[idx]];
+      return next;
+    });
+  }, []);
+
+  const updateLabel = useCallback((id, label) => {
+    setSections(prev => prev.map(sec => sec.id === id ? { ...sec, label } : sec));
+  }, []);
+
+  const updateContent = useCallback((id, content) => {
+    setSections(prev => prev.map(sec => sec.id === id ? { ...sec, content } : sec));
+  }, []);
+
+  const { addSubsection, deleteSubsection, updateSubsectionContent, updateSubsectionBgColor, updateSectionBgColor } = makeSubsectionHandlers(setSections);
+  const containerRef = useRef(null);
+  const { cellMenu, closeCellMenu, pickCellColor } = useTableCellColors(containerRef, canEdit, 'cell_colors_tissue_culture');
+
+  return (
+    <div ref={containerRef} onMouseDown={() => setCtxMenu(null)}>
+      {/* Lab logo */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 24 }}>
+        <img src="/dna-logo.jpg" alt="Petljak Lab" style={{ width: 64, height: 64, objectFit: 'contain' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
+          <span style={{ fontSize: 32, fontWeight: 700, color: '#5b3d8a', letterSpacing: '0.18em' }}>PETLJAK</span>
+          <span style={{ fontSize: 16, fontWeight: 400, color: '#5b3d8a', letterSpacing: '0.45em', marginTop: 2 }}>LAB</span>
+        </div>
       </div>
+
+      {/* Document title */}
+      <div style={{ textAlign: 'center', marginBottom: 20 }}>
+        <h1 style={{ fontSize: 33, fontWeight: 700, color: purple, textDecoration: 'underline', margin: '0 0 4px', lineHeight: 1.2 }}>
+          TISSUE CULTURE (TC) PROTOCOLS
+        </h1>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Updated December 2025</p>
+      </div>
+
+      {/* Table of Contents — auto-generated from sections, numbered by position */}
+      <div style={s.card}>
+        <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 10px' }}>Table of Contents</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {sections.map((sec, idx) => (
+            <button key={sec.id} onClick={() => sectionRefs.current[sec.id]?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: purple, fontSize: 13, textDecoration: 'underline', textAlign: 'left' }}>
+              {idx + 1}. {sec.label || `Section ${idx + 1}`}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Sections */}
+      {sections.map((sec, idx) => (
+        <div key={sec.id} ref={el => { sectionRefs.current[sec.id] = el; }} style={{ ...s.card, background: sec.bgColor || 'var(--bg-card)' }}
+          onContextMenu={canEdit ? e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, idx }); } : undefined}>
+          {sec.builtin ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                <span style={{ ...s.h1, margin: 0, padding: 0, border: 'none', flexShrink: 0 }}>{idx + 1}.</span>
+                {canEdit
+                  ? <input ref={el => { inputRefs.current[sec.id] = el; }} value={sec.label} onChange={e => updateLabel(sec.id, e.target.value)}
+                      style={{ ...s.h1, background: 'none', border: 'none', borderBottom: '1px solid var(--purple-primary)', outline: 'none', flex: 1, cursor: 'text', boxSizing: 'border-box', display: 'block', margin: 0 }} />
+                  : <div style={{ ...s.h1, margin: 0, flex: 1 }}>{sec.label}</div>
+                }
+              </div>
+              <BuiltinBody id={sec.id} />
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                <span style={{ ...s.h1, margin: 0, padding: 0, border: 'none', flexShrink: 0 }}>{idx + 1}.</span>
+                {canEdit
+                  ? <input ref={el => { inputRefs.current[sec.id] = el; }} value={sec.label} onChange={e => updateLabel(sec.id, e.target.value)} placeholder="Section title"
+                      style={{ ...s.h1, background: 'none', border: 'none', borderBottom: '1px solid var(--purple-primary)', outline: 'none', flex: 1, cursor: 'text', boxSizing: 'border-box', display: 'block', margin: 0 }} />
+                  : <div style={{ ...s.h1, margin: 0, flex: 1 }}>{sec.label || <span style={{ fontStyle: 'italic', opacity: 0.5 }}>Section title</span>}</div>
+                }
+              </div>
+              <CustomSectionContent sectionId={sec.id} initialContent={sec.content} onContentChange={content => updateContent(sec.id, content)} />
+            </>
+          )}
+          {(sec.subsections || []).map(sub => (
+            <SubsectionBlock key={sub.id} sub={sub} canEdit={canEdit}
+              onContentChange={content => updateSubsectionContent(sec.id, sub.id, content)}
+              onChangeBgColor={color => updateSubsectionBgColor(sec.id, sub.id, color)}
+              onDelete={() => deleteSubsection(sec.id, sub.id)} />
+          ))}
+        </div>
+      ))}
+
+      {cellMenu && <TableCellContextMenu x={cellMenu.x} y={cellMenu.y} onPickColor={pickCellColor} onClose={closeCellMenu} />}
+      {ctxMenu && (
+        <SectionContextMenu
+          x={ctxMenu.x} y={ctxMenu.y}
+          onAddAbove={() => addSection(ctxMenu.idx - 1)}
+          onAddBelow={() => addSection(ctxMenu.idx)}
+          onMoveUp={ctxMenu.idx > 0 ? () => moveSection(ctxMenu.idx, -1) : null}
+          onMoveDown={ctxMenu.idx < sections.length - 1 ? () => moveSection(ctxMenu.idx, 1) : null}
+          onDelete={!sections[ctxMenu.idx]?.builtin ? () => deleteSection(ctxMenu.idx) : null}
+          onAddSubsection={() => addSubsection(sections[ctxMenu.idx]?.id)}
+          onChangeBgColor={color => updateSectionBgColor(sections[ctxMenu.idx]?.id, color)}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
     </div>
   );
 }

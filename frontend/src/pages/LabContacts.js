@@ -19,11 +19,14 @@ const ROLE_COLORS = {
 const PERMISSIONS = [
   { key: 'can_assign_tasks', label: 'Assign Tasks', description: 'Can assign recurrent and ad hoc tasks' },
   { key: 'can_approve_sporadic', label: 'Approve Task Requests', description: 'Can approve or deny ad hoc task requests' },
+  { key: 'can_view_task_tabs', label: 'View Task Management', description: 'Can see all task management tabs (Recurrent, Ad hoc, Calendar, Productivity, Assignments)' },
   { key: 'can_edit_meetings', label: 'Edit Meeting Presenter', description: 'Can change who presents at lab meetings' },
   { key: 'can_view_finance', label: 'View Finance', description: 'Can see grants, orders and reagents' },
   { key: 'can_edit_samples', label: 'Edit Sample Inventory', description: 'Can add, edit and remove samples' },
   { key: 'can_view_contacts', label: 'View Lab Contacts', description: 'Can see the full contact directory' },
   { key: 'can_add_members', label: 'Add Team Members', description: 'Can add new members to the platform' },
+  { key: 'can_edit_sops', label: 'Edit SOPs & Policies', description: 'Can edit lab policy and SOP documents' },
+  { key: 'can_view_confidential', label: 'View Confidential Info', description: 'Can see personal phone, email, address and emergency contacts' },
 ];
 
 const DASHBOARD_PERMISSIONS = [
@@ -42,8 +45,10 @@ const EMPTY_CONTACT = {
 const EMPTY_MEMBER = {
   first_name: '', last_name: '', email: '', password: '', role: 'member',
   can_assign_tasks: false, can_approve_sporadic: false,
+  can_view_task_tabs: false,
   can_edit_meetings: false, can_view_finance: true,
   can_edit_samples: true, can_view_contacts: false, can_add_members: false,
+  can_edit_sops: false, can_view_confidential: false,
   can_see_lab_dashboard: true, can_see_leadership_dashboard: false, can_see_personal_dashboard: true,
   title: '', personal_email: '', phone: '', address: '',
   emergency_contact_name: '', emergency_contact_phone: '',
@@ -707,7 +712,7 @@ export default function LabContacts({ userRole, userId, profile, permissions }) 
   const [emailSuccess, setEmailSuccess] = useState(false);
 
   const canManage = userRole === 'admin' || (permissions?.can_add_members);
-  const canViewPersonalPhone = userRole === 'admin' || userRole === 'pm' || profile?.full_name?.toLowerCase().startsWith('mia');
+  const canViewPersonalPhone = userRole === 'admin' || userRole === 'pm' || permissions?.can_view_confidential;
 
   function logAuthEvent(event_type, fields = {}) {
     fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/log-event`, {

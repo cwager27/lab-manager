@@ -26,6 +26,9 @@ const PageLoader = () => (
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
+  const [navCollapsed, setNavCollapsed] = useState(() => {
+    try { return localStorage.getItem('nav_collapsed') === 'true'; } catch { return false; }
+  });
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [showPasswordReset, setShowPasswordReset] = useState(isRecoveryUrl);
@@ -177,6 +180,9 @@ export default function App() {
     can_edit_samples: profile?.can_edit_samples,
     can_view_contacts: profile?.can_view_contacts,
     can_add_members: profile?.can_add_members,
+    can_edit_sops: profile?.can_edit_sops,
+    can_view_confidential: profile?.can_view_confidential,
+    can_view_task_tabs: profile?.can_view_task_tabs,
   };
 
   return (
@@ -189,8 +195,10 @@ export default function App() {
         onLogout={handleLogout}
         canManage={canManage}
         permissions={permissions}
+        collapsed={navCollapsed}
+        onToggleCollapse={() => setNavCollapsed(v => { const next = !v; try { localStorage.setItem('nav_collapsed', next); } catch {} return next; })}
       />
-      <main style={{ marginLeft: '240px', flex: 1, padding: '32px', maxWidth: 'calc(100vw - 240px)' }}>
+      <main style={{ marginLeft: navCollapsed ? '64px' : '240px', flex: 1, padding: '32px', maxWidth: `calc(100vw - ${navCollapsed ? '64px' : '240px'})`, transition: 'margin-left 0.2s ease, max-width 0.2s ease' }}>
         <Suspense fallback={<PageLoader />}>
         {currentPage === 'dashboard' && <Dashboard profile={profile} userRole={userRole} userId={user.id} setCurrentPage={setCurrentPage} />}
         {currentPage === 'tasks2' && <Tasks2 userRole={userRole} userId={user.id} profile={profile} />}
@@ -198,7 +206,7 @@ export default function App() {
         {currentPage === 'meetings' && <LabMeetings userRole={userRole} userId={user.id} profile={profile} permissions={permissions} />}
         {currentPage === 'finance' && permissions.can_view_finance && <Finance userRole={userRole} />}
         {currentPage === 'inventory' && <SampleInventory userRole={userRole} userId={user.id} profile={profile} />}
-        {currentPage === 'policies' && <LabPoliciesSOPs userRole={userRole} userId={user.id} />}
+        {currentPage === 'policies' && <LabPoliciesSOPs userRole={userRole} userId={user.id} profile={profile} permissions={permissions} />}
         {currentPage === 'compliance' && <Compliance userRole={userRole} userId={user.id} profile={profile} />}
         {currentPage === 'contacts' && (permissions.can_view_contacts || userRole === 'admin' || userRole === 'pm') && <LabContacts userRole={userRole} userId={user.id} profile={profile} permissions={permissions} />}
         {currentPage === 'contacts' && !permissions.can_view_contacts && userRole !== 'admin' && userRole !== 'pm' && (

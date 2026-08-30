@@ -240,11 +240,26 @@ export default function Finance({ userRole }) {
   const [editingReagent, setEditingReagent] = useState(null);
   const [editReagentForm, setEditReagentForm] = useState({});
   const [confirmDeleteReagent, setConfirmDeleteReagent] = useState(false);
+  const [dupWarning, setDupWarning] = useState(null);
+  const [dupConfirmed, setDupConfirmed] = useState(false);
 
   const allFYs = useMemo(() => {
+    const cur = getCurrentFY();
     const s = new Set(['fy26', 'fy25', 'fy24']);
     orders.forEach(o => { if (o.order_date) s.add(getFiscalYear(o.order_date)); });
-    return [...s].sort().reverse();
+    return [...s].filter(fy => fy <= cur).sort().reverse();
+  }, [orders]);
+
+  const grantSpendByName = useMemo(() => {
+    const map = {};
+    orders.forEach(o => {
+      if (!o.grant_name || o.total_price == null || o.status === 'deleted') return;
+      if (!map[o.grant_name]) map[o.grant_name] = { complete: 0, processing: 0 };
+      const s = (o.status || '').toLowerCase();
+      if (s === 'complete') map[o.grant_name].complete += Number(o.total_price);
+      else if (s === 'processing') map[o.grant_name].processing += Number(o.total_price);
+    });
+    return map;
   }, [orders]);
 
   const { widths: grantsWidths, onColMouseDown: grantsResize } = useResizableColumns(8);
@@ -306,6 +321,21 @@ export default function Finance({ userRole }) {
       setAddOrderError(`Please fill in: ${missing.join(', ')}`);
       return;
     }
+    if (!dupConfirmed) {
+      const norm = v => (v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const normCat = norm(newOrder.catalog_number);
+      const normItem = norm(newOrder.item);
+      const catalogConflicts = orders.filter(o =>
+        o.status !== 'deleted' && norm(o.catalog_number) === normCat && norm(o.item) !== normItem
+      );
+      const nameConflicts = orders.filter(o =>
+        o.status !== 'deleted' && norm(o.item) === normItem && norm(o.catalog_number) !== normCat
+      );
+      if (catalogConflicts.length > 0 || nameConflicts.length > 0) {
+        setDupWarning({ catalogConflicts, nameConflicts });
+        return;
+      }
+    }
     const toInsert = {
       ...newOrder,
       unit_price: parseFloat(newOrder.unit_price) || null,
@@ -318,6 +348,8 @@ export default function Finance({ userRole }) {
       setOrders(prev => [...prev, data]);
       setShowAddOrder(false);
       setAddOrderError('');
+      setDupWarning(null);
+      setDupConfirmed(false);
       setNewOrder({ item: '', vendor: '', catalog_number: '', category: '', grant_name: '', requisition_id: '', unit_description: '', unit_price: '', units: '', order_date: '', requestor: '', status: 'pending', notes: '' });
     } else if (error) {
       setAddOrderError(error.message);
@@ -410,6 +442,22 @@ export default function Finance({ userRole }) {
     catalogRows.forEach(r => { m[r.catalog_number] = r; });
     return m;
   }, [catalogRows]);
+
+  const catalogToItems = useMemo(() => {
+    const map = {};
+    orders.forEach(o => {
+      if (!o.catalog_number || o.status === 'deleted') return;
+      const cat = o.catalog_number.trim();
+      if (!cat) return;
+      if (!map[cat]) map[cat] = { items: [], vendor: '', unit_description: '', unit_price: null };
+      const item = (o.item || '').trim();
+      if (item && !map[cat].items.includes(item)) map[cat].items.push(item);
+      if (o.vendor && !map[cat].vendor) map[cat].vendor = o.vendor;
+      if (o.unit_description && !map[cat].unit_description) map[cat].unit_description = o.unit_description;
+      if (o.unit_price != null && map[cat].unit_price == null) map[cat].unit_price = o.unit_price;
+    });
+    return map;
+  }, [orders]);
 
 
   const sortedCatalogRows = useMemo(() => {
@@ -962,35 +1010,41 @@ export default function Finance({ userRole }) {
         <div />
       </div>
 
-      {alertGrants.length > 0 && (
-        <div style={{ background: '#FEF9E7', border: '1px solid #FAD7A0', borderRadius: 'var(--radius-md)', padding: '14px 16px', marginBottom: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}><AlertTriangle size={16} color="#F39C12" /><span style={{ fontSize: '13px', fontWeight: 600, color: '#F39C12' }}>Grant Alerts</span></div>
-          {alertGrants.map(g => { const pct = g.total_amount && g.remaining_balance ? (g.remaining_balance / g.total_amount) * 100 : null; const daysLeft = g.end_date ? Math.ceil((new Date(g.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null; return (<p key={g.id} style={{ fontSize: '12px', color: '#F39C12', margin: '4px 0 0' }}><strong>{g.name}</strong>{pct !== null && pct < 25 ? ` — ${pct.toFixed(1)}% remaining ($${g.remaining_balance?.toLocaleString()})` : ''}{daysLeft !== null && daysLeft <= 90 ? ` — expires in ${daysLeft} days (${g.end_date})` : ''}</p>); })}
-        </div>
-      )}
-
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
-        {[
-          { label: 'Total Orders',                value: orders.length,                                           tab: 'orders'   },
-          { label: `${curFY.toUpperCase()} Spend`, value: `$${Math.round(curFYSpend).toLocaleString()}`,        tab: 'charts'   },
-          { label: 'Vendors',                     value: vendors.length,                                         tab: 'vendors'  },
-          { label: 'Active Grants',               value: grants.length,                                          tab: 'grants'   },
-          { label: 'Grant Alerts',                value: alertGrants.length,                                     tab: 'grants'   },
-          { label: 'Std. Reagents',               value: reagents.length + nanoseq.length,                      tab: 'reagents' },
-        ].map(stat => (
-          <div key={stat.label} onClick={() => setActiveTab(stat.tab)}
-            style={{ flex: 1, background: 'var(--purple-faint)', borderRadius: 'var(--radius-md)', padding: '16px', textAlign: 'center', cursor: 'pointer' }}>
-            <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--purple-primary)' }}>{stat.value}</div>
-            <div style={{ fontSize: '12px', color: 'var(--purple-primary)', marginTop: '2px', opacity: 0.8 }}>{stat.label}</div>
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', alignItems: 'stretch' }}>
+        <div style={{ flex: 1, background: alertGrants.length > 0 ? '#FEF9E7' : 'var(--bg-primary)', border: `1px solid ${alertGrants.length > 0 ? '#FAD7A0' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', padding: '14px 16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: alertGrants.length > 0 ? '8px' : 0 }}>
+            <AlertTriangle size={16} color={alertGrants.length > 0 ? '#F39C12' : 'var(--text-muted)'} />
+            <span style={{ fontSize: '13px', fontWeight: 600, color: alertGrants.length > 0 ? '#F39C12' : 'var(--text-muted)' }}>
+              {alertGrants.length > 0 ? 'Grant Alerts' : 'No grant alerts'}
+            </span>
           </div>
-        ))}
+          {alertGrants.map(g => {
+            const pct = g.total_amount && g.remaining_balance ? (g.remaining_balance / g.total_amount) * 100 : null;
+            const daysLeft = g.end_date ? Math.ceil((new Date(g.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null;
+            return (
+              <p key={g.id} style={{ fontSize: '12px', color: 'var(--text-primary)', margin: '4px 0 0' }}>
+                <strong>{g.name}</strong>
+                {pct !== null && pct < 25 ? ` — ${pct.toFixed(1)}% remaining ($${g.remaining_balance?.toLocaleString()})` : ''}
+                {daysLeft !== null && daysLeft <= 90 ? ` — expires in ${daysLeft} days (${g.end_date})` : ''}
+              </p>
+            );
+          })}
+        </div>
+        <div onClick={() => setActiveTab('charts')} style={{ background: 'var(--purple-faint)', borderRadius: 'var(--radius-md)', padding: '16px 24px', textAlign: 'center', cursor: 'pointer', minWidth: '140px' }}>
+          <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--purple-primary)' }}>${Math.round(curFYSpend).toLocaleString()}</div>
+          <div style={{ fontSize: '12px', color: 'var(--purple-primary)', marginTop: '2px', opacity: 0.8 }}>{curFY.toUpperCase()} Spend</div>
+        </div>
+        <div onClick={() => setActiveTab('grants')} style={{ background: 'var(--purple-faint)', borderRadius: 'var(--radius-md)', padding: '16px 24px', textAlign: 'center', cursor: 'pointer', minWidth: '140px' }}>
+          <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--purple-primary)' }}>{grants.length}</div>
+          <div style={{ fontSize: '12px', color: 'var(--purple-primary)', marginTop: '2px', opacity: 0.8 }}>Active Grants</div>
+        </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
         <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content' }}>
           {['orders', 'charts', 'annual-summary', 'smart-summary', 'vendors', 'grants', 'reagents'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', background: activeTab === tab ? 'var(--purple-primary)' : 'transparent', color: activeTab === tab ? 'white' : 'var(--text-secondary)', border: 'none', fontWeight: activeTab === tab ? 600 : 400, fontSize: '13px', textTransform: 'capitalize', whiteSpace: 'nowrap' }}>
-              {tab === 'reagents' ? 'Standardized Reagents' : tab === 'charts' ? 'Spending Summaries' : tab === 'smart-summary' ? 'Smart Summary' : tab === 'annual-summary' ? 'Annual Summary' : tab}
+              {tab === 'reagents' ? 'Standardized Reagents' : tab === 'charts' ? 'Spending Summaries' : tab === 'smart-summary' ? 'Smart Summary' : tab === 'annual-summary' ? 'Annual Summaries' : tab}
             </button>
           ))}
         </div>
@@ -1162,20 +1216,31 @@ export default function Finance({ userRole }) {
                         <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
                           {grant.total_amount != null ? `$${grant.total_amount.toLocaleString()}` : '—'}
                         </td>
-                        <td style={{ padding: '12px 14px', minWidth: '170px' }}>
-                          {grant.remaining_balance != null ? (
-                            <div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '5px' }}>
-                                <span style={{ fontSize: '13px', fontWeight: 600, color: balanceColor }}>${grant.remaining_balance.toLocaleString()}</span>
-                                {pct !== null && <span style={{ fontSize: '11px', fontWeight: 600, color: balanceColor, marginLeft: '8px' }}>{pct.toFixed(1)}%</span>}
-                              </div>
-                              {pct !== null && (
-                                <div style={{ height: '6px', background: 'var(--border)', borderRadius: '3px', overflow: 'hidden' }}>
-                                  <div style={{ height: '100%', width: `${Math.min(Math.max(pct, 0), 100)}%`, background: balanceColor, borderRadius: '3px' }} />
+                        <td style={{ padding: '12px 14px', minWidth: '200px' }}>
+                          {grant.remaining_balance != null ? (() => {
+                            const spend = grantSpendByName[grant.name] || { complete: 0, processing: 0 };
+                            const total = grant.total_amount;
+                            const completePct = total ? Math.min((spend.complete / total) * 100, 100) : 0;
+                            const processingPct = total ? Math.min((spend.processing / total) * 100, 100 - completePct) : 0;
+                            return (
+                              <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '5px' }}>
+                                  <span style={{ fontSize: '13px', fontWeight: 600, color: balanceColor }}>${grant.remaining_balance.toLocaleString()}</span>
+                                  {pct !== null && <span style={{ fontSize: '11px', fontWeight: 600, color: balanceColor, marginLeft: '8px' }}>{pct.toFixed(1)}% left</span>}
                                 </div>
-                              )}
-                            </div>
-                          ) : '—'}
+                                <div style={{ height: '6px', background: 'var(--border)', borderRadius: '3px', overflow: 'hidden', display: 'flex' }}>
+                                  <div style={{ height: '100%', width: `${completePct}%`, background: '#27AE60' }} />
+                                  <div style={{ height: '100%', width: `${processingPct}%`, background: '#F39C12' }} />
+                                </div>
+                                {(spend.complete > 0 || spend.processing > 0) && (
+                                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px', fontSize: '10px' }}>
+                                    {spend.complete > 0 && <span style={{ color: '#27AE60' }}>✓ ${Math.round(spend.complete).toLocaleString()}</span>}
+                                    {spend.processing > 0 && <span style={{ color: '#F39C12' }}>⟳ ${Math.round(spend.processing).toLocaleString()}</span>}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })() : '—'}
                         </td>
                         <td style={{ padding: '12px 14px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{grant.start_date || '—'}</td>
                         <td style={{ padding: '12px 14px', fontSize: '12px', color: isExpiringUrgent ? '#E74C3C' : 'var(--text-secondary)', fontWeight: isExpiringUrgent ? 600 : 400, whiteSpace: 'nowrap' }}>{grant.end_date || '—'}</td>
@@ -1305,7 +1370,7 @@ export default function Finance({ userRole }) {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  {[{ id: 'misc', label: 'Misc', count: reagents.length }, { id: 'nanoseq', label: 'Nanoseq', count: nanoseq.length }].map(rt => (
+                  {[{ id: 'misc', label: 'Standard Reagents', count: reagents.length }, { id: 'nanoseq', label: 'Nanoseq', count: nanoseq.length }].map(rt => (
                     <button key={rt.id} onClick={() => { setReagentTab(rt.id); setReagentSearch(''); }} style={{ padding: '7px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: reagentTab === rt.id ? 'var(--purple-primary)' : 'var(--bg-primary)', color: reagentTab === rt.id ? 'white' : 'var(--text-secondary)', fontWeight: reagentTab === rt.id ? 600 : 400, fontSize: '12px' }}>{rt.label} <span style={{ opacity: 0.75, fontWeight: 400 }}>({rt.count})</span></button>
                   ))}
                 </div>
@@ -2405,8 +2470,52 @@ export default function Finance({ userRole }) {
               </div>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-              {[{label:'Item Name *',key:'item',full:true},{label:'Catalog Number *',key:'catalog_number'},{label:'Requisition ID *',key:'requisition_id'},{label:'Unit Description *',key:'unit_description'},{label:'Unit Price ($) *',key:'unit_price',type:'number'},{label:'Units (n) *',key:'units',type:'number'},{label:'Order Date *',key:'order_date',type:'date'}].map(field => (
-                <div key={field.key} style={{ gridColumn: field.full ? '1 / -1' : 'auto' }}>
+              {/* Item Name — datalist populated from catalog number match */}
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Item Name *</label>
+                <input
+                  list="order-item-list"
+                  value={newOrder.item}
+                  onChange={e => setNewOrder(p => ({ ...p, item: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
+                />
+                <datalist id="order-item-list">
+                  {(catalogToItems[newOrder.catalog_number.trim()]?.items || []).length > 0
+                    ? catalogToItems[newOrder.catalog_number.trim()].items.map(it => <option key={it} value={it} />)
+                    : [...new Set(orders.filter(o => o.status !== 'deleted' && o.item).map(o => o.item.trim()))].map(it => <option key={it} value={it} />)
+                  }
+                </datalist>
+              </div>
+              {/* Catalog Number — datalist of known catalog numbers; auto-fills item/vendor on blur */}
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Catalog Number *</label>
+                <input
+                  list="order-catalog-list"
+                  value={newOrder.catalog_number}
+                  onChange={e => setNewOrder(p => ({ ...p, catalog_number: e.target.value }))}
+                  onBlur={e => {
+                    const cat = e.target.value.trim();
+                    if (!cat) return;
+                    const existing = catalogToItems[cat];
+                    if (!existing) return;
+                    setNewOrder(p => ({
+                      ...p,
+                      item: p.item || (existing.items.length === 1 ? existing.items[0] : p.item),
+                      vendor: p.vendor || existing.vendor,
+                      unit_description: p.unit_description || existing.unit_description,
+                      unit_price: p.unit_price || (existing.unit_price != null ? String(existing.unit_price) : p.unit_price),
+                    }));
+                    setDupWarning(null);
+                    setDupConfirmed(false);
+                  }}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
+                />
+                <datalist id="order-catalog-list">
+                  {Object.keys(catalogToItems).map(cat => <option key={cat} value={cat} />)}
+                </datalist>
+              </div>
+              {[{label:'Requisition ID *',key:'requisition_id'},{label:'Unit Description *',key:'unit_description'},{label:'Unit Price ($) *',key:'unit_price',type:'number'},{label:'Units (n) *',key:'units',type:'number'},{label:'Order Date *',key:'order_date',type:'date'}].map(field => (
+                <div key={field.key}>
                   <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{field.label}</label>
                   <input type={field.type || 'text'} value={newOrder[field.key]} onChange={e => setNewOrder(p => ({ ...p, [field.key]: e.target.value }))} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
                 </div>
@@ -2454,9 +2563,44 @@ export default function Finance({ userRole }) {
                 <textarea value={newOrder.notes} onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))} rows={2} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
               </div>
             </div>
+            {dupWarning && (
+              <div style={{ background: '#FEF9E7', border: '1px solid #FAD7A0', borderRadius: 'var(--radius-md)', padding: '14px 16px', marginBottom: '16px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#E67E22', marginBottom: '8px' }}>Potential duplicate detected</div>
+                {dupWarning.catalogConflicts.length > 0 && (
+                  <div style={{ marginBottom: '8px' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                      Catalog number <strong>{newOrder.catalog_number}</strong> was previously entered under different item name(s):
+                    </div>
+                    {[...new Map(dupWarning.catalogConflicts.map(o => [o.item, o])).values()].map(o => (
+                      <div key={o.id} style={{ fontSize: '11px', color: 'var(--text-primary)', padding: '3px 8px', background: 'rgba(230,126,34,0.08)', borderRadius: '4px', marginBottom: '2px' }}>
+                        "{o.item}" — {o.vendor} ({o.order_date})
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {dupWarning.nameConflicts.length > 0 && (
+                  <div style={{ marginBottom: '8px' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                      Item name <strong>{newOrder.item}</strong> was previously entered with different catalog number(s):
+                    </div>
+                    {[...new Map(dupWarning.nameConflicts.map(o => [o.catalog_number, o])).values()].map(o => (
+                      <div key={o.id} style={{ fontSize: '11px', color: 'var(--text-primary)', padding: '3px 8px', background: 'rgba(230,126,34,0.08)', borderRadius: '4px', marginBottom: '2px' }}>
+                        Cat# {o.catalog_number} — {o.vendor} ({o.order_date})
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginTop: '8px' }}>
+                  <input type="checkbox" checked={dupConfirmed} onChange={e => setDupConfirmed(e.target.checked)} />
+                  <span style={{ fontSize: '12px', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    I confirm this is not a duplicate — item and catalog number are genuinely different
+                  </span>
+                </label>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button onClick={() => { setShowAddOrder(false); setAddOrderError(''); }} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500 }}>Cancel</button>
-              <button onClick={handleAddOrder} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600 }}>Add Order</button>
+              <button onClick={() => { setShowAddOrder(false); setAddOrderError(''); setDupWarning(null); setDupConfirmed(false); }} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500 }}>Cancel</button>
+              <button onClick={handleAddOrder} disabled={dupWarning && !dupConfirmed} style={{ padding: '10px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: dupWarning && !dupConfirmed ? 'var(--border)' : 'var(--purple-primary)', color: dupWarning && !dupConfirmed ? 'var(--text-muted)' : 'white', fontWeight: 600, cursor: dupWarning && !dupConfirmed ? 'not-allowed' : 'pointer' }}>Add Order</button>
             </div>
           </div>
         </div>

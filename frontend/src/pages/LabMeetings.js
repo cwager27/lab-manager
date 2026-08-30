@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { fmtName, sortByLast } from '../lib/nameUtils';
-import { Plus, X, Star, AlertTriangle, CheckCircle, ExternalLink } from 'lucide-react';
+import { Plus, X, Star, AlertTriangle, CheckCircle, ExternalLink, Pencil } from 'lucide-react';
 
 const ZOOM_KEY_OPTIONS = ['Meeting ID', 'Passcode', 'Webinar ID', 'Other'];
 const ZOOM_SHORT = { 'Meeting ID': 'ID', 'Passcode': 'PW', 'Webinar ID': 'WID' };
@@ -102,6 +102,15 @@ function getRotorPresenter(history, presenters, date, vacations, excludeId = nul
   return fallback.length ? [...fallback].sort(sortFn)[0] : null;
 }
 
+const SERIES_INFO_KEY = 'lab_series_info_v1';
+const DEFAULT_SERIES_INFO = {
+  time: 'Thu 1:30–3pm',
+  location: 'CURE seminar room',
+  zoomLink: 'https://zoom.us/j/98770400275',
+  zoomId: '987 7040 0275',
+  zoomPw: '676073',
+};
+
 export default function LabMeetings({ userRole, userId, profile }) {
   const [labMeetings, setLabMeetings] = useState([]);
   const [adhocMeetings, setAdhocMeetings] = useState([]);
@@ -119,6 +128,14 @@ export default function LabMeetings({ userRole, userId, profile }) {
   const [guestTitleEdit, setGuestTitleEdit] = useState('');
   const [vacWarn, setVacWarn] = useState(null);
   const [editingZoomInfo, setEditingZoomInfo] = useState(null);
+  const [seriesInfo, setSeriesInfo] = useState(() => {
+    try {
+      const stored = localStorage.getItem(SERIES_INFO_KEY);
+      return stored ? { ...DEFAULT_SERIES_INFO, ...JSON.parse(stored) } : DEFAULT_SERIES_INFO;
+    } catch { return DEFAULT_SERIES_INFO; }
+  });
+  const [editingSeriesInfo, setEditingSeriesInfo] = useState(false);
+  const [seriesDraft, setSeriesDraft] = useState(null);
 
   const canEdit = userRole === 'pm' || profile?.full_name?.toLowerCase().startsWith('mia');
   const today = new Date().toISOString().split('T')[0];
@@ -158,6 +175,17 @@ export default function LabMeetings({ userRole, userId, profile }) {
       setVacWarn(`⚠ ${name} is out ${vac.start_date} – ${vac.end_date}. Assignment saved.`);
       setTimeout(() => setVacWarn(null), 6000);
     }
+  }
+
+  function openSeriesEdit() {
+    setSeriesDraft({ ...seriesInfo });
+    setEditingSeriesInfo(true);
+  }
+
+  function saveSeriesInfo() {
+    setSeriesInfo(seriesDraft);
+    localStorage.setItem(SERIES_INFO_KEY, JSON.stringify(seriesDraft));
+    setEditingSeriesInfo(false);
   }
 
   function startEdit(id, field, value, table, extra) {
@@ -445,16 +473,19 @@ export default function LabMeetings({ userRole, userId, profile }) {
     const statusStyle = STATUS_STYLES[meeting.status] || STATUS_STYLES.scheduled;
     const isPast = meeting.meeting_date < today;
     const isAdhoc = table === 'adhoc';
+    const isCompleted = meeting.status === 'completed';
     const gridTemplate = isAdhoc ? '70px 1fr 120px 80px 80px 48px 1fr 22px' : '74px 1fr 28px 80px 1fr 1fr 22px';
     const awayMembers = members.filter(m => vacations.some(v => v.requested_by === m.id && v.start_date <= meeting.meeting_date && v.end_date >= meeting.meeting_date));
     const holiday = !isAdhoc ? isHoliday(meeting.meeting_date) : null;
+    const rowBg = isCompleted ? '#F7F8FA' : (!isAdhoc && meeting.is_sof) ? 'var(--purple-faint)' : 'var(--bg-card)';
+    const rowBorder = isCompleted ? '#E3E5E8' : (!isAdhoc && meeting.is_sof) ? 'var(--purple-border)' : 'var(--border)';
 
     return (
       <div key={meeting.id} style={{
         display: 'grid', gridTemplateColumns: gridTemplate,
         gap: isAdhoc ? '8px' : '6px', padding: '5px 8px', alignItems: isAdhoc ? 'start' : 'center',
-        background: (!isAdhoc && meeting.is_sof) ? 'var(--purple-faint)' : 'var(--bg-card)',
-        border: `1px solid ${(!isAdhoc && meeting.is_sof) ? 'var(--purple-border)' : 'var(--border)'}`,
+        background: rowBg,
+        border: `1px solid ${rowBorder}`,
         borderRadius: 'var(--radius-sm)', marginBottom: '3px', fontSize: '17px',
         opacity: meeting.status === 'cancelled' ? 0.55 : 1,
       }}>
@@ -709,18 +740,32 @@ export default function LabMeetings({ userRole, userId, profile }) {
               {isLab ? 'Lab Meetings' : 'Ad-hoc Meetings'}
             </h2>
             {isLab && (
-              <div style={{ display: 'flex', gap: '5px', marginTop: '5px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '15px', color: 'var(--text-muted)', marginRight: '2px' }}>Thu 1:30–3pm</span>
-                <a href="https://zoom.us/j/98770400275" target="_blank" rel="noopener noreferrer"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'var(--purple-primary)', color: 'white', padding: '2px 9px', borderRadius: '10px', fontSize: '15px', fontWeight: 600, textDecoration: 'none' }}>
-                  <ExternalLink size={10} /> Join Zoom
-                </a>
-                <span style={{ background: 'var(--purple-primary)', color: 'white', padding: '2px 9px', borderRadius: '10px', fontSize: '15px', fontWeight: 600 }}>
-                  ID: 987 7040 0275
-                </span>
-                <span style={{ background: 'var(--purple-primary)', color: 'white', padding: '2px 9px', borderRadius: '10px', fontSize: '15px', fontWeight: 600 }}>
-                  PW: 676073
-                </span>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', background: '#EBEBEB', padding: '2px 10px', borderRadius: '8px' }}>{seriesInfo.time}</span>
+                <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>·</span>
+                <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', background: '#EBEBEB', padding: '2px 10px', borderRadius: '8px' }}>{seriesInfo.location}</span>
+                {seriesInfo.zoomLink && (
+                  <a href={seriesInfo.zoomLink} target="_blank" rel="noopener noreferrer"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: '#EBEBEB', color: 'var(--text-primary)', padding: '2px 10px', borderRadius: '8px', fontSize: '15px', fontWeight: 600, textDecoration: 'none' }}>
+                    <ExternalLink size={10} /> Join Zoom
+                  </a>
+                )}
+                {seriesInfo.zoomId && (
+                  <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', background: '#EBEBEB', padding: '2px 10px', borderRadius: '8px' }}>
+                    ID: {seriesInfo.zoomId}
+                  </span>
+                )}
+                {seriesInfo.zoomPw && (
+                  <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', background: '#EBEBEB', padding: '2px 10px', borderRadius: '8px' }}>
+                    PW: {seriesInfo.zoomPw}
+                  </span>
+                )}
+                {canEdit && (
+                  <button onClick={openSeriesEdit} title="Edit meeting info"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px 4px', display: 'flex', alignItems: 'center', borderRadius: '4px' }}>
+                    <Pencil size={13} />
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -764,6 +809,29 @@ export default function LabMeetings({ userRole, userId, profile }) {
             </button>
           ))}
         </div>
+
+        {/* Presenter count summary for lab year tabs */}
+        {isLab && (() => {
+          const yearMeetings = getMeetings(table).filter(m => m.meeting_date?.startsWith(filter));
+          const pastCompleted = yearMeetings.filter(m => m.status === 'completed' && m.meeting_date <= today);
+          if (!pastCompleted.length) return null;
+          const counts = {};
+          pastCompleted.forEach(m => {
+            const name = fmtName(m.presenter?.full_name) || m.guest_name;
+            if (name) counts[name] = (counts[name] || 0) + 1;
+          });
+          const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+          return (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', alignItems: 'center', marginBottom: '8px', padding: '6px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '2px' }}>Presented:</span>
+              {sorted.map(([name, count]) => (
+                <span key={name} style={{ fontSize: '13px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1px 8px', color: 'var(--text-secondary)' }}>
+                  {name} <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{count}×</span>
+                </span>
+              ))}
+            </div>
+          );
+        })()}
 
         {/* Column headers */}
         <div style={{ display: 'grid', gridTemplateColumns: isLab ? '74px 1fr 28px 80px 1fr 1fr 22px' : '70px 1fr 120px 80px 80px 48px 1fr 22px', gap: isLab ? '6px' : '8px', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', marginBottom: '4px', fontSize: '14px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -1011,6 +1079,39 @@ export default function LabMeetings({ userRole, userId, profile }) {
               <button onClick={() => setEditingZoomInfo(null)} style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 500, fontSize: '18px' }}>Cancel</button>
               <button onClick={() => commitZoomInfo(editingZoomInfo.meetingId, editingZoomInfo.fields)}
                 style={{ padding: '7px 16px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--purple-primary)', color: 'white', fontWeight: 600, fontSize: '18px' }}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Series Info Edit Modal */}
+      {editingSeriesInfo && seriesDraft && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', padding: '28px', width: '420px', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '18px' }}>Edit Lab Meeting Info</h2>
+            {[
+              { label: 'Time', key: 'time', placeholder: 'e.g. Thu 1:30–3pm' },
+              { label: 'Location', key: 'location', placeholder: 'e.g. CURE seminar room' },
+              { label: 'Zoom Link', key: 'zoomLink', placeholder: 'https://zoom.us/j/...' },
+              { label: 'Zoom ID', key: 'zoomId', placeholder: 'e.g. 987 7040 0275' },
+              { label: 'Zoom Password', key: 'zoomPw', placeholder: 'e.g. 676073' },
+            ].map(({ label, key, placeholder }) => (
+              <div key={key} style={{ marginBottom: '12px' }}>
+                <label style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>{label}</label>
+                <input value={seriesDraft[key]} onChange={e => setSeriesDraft(p => ({ ...p, [key]: e.target.value }))}
+                  placeholder={placeholder}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '16px', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '6px' }}>
+              <button onClick={() => setEditingSeriesInfo(false)}
+                style={{ padding: '7px 16px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'transparent', fontSize: '16px', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                Cancel
+              </button>
+              <button onClick={saveSeriesInfo}
+                style={{ padding: '7px 16px', border: 'none', borderRadius: 'var(--radius-md)', background: 'var(--purple-primary)', color: 'white', fontSize: '16px', fontWeight: 600, cursor: 'pointer' }}>
+                Save
+              </button>
             </div>
           </div>
         </div>

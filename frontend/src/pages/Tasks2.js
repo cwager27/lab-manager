@@ -217,7 +217,7 @@ function pickerFor(freq, value, onChange) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Tasks2({ userRole, userId, profile: myProfile }) {
-  const canManage = userRole === 'admin' || userRole === 'pm';
+  const canManage = userRole === 'admin' || userRole === 'pm' || myProfile?.can_view_task_tabs;
   const [tab, setTab] = useState(() => {
     if (!canManage) return 'my-tasks';
     return localStorage.getItem('tasks2_tab') || 'view-all';
@@ -346,7 +346,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   // ── One-off Tasks state ───────────────────────────────────────────────────
   const [oneOffTasks, setOneOffTasks] = useState([]);
   const [oneOffLoading, setOneOffLoading] = useState(false);
-  const [oneOffForm, setOneOffForm] = useState({ title: '', description: '', assigneeIds: [], dueDate: '', showOnPublic: false });
+  const [oneOffForm, setOneOffForm] = useState({ title: '', description: '', assigneeIds: [], dueDate: '', showOnPublic: true });
   const [oneOffSaving, setOneOffSaving] = useState(false);
   const [oneOffError, setOneOffError] = useState('');
   const [confirmDeleteOneOff, setConfirmDeleteOneOff] = useState(null);
@@ -992,6 +992,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             due_date: today,
             status: 'pending',
             category: 'MISC',
+            show_on_public_dashboard: false,
           },
           {
             title: `Identify and speak to member who omitted: ${omission}`,
@@ -1000,6 +1001,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             due_date: today,
             status: 'pending',
             category: 'MISC',
+            show_on_public_dashboard: false,
           },
         ]);
         try { await supabase.from('sporadic_tasks').insert(rows); } catch {}
@@ -1924,26 +1926,45 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         setMyTaskOneOffs(prev => prev.map(x => x.id === t.id ? { ...x, notes: trimmed || null } : x));
       };
       const isOverdue = bucketId === 'overdue' && !isDone;
+      const isUpcoming = (bucketId === 'week') && !isDone;
+      const todayIso = today();
+      const daysOverdueCount = isOverdue && t.due_date ? Math.ceil((new Date(todayIso) - new Date(t.due_date)) / 86400000) : 0;
+      const daysUntilCount = isUpcoming && t.due_date ? Math.ceil((new Date(t.due_date) - new Date(todayIso)) / 86400000) : 0;
+      const cardBg = isDone ? '#EAF7F0' : isOverdue ? '#FEF2F2' : isUpcoming ? '#FFFBEB' : 'var(--bg-card)';
+      const cardBorder = isDone ? '#A9DFBF' : isOverdue ? '#FECACA' : isUpcoming ? '#FDE68A' : 'var(--border)';
       return (
-        <div key={t.id} style={{ background: isDone ? '#EAF7F0' : isOverdue ? '#FEF2F2' : 'var(--bg-card)', border: `1px solid ${isDone ? '#A9DFBF' : isOverdue ? '#FECACA' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+        <div key={t.id} style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 'var(--radius-md)', marginBottom: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px' }}>
             <div style={{ display: 'flex', gap: '5px', flexShrink: 0, marginTop: '2px' }}>
               <button onClick={toggleResp} style={{ width: '26px', height: '26px', borderRadius: '50%', border: '2px solid', borderColor: resp === 'checked' || isDone ? '#27AE60' : 'var(--border)', background: resp === 'checked' || isDone ? '#27AE60' : 'transparent', color: resp === 'checked' || isDone ? 'white' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><CheckCircle size={13} /></button>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: '13px', fontWeight: 600, color: isDone ? 'var(--text-muted)' : isOverdue ? '#C0392B' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.5, margin: 0 }}>{isOverdue && <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', border: '2px solid #ef4444', color: '#ef4444', fontSize: 10, fontWeight: 800, marginRight: 6, verticalAlign: 'middle', flexShrink: 0 }}>!</span>}{t.title}</p>
-              {t.description && <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: 3 }}>{t.description}</div>}
-              {t.assigner?.full_name && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 2 }}>Assigned by {t.assigner.full_name}</div>}
+              <p style={{ fontSize: '13px', fontWeight: isOverdue || isUpcoming ? 600 : 500, color: isDone ? 'var(--text-muted)' : '#1a1a2e', textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.5, margin: 0 }}>
+                {isOverdue && <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', border: '2px solid #ef4444', color: '#ef4444', fontSize: 10, fontWeight: 800, marginRight: 6, verticalAlign: 'middle', flexShrink: 0 }}>!</span>}
+                {t.title}
+              </p>
+              {t.description && <div style={{ fontSize: '12px', color: '#555', marginTop: 3 }}>{t.description}</div>}
+              {t.assigner?.full_name && <div style={{ fontSize: '11px', color: '#666', marginTop: 2 }}>Assigned by {t.assigner.full_name}</div>}
               {isDone && (t.submitted_at || t.completed_at) && (
                 <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
                   Due {t.due_date ? fmtDate(t.due_date) : '—'}{cls === 'late' && <span style={{ color: '#f59e0b', marginLeft: 4 }}>(late)</span>}
                 </div>
               )}
               {!isDone && <textarea value={notes} onChange={e => updateNotes(e.target.value)} onBlur={e => saveNotes(e.target.value)} placeholder="Add a note…" rows={1}
-                style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', fontFamily: 'inherit' }} />}
+                style={{ width: '100%', marginTop: '6px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: '#333', background: 'rgba(255,255,255,0.7)', fontFamily: 'inherit' }} />}
               {t.file_url && <div style={{ marginTop: 6 }}><a href={t.file_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: 'var(--purple-primary)', fontWeight: 600 }}>📎 Attachment →</a></div>}
             </div>
-            {isDone && <span style={{ fontSize: 11, fontWeight: 700, color: '#27AE60', background: '#D5F5E3', padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap', flexShrink: 0, alignSelf: 'center' }}>✓ Completed</span>}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
+              {isDone ? (
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#27AE60', background: '#D5F5E3', padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap' }}>✓ Completed</span>
+              ) : t.due_date ? (
+                <>
+                  <span style={{ fontSize: 11, color: '#1a1a2e', whiteSpace: 'nowrap', fontWeight: isOverdue || isUpcoming ? 600 : 400 }}>{fmtDate(t.due_date)}</span>
+                  {isOverdue && daysOverdueCount > 0 && <span style={{ fontSize: 10, color: '#C0392B', whiteSpace: 'nowrap' }}>{daysOverdueCount === 1 ? '1d overdue' : `${daysOverdueCount}d overdue`}</span>}
+                  {isUpcoming && <span style={{ fontSize: 10, color: '#B7770D', whiteSpace: 'nowrap' }}>{daysUntilCount === 0 ? 'due today' : daysUntilCount === 1 ? 'in 1 day' : `in ${daysUntilCount} days`}</span>}
+                </>
+              ) : null}
+            </div>
           </div>
         </div>
       );
@@ -2160,12 +2181,12 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
     // ── To Do / Completed split ────────────────────────────────────────────
     const BUCKET_CONFIG = [
-      { id: 'overdue', label: 'Overdue',       headColor: '#ef4444',              headBg: '#fef2f2',             isActive: true },
-      { id: 'week',    label: 'This Week',      headColor: 'var(--purple-primary)', headBg: '#f5eefb',             isActive: true },
-      { id: 'month',   label: 'This Month',     headColor: 'var(--text-primary)',   headBg: 'var(--bg-secondary)', isActive: true },
-      { id: 'three',   label: 'Next 3 Months',  headColor: 'var(--text-secondary)', headBg: 'var(--bg-secondary)', isActive: true },
-      { id: 'beyond',  label: 'Beyond',          headColor: 'var(--text-muted)',     headBg: 'var(--bg-secondary)', isActive: true },
-      { id: 'nodate',  label: 'No Due Date',     headColor: 'var(--text-muted)',     headBg: 'var(--bg-secondary)', isActive: true },
+      { id: 'overdue', label: 'Overdue',        headColor: '#C0392B',              headBg: '#FEF2F2',             isActive: true },
+      { id: 'week',    label: 'This Week',       headColor: '#B7770D',              headBg: '#FFFBEB',             isActive: true },
+      { id: 'month',   label: 'This Month',      headColor: 'var(--text-primary)',  headBg: 'var(--bg-secondary)', isActive: true },
+      { id: 'three',   label: 'Next 3 Months',   headColor: 'var(--text-secondary)', headBg: 'var(--bg-secondary)', isActive: true },
+      { id: 'beyond',  label: 'Beyond',           headColor: 'var(--text-muted)',    headBg: 'var(--bg-secondary)', isActive: true },
+      { id: 'nodate',  label: 'No Due Date',      headColor: 'var(--text-muted)',    headBg: 'var(--bg-secondary)', isActive: true },
     ];
 
     // Split recurrent groups into todo vs completed
@@ -2217,8 +2238,11 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           if (recItems.length === 0 && adhocItems.length === 0) return null;
           return (
             <div key={id} style={{ marginBottom: 24 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 10px', background: headBg, borderRadius: 6, marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: headBg, borderRadius: 6, marginBottom: 10, border: `1px solid ${id === 'overdue' ? '#fca5a5' : id === 'week' ? '#FDE68A' : 'transparent'}` }}>
+                {id === 'overdue' && <AlertTriangle size={11} color="#C0392B" />}
+                {id === 'week' && <Clock size={11} color="#B7770D" />}
                 <span style={{ fontSize: 12, fontWeight: 800, color: headColor, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
+                <span style={{ fontSize: 11, color: headColor, opacity: 0.7, fontWeight: 400 }}>({recItems.length + adhocItems.length})</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div>
@@ -4149,7 +4173,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       setOneOffSaving(false);
       return;
     }
-    setOneOffForm({ title: '', description: '', assigneeIds: [], dueDate: '', showOnPublic: false });
+    setOneOffForm({ title: '', description: '', assigneeIds: [], dueDate: '', showOnPublic: true });
     setOneOffSaving(false);
     loadOneOffTab();
   }
@@ -4189,25 +4213,34 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     const TaskRow = ({ task }) => {
       const isDone = task.status === 'done' || task.status === 'submitted' || task.status === 'completed';
       const isOverdue = !isDone && task.due_date && task.due_date < todayStr;
+      const upcoming7 = !isDone && !isOverdue && task.due_date && task.due_date <= new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+      const daysOverdue = isOverdue ? Math.ceil((new Date(todayStr) - new Date(task.due_date)) / 86400000) : 0;
+      const daysUntil = upcoming7 ? Math.ceil((new Date(task.due_date) - new Date(todayStr)) / 86400000) : 0;
+      const rowBg = isDone ? 'var(--bg-primary)' : isOverdue ? '#FEF2F2' : upcoming7 ? '#FFFBEB' : 'var(--bg-primary)';
+      const rowBorder = isDone ? 'var(--border)' : isOverdue ? '#fca5a5' : upcoming7 ? '#FDE68A' : 'var(--border)';
       const isConfirmDelete = confirmDeleteOneOff === task.id;
       return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: isOverdue ? '#FEF2F2' : 'var(--bg-primary)', borderRadius: 8, border: `1px solid ${isOverdue ? '#fca5a5' : 'var(--border)'}`, opacity: isDone ? 0.55 : 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: rowBg, borderRadius: 8, border: `1px solid ${rowBorder}`, opacity: isDone ? 0.55 : 1 }}>
           <input type="checkbox" checked={isDone} onChange={() => handleOneOffToggleDone(task)}
             style={{ width: 15, height: 15, flexShrink: 0, cursor: 'pointer', accentColor: 'var(--purple-primary)' }} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, color: 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</div>
-            {task.description && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.description}</div>}
+            <div style={{ fontSize: 13, color: '#1a1a2e', textDecoration: isDone ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: (isOverdue || upcoming7) && !isDone ? 600 : 400 }}>{task.title}</div>
+            {task.description && <div style={{ fontSize: 11, color: '#555', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.description}</div>}
           </div>
           {oneOffPersonTab === 'all' && task.assignee?.full_name && (
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{task.assignee.full_name}</span>
+            <span style={{ fontSize: 11, color: '#555', flexShrink: 0, whiteSpace: 'nowrap' }}>{task.assignee.full_name}</span>
           )}
           {task.show_on_public_dashboard && <Globe size={12} color="var(--purple-primary)" style={{ flexShrink: 0 }} />}
           {task.due_date ? (
-            <span style={{ fontSize: 11, color: isOverdue ? '#ef4444' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: isOverdue ? 600 : 400 }}>
-              {fmtDate(task.due_date)}
-            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, flexShrink: 0 }}>
+              <span style={{ fontSize: 11, color: '#1a1a2e', whiteSpace: 'nowrap', fontWeight: (isOverdue || upcoming7) ? 600 : 400 }}>
+                {fmtDate(task.due_date)}
+              </span>
+              {isOverdue && <span style={{ fontSize: 10, color: '#C0392B', whiteSpace: 'nowrap' }}>{daysOverdue === 1 ? '1d overdue' : `${daysOverdue}d overdue`}</span>}
+              {upcoming7 && <span style={{ fontSize: 10, color: '#B7770D', whiteSpace: 'nowrap' }}>{daysUntil === 0 ? 'due today' : daysUntil === 1 ? 'in 1 day' : `in ${daysUntil} days`}</span>}
+            </div>
           ) : (
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 11, color: '#555', flexShrink: 0, whiteSpace: 'nowrap' }}>
               Assigned {task.created_at ? fmtDate(task.created_at.slice(0, 10)) : ''}
             </span>
           )}
@@ -4256,11 +4289,11 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                 style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 20 }}>
-              <input type="checkbox" id="one-off-public" checked={oneOffForm.showOnPublic}
-                onChange={e => setOneOffForm(p => ({ ...p, showOnPublic: e.target.checked }))}
+              <input type="checkbox" id="one-off-public" checked={!oneOffForm.showOnPublic}
+                onChange={e => setOneOffForm(p => ({ ...p, showOnPublic: !e.target.checked }))}
                 style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--purple-primary)' }} />
               <label htmlFor="one-off-public" style={{ fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Globe size={13} color="var(--purple-primary)" /> Show on public dashboard
+                <Globe size={13} color="var(--text-muted)" /> Do not show on public dashboard
               </label>
             </div>
           </div>
