@@ -781,6 +781,7 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                         <div style={{ maxHeight: 280, overflowY: 'auto' }}>
                           {unassigned7.map((t, i) => {
                             const overdue = t.due_date && t.due_date < today;
+                            const daysOverdue = overdue ? Math.ceil((new Date(today) - new Date(t.due_date)) / 86400000) : 0;
                             const isExpanded = expandedUnassignedId === t.id;
                             const activeMembers = teamMembers.filter(m => m.lab_status !== 'alumni');
                             return (
@@ -811,7 +812,12 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                                     ))}
                                   </select>
                                   {t.due_date && (
-                                    <span style={{ fontSize: 11, color: overdue ? '#E74C3C' : 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap', fontWeight: overdue ? 600 : 400 }}>{formatDate(t.due_date)}</span>
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0 }}>
+                                      <span style={{ fontSize: 11, color: overdue ? '#E74C3C' : 'var(--text-muted)', whiteSpace: 'nowrap', fontWeight: overdue ? 600 : 400 }}>{formatDate(t.due_date)}</span>
+                                      {overdue && daysOverdue > 0 && (
+                                        <span style={{ fontSize: 10, color: '#C0392B', whiteSpace: 'nowrap' }}>{daysOverdue === 1 ? '1d overdue' : `${daysOverdue}d overdue`}</span>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
                                 {isExpanded && (
