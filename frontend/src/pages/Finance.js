@@ -308,6 +308,7 @@ export default function Finance({ userRole }) {
   const [dupWarning, setDupWarning] = useState(null);
   const [dupConfirmed, setDupConfirmed] = useState(false);
   const [itemSuggestion, setItemSuggestion] = useState(null);
+  const [requestorSuggestion, setRequestorSuggestion] = useState(null);
 
   const allFYs = useMemo(() => {
     const cur = getCurrentFY();
@@ -416,6 +417,8 @@ export default function Finance({ userRole }) {
       setAddOrderError('');
       setDupWarning(null);
       setDupConfirmed(false);
+      setItemSuggestion(null);
+      setRequestorSuggestion(null);
       setNewOrder({ item: '', vendor: '', catalog_number: '', category: '', grant_name: '', requisition_id: '', unit_description: '', unit_price: '', units: '', order_date: '', requestor: '', status: 'pending', notes: '' });
     } else if (error) {
       setAddOrderError(error.message);
@@ -549,6 +552,15 @@ export default function Finance({ userRole }) {
     return map;
   }, [orders]);
 
+  const knownRequestors = useMemo(() => {
+    const freq = {};
+    orders.forEach(o => {
+      if (!o.requestor || o.status === 'deleted') return;
+      const r = o.requestor.trim();
+      if (r) freq[r] = (freq[r] || 0) + 1;
+    });
+    return Object.keys(freq).sort((a, b) => freq[b] - freq[a]);
+  }, [orders]);
 
   const sortedCatalogRows = useMemo(() => {
     const rows = [...catalogRows];
@@ -2670,14 +2682,39 @@ export default function Finance({ userRole }) {
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Requestor *</label>
-                <input
-                  type="text"
-                  autoCapitalize="words"
+                <AutocompleteInput
                   value={newOrder.requestor}
-                  onChange={e => setNewOrder(p => ({ ...p, requestor: e.target.value }))}
-                  onBlur={e => setNewOrder(p => ({ ...p, requestor: e.target.value.trim().replace(/\b\w/g, c => c.toUpperCase()) }))}
+                  onChange={e => { setNewOrder(p => ({ ...p, requestor: e.target.value })); setRequestorSuggestion(null); }}
+                  onBlur={e => {
+                    const raw = e.target.value;
+                    const titleCased = raw.trim().replace(/\b\w/g, c => c.toUpperCase());
+                    setNewOrder(p => ({ ...p, requestor: titleCased }));
+                    const normTyped = titleCased.toLowerCase();
+                    if (!normTyped) return;
+                    const exactMatch = knownRequestors.find(k => k.toLowerCase() === normTyped);
+                    if (exactMatch && exactMatch !== titleCased) {
+                      setRequestorSuggestion({ typed: titleCased, suggestion: exactMatch });
+                    } else if (!exactMatch) {
+                      let best = null, bestDist = Infinity;
+                      for (const k of knownRequestors) {
+                        const d = levenshtein(normTyped, k.toLowerCase());
+                        if (d < bestDist) { bestDist = d; best = k; }
+                      }
+                      const threshold = Math.min(3, Math.max(1, Math.floor(titleCased.length / 4)));
+                      if (best && bestDist > 0 && bestDist <= threshold) setRequestorSuggestion({ typed: titleCased, suggestion: best });
+                    }
+                  }}
+                  options={knownRequestors}
+                  placeholder="Type or select requestor..."
                   style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
                 />
+                {requestorSuggestion && (
+                  <div style={{ marginTop: 6, padding: '8px 12px', background: '#EBF5FB', border: '1px solid #3498DB', borderRadius: 6, fontSize: 13, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <span>Did you mean <strong>"{requestorSuggestion.suggestion}"</strong>?</span>
+                    <button onMouseDown={e => e.preventDefault()} onClick={() => { setNewOrder(p => ({ ...p, requestor: requestorSuggestion.suggestion })); setRequestorSuggestion(null); }} style={{ padding: '3px 10px', borderRadius: 4, border: 'none', background: '#3498DB', color: 'white', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Use this</button>
+                    <button onMouseDown={e => e.preventDefault()} onClick={() => setRequestorSuggestion(null)} style={{ padding: '3px 10px', borderRadius: 4, border: '1px solid #3498DB', background: 'transparent', color: '#3498DB', cursor: 'pointer', fontSize: 12 }}>Keep mine</button>
+                  </div>
+                )}
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status *</label>
