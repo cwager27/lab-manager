@@ -1927,9 +1927,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       };
       const isOverdue = bucketId === 'overdue' && !isDone;
       const isUpcoming = (bucketId === 'week') && !isDone;
-      const todayIso = today();
-      const daysOverdueCount = isOverdue && t.due_date ? Math.ceil((new Date(todayIso) - new Date(t.due_date)) / 86400000) : 0;
-      const daysUntilCount = isUpcoming && t.due_date ? Math.ceil((new Date(t.due_date) - new Date(todayIso)) / 86400000) : 0;
+      const daysOverdueCount = isOverdue && t.due_date ? Math.ceil((new Date(today) - new Date(t.due_date)) / 86400000) : 0;
+      const daysUntilCount = isUpcoming && t.due_date ? Math.ceil((new Date(t.due_date) - new Date(today)) / 86400000) : 0;
       const cardBg = isDone ? '#EAF7F0' : isOverdue ? '#FEF2F2' : isUpcoming ? '#FFFBEB' : 'var(--bg-card)';
       const cardBorder = isDone ? '#A9DFBF' : isOverdue ? '#FECACA' : isUpcoming ? '#FDE68A' : 'var(--border)';
       return (
