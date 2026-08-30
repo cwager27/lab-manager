@@ -1139,6 +1139,7 @@ function CustomSOPView({ sop, canEdit, onDelete, onUpdate }) {
   const [selectedCell, setSelectedCell] = useState(null);
   const [contextMenu, setContextMenu]   = useState(null);
   const cellRefs = useRef({});
+  const tableRef = useRef(null);
 
   if (sop.type === 'doc') {
     const previewUrl = sop.url.includes('/preview') ? sop.url : sop.url.replace('/edit', '/preview').replace('/view', '/preview');
@@ -1201,7 +1202,8 @@ function CustomSOPView({ sop, canEdit, onDelete, onUpdate }) {
 
   return (
     <div onMouseDown={e => { if (!e.target.closest('td') && !e.target.closest('button')) setSelectedCell(null); }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      <SOPToolbar editorRef={tableRef} canEdit={canEdit} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '10px 0' }}>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
           {canEdit ? 'Click to select · right-click for options · Delete key clears cell' : sop.name}
         </p>
@@ -1214,7 +1216,7 @@ function CustomSOPView({ sop, canEdit, onDelete, onUpdate }) {
         )}
       </div>
 
-      <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'auto' }}
+      <div ref={tableRef} style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'auto' }}
         onKeyDown={e => {
           if ((e.key === 'Delete' || e.key === 'Backspace') && selectedCell && document.activeElement?.dataset?.cell !== `${selectedCell.ri}-${selectedCell.ci}`) {
             e.preventDefault(); clearCell(selectedCell.ri, selectedCell.ci);
