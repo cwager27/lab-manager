@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { supabaseAdmin } = require('../lib/supabaseAdmin');
-const transporter = { sendMail: async () => {} }; // emails disabled
+const transporter = require('../lib/mailer');
 
 function reminderHtml(name, taskName, dueDate, message) {
   const fmt = new Date(dueDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });

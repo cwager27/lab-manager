@@ -11,7 +11,7 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
-const transporter = { sendMail: async () => {} }; // emails disabled
+const transporter = require('./lib/mailer');
 
 const assignmentRoutes = require('./routes/assignments');
 const checklistRoutes = require('./routes/checklists');

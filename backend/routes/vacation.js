@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { createClient } = require('@supabase/supabase-js');
 const { supabaseAdmin } = require('../lib/supabaseAdmin');
-const transporter = { sendMail: async () => {} }; // emails disabled
+const transporter = require('../lib/mailer');
 
 router.post('/vacation-request', async (req, res) => {
   const { requestId, memberName, memberEmail, startDate, endDate, leaveType, comments } = req.body;

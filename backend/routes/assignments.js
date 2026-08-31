@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { createClient } = require('@supabase/supabase-js');
-const transporter = { sendMail: async () => {} }; // emails disabled
+const transporter = require('../lib/mailer');
 
 router.post('/send-assignments', async (req, res) => {
   const { assignments, cycleStart, cycleEnd } = req.body;
