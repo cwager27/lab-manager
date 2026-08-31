@@ -993,6 +993,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             status: 'pending',
             category: 'MISC',
             show_on_public_dashboard: false,
+            personal_only: true,
           },
           {
             title: `Identify and speak to member who omitted: ${omission}`,
@@ -1002,6 +1003,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             status: 'pending',
             category: 'MISC',
             show_on_public_dashboard: false,
+            personal_only: true,
           },
         ]);
         try { await supabase.from('sporadic_tasks').insert(rows); } catch {}
@@ -1382,6 +1384,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         .from('sporadic_tasks')
         .select('*')
         .eq('assigned_to', userId)
+        .not('personal_only', 'is', true)
         .order('due_date', { ascending: true }),
     ]);
     setMyTaskOccs(occs || []);
