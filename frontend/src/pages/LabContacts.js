@@ -108,6 +108,25 @@ const inpStyle = {
   borderRadius: 4, fontSize: '12px', outline: 'none', boxSizing: 'border-box', background: 'var(--bg-primary)',
 };
 
+function VisibilityToggle({ value, onChange }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 6, marginBottom: 8 }}>
+      <div>
+        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Visibility</span>
+        <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: 8 }}>personal phone · address · emergency contact</span>
+      </div>
+      <div style={{ display: 'flex', gap: 4 }}>
+        {[{ val: false, label: 'All members' }, { val: true, label: 'PM & Admin only' }].map(({ val, label }) => (
+          <button key={String(val)} onClick={() => onChange(val)}
+            style={{ padding: '4px 10px', borderRadius: 4, border: `1px solid ${value === val ? (val ? '#C0392B' : 'var(--purple-primary)') : 'var(--border)'}`, background: value === val ? (val ? '#FDEDEC' : '#F5EEF8') : 'transparent', color: value === val ? (val ? '#C0392B' : 'var(--purple-primary)') : 'var(--text-muted)', fontSize: '12px', fontWeight: value === val ? 700 : 400, cursor: 'pointer' }}>
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // Each admin contact row owns its own edit state — no shared state possible
 function AdminContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, onDelete, rowIndex }) {
   const [expanded, setExpanded] = useState(false);
@@ -163,7 +182,11 @@ function AdminContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, o
         <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
           {contact.alternative_email ? <a href={`tel:${contact.alternative_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.alternative_email}</a> : '—'}
         </td>
-        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>{contact.address || '—'}</td>
+        <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+          {canViewPersonalPhone || !contact.restrict_visibility
+            ? (contact.address || '—')
+            : <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>🔒 Restricted</span>}
+        </td>
         <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', width: '100%' }}>{contact.notes || '—'}</td>
         {canManage && (
           <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
@@ -201,11 +224,12 @@ function AdminContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, o
                   onBlur={e => setForm(p => ({ ...p, address: formatAddress(e.target.value) }))} />
               </div>
             </div>
-            <div style={{ marginBottom: 12 }}>
+            <div style={{ marginBottom: 8 }}>
               <label style={labelStyle}>Responsibilities / Notes</label>
               <textarea value={form.notes || ''} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
                 rows={2} style={{ ...inpStyle, resize: 'vertical' }} />
             </div>
+            <VisibilityToggle value={!!form.restrict_visibility} onChange={v => setForm(p => ({ ...p, restrict_visibility: v }))} />
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button onClick={() => setExpanded(false)} style={{ padding: '7px 16px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
               <button onClick={handleSave} disabled={saving} style={{ padding: '7px 16px', borderRadius: 6, border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: saving ? 'wait' : 'pointer' }}>
@@ -253,11 +277,13 @@ function AlumniContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, 
         <td style={{ padding: '10px 14px', fontSize: '12px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
             {contact.email ? <a href={`mailto:${contact.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{contact.email}</a> : <span style={{ color: 'var(--text-secondary)' }}>—</span>}
-            {contact.personal_email && <a href={`mailto:${contact.personal_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}><Mail size={10} />{contact.personal_email}</a>}
+            {contact.personal_email && (canViewPersonalPhone || !contact.restrict_visibility) && <a href={`mailto:${contact.personal_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}><Mail size={10} />{contact.personal_email}</a>}
           </div>
         </td>
         <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
-          {contact.phone ? <a href={`tel:${contact.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.phone}</a> : '—'}
+          {(canViewPersonalPhone || !contact.restrict_visibility)
+            ? (contact.phone ? <a href={`tel:${contact.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{contact.phone}</a> : '—')
+            : <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>🔒</span>}
         </td>
         <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>
           {contact.dietary_restrictions || '—'}
@@ -328,11 +354,12 @@ function AlumniContactRow({ contact, canManage, canViewPersonalPhone, onUpdate, 
               <div><label style={labelStyle}>Email</label>{inp('emergency_contact_email', 'name@example.com')}</div>
               <div><label style={labelStyle}>Relationship</label>{inp('emergency_contact_relationship', 'e.g. Parent')}</div>
             </div>
-            <div style={{ marginBottom: 12 }}>
+            <div style={{ marginBottom: 8 }}>
               <label style={labelStyle}>Notes</label>
               <textarea value={form.notes || ''} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
                 rows={2} style={{ ...inpStyle, resize: 'vertical' }} placeholder="e.g. Graduated 2023, now at industry…" />
             </div>
+            <VisibilityToggle value={!!form.restrict_visibility} onChange={v => setForm(p => ({ ...p, restrict_visibility: v }))} />
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button onClick={() => setExpanded(false)} style={{ padding: '7px 16px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
               <button onClick={handleSave} disabled={saving} style={{ padding: '7px 16px', borderRadius: 6, border: 'none', background: 'var(--purple-primary)', color: 'white', fontSize: '13px', fontWeight: 600, cursor: saving ? 'wait' : 'pointer' }}>
@@ -396,6 +423,7 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
       emergency_contact_phone: extraData?.emergency_contact_phone || '',
       emergency_contact_email: extraData?.emergency_contact_email || '',
       emergency_contact_relationship: extraData?.emergency_contact_relationship || '',
+      restrict_visibility: extraData?.restrict_visibility || false,
     });
     setShowContactEdit(e => !e);
   }
@@ -414,6 +442,7 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
         emergency_contact_phone: form.emergency_contact_phone || '',
         emergency_contact_email: form.emergency_contact_email || '',
         emergency_contact_relationship: form.emergency_contact_relationship || '',
+        restrict_visibility: form.restrict_visibility || false,
       };
       if (extraData?.id) {
         const { error } = await supabase.from('lab_contacts').update(payload).eq('id', extraData.id);
@@ -460,11 +489,13 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
         <td style={{ padding: '10px 14px', fontSize: '12px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
             {(extraData?.email || member.email) ? <a href={`mailto:${extraData?.email || member.email}`} style={{ color: 'var(--purple-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={11} />{extraData?.email || member.email}</a> : '—'}
-            {extraData?.personal_email && <a href={`mailto:${extraData.personal_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}><Mail size={10} />{extraData.personal_email}</a>}
+            {extraData?.personal_email && (canViewPersonalPhone || !extraData?.restrict_visibility) && <a href={`mailto:${extraData.personal_email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}><Mail size={10} />{extraData.personal_email}</a>}
           </div>
         </td>
         <td style={{ padding: '10px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
-          {extraData?.phone ? <a href={`tel:${extraData.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{extraData.phone}</a> : '—'}
+          {(canViewPersonalPhone || !extraData?.restrict_visibility)
+            ? (extraData?.phone ? <a href={`tel:${extraData.phone}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={11} />{extraData.phone}</a> : '—')
+            : <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>🔒</span>}
         </td>
         <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {extraData?.dietary_restrictions || '—'}
@@ -594,6 +625,7 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
               <div><label style={labelStyle}>Email</label>{inp('emergency_contact_email', 'name@example.com')}</div>
               <div><label style={labelStyle}>Relationship</label>{inp('emergency_contact_relationship', 'e.g. Parent')}</div>
             </div>
+            <VisibilityToggle value={!!form.restrict_visibility} onChange={v => setForm(p => ({ ...p, restrict_visibility: v }))} />
             {saveError && <div style={{ color: 'var(--danger)', fontSize: '12px', marginBottom: 8, textAlign: 'right' }}>{saveError}</div>}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button onClick={() => { setShowContactEdit(false); setSaveError(''); }} style={{ padding: '7px 16px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
