@@ -29,6 +29,14 @@ const PERMISSIONS = [
   { key: 'can_view_confidential', label: 'View Confidential Info', description: 'Can see personal phone, email, address and emergency contacts' },
 ];
 
+const TASK_TAB_PERMISSIONS = [
+  { key: 'can_view_recurrent_tab',    label: 'Recurrent Tasks',  description: 'Can see the Recurrent Tasks tab' },
+  { key: 'can_view_adhoc_tab',        label: 'Ad hoc Tasks',     description: 'Can see the Ad hoc Tasks tab' },
+  { key: 'can_view_calendar_tab',     label: 'Calendar',         description: 'Can see the Calendar tab' },
+  { key: 'can_view_productivity_tab', label: 'Productivity',     description: 'Can see the Productivity tab' },
+  { key: 'can_view_assignments_tab',  label: 'Assignments',      description: 'Can see the Task Assignments tab' },
+];
+
 const DASHBOARD_PERMISSIONS = [
   { key: 'can_see_lab_dashboard', label: 'Lab Dashboard', description: 'Lab-wide productivity, vacations, meetings' },
   { key: 'can_see_leadership_dashboard', label: 'Leadership Dashboard', description: 'Grants and unassigned tasks' },
@@ -49,6 +57,8 @@ const EMPTY_MEMBER = {
   can_edit_meetings: false, can_view_finance: true,
   can_edit_samples: true, can_view_contacts: false, can_add_members: false,
   can_edit_sops: false, can_view_confidential: false,
+  can_view_recurrent_tab: false, can_view_adhoc_tab: false, can_view_calendar_tab: false,
+  can_view_productivity_tab: false, can_view_assignments_tab: false,
   can_see_lab_dashboard: true, can_see_leadership_dashboard: false, can_see_personal_dashboard: true,
   title: '', personal_email: '', phone: '', address: '',
   emergency_contact_name: '', emergency_contact_phone: '',
@@ -638,76 +648,107 @@ function LabMemberRow({ member, canManage, canViewPersonalPhone, userId, isAdmin
       )}
       {showPerms && canManage && (
         <tr style={{ background: 'var(--bg-secondary)' }}>
-          <td colSpan={canViewPersonalPhone ? 6 : 4} style={{ padding: '16px 20px', borderTop: '1px solid var(--border)' }}>
-            {/* Role selector */}
-            {isAdmin && onUpdateRole && (
-              <div style={{ marginBottom: '14px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
-                <p style={{ margin: '0 0 8px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Role</p>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                  {['admin', 'pm', 'member', 'intern'].map(role => {
-                    const rc = ROLE_COLORS[role] || ROLE_COLORS.member;
-                    const isActive = member.role === role;
-                    return (
-                      <button key={role} onClick={() => onUpdateRole(member.id, role)}
-                        style={{ padding: '5px 12px', borderRadius: 'var(--radius-md)', fontSize: '12px', fontWeight: isActive ? 700 : 500, cursor: isActive ? 'default' : 'pointer', border: `2px solid ${isActive ? rc.border : 'var(--border)'}`, background: isActive ? rc.bg : 'var(--bg-primary)', color: isActive ? rc.text : 'var(--text-secondary)' }}>
-                        {ROLE_LABELS[role]}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            {/* Permission toggles */}
-            <div style={{ marginBottom: '14px' }}>
-              <p style={{ margin: '0 0 8px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Permissions</p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '8px' }}>
-                {PERMISSIONS.map(perm => (
+          <td colSpan={99} style={{ padding: '16px 24px 20px', borderTop: '1px solid var(--border)' }}>
+            {(() => {
+              const secLabel = { margin: '0 0 8px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' };
+              const toggle = (key, isOn, onChange) => (
+                <button onClick={onChange}
+                  style={{ width: '36px', height: '20px', borderRadius: '10px', border: 'none', background: isOn ? 'var(--purple-primary)' : 'var(--border)', cursor: 'pointer', position: 'relative', flexShrink: 0 }}>
+                  <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: 'white', position: 'absolute', top: '3px', left: isOn ? '19px' : '3px', transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                </button>
+              );
+              const permCard = (perm) => {
+                const isOn = !!member[perm.key];
+                return (
                   <div key={perm.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
                     <p style={{ margin: 0, fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)' }}>{perm.label}</p>
-                    <button onClick={() => onUpdatePermissions(member.id, perm.key, !member[perm.key])}
-                      style={{ width: '36px', height: '20px', borderRadius: '10px', border: 'none', background: member[perm.key] ? 'var(--purple-primary)' : 'var(--border)', cursor: 'pointer', position: 'relative', flexShrink: 0 }}>
-                      <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: 'white', position: 'absolute', top: '3px', left: member[perm.key] ? '19px' : '3px', transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-                    </button>
+                    {toggle(perm.key, isOn, () => onUpdatePermissions(member.id, perm.key, !isOn))}
                   </div>
-                ))}
-              </div>
-            </div>
-            {/* Presenter rotation */}
-            <div style={{ paddingTop: '12px', borderTop: '1px solid var(--border)', marginBottom: '14px' }}>
-              <p style={{ margin: '0 0 8px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Lab Meeting Rotor</p>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: `1px solid ${member.is_presenter ? 'rgba(123,63,160,0.3)' : 'var(--border)'}`, maxWidth: 280 }}>
-                <div>
-                  <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: member.is_presenter ? 'var(--purple-primary)' : 'var(--text-secondary)' }}>Presenter</p>
-                  <p style={{ margin: '1px 0 0', fontSize: '10px', color: 'var(--text-muted)' }}>Included in the lab meeting rotation</p>
-                </div>
-                <button onClick={() => onUpdatePermissions(member.id, 'is_presenter', !member.is_presenter)}
-                  style={{ width: '36px', height: '20px', borderRadius: '10px', border: 'none', background: member.is_presenter ? 'var(--purple-primary)' : 'var(--border)', cursor: 'pointer', position: 'relative', flexShrink: 0 }}>
-                  <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: 'white', position: 'absolute', top: '3px', left: member.is_presenter ? '19px' : '3px', transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-                </button>
-              </div>
-            </div>
-
-            {/* Dashboard access */}
-            <div style={{ paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
-              <p style={{ margin: '0 0 8px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dashboard Access</p>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {DASHBOARD_PERMISSIONS.map(perm => {
-                  const isOn = member[perm.key] !== false;
-                  return (
-                    <div key={perm.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '8px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: `1px solid ${isOn ? 'rgba(123,63,160,0.3)' : 'var(--border)'}`, minWidth: 180 }}>
-                      <div>
-                        <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: isOn ? 'var(--purple-primary)' : 'var(--text-secondary)' }}>{perm.label}</p>
-                        <p style={{ margin: '1px 0 0', fontSize: '10px', color: 'var(--text-muted)' }}>{perm.description}</p>
+                );
+              };
+              return (
+                <>
+                  {/* Role */}
+                  {isAdmin && onUpdateRole && (
+                    <div style={{ marginBottom: '14px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
+                      <p style={secLabel}>Role</p>
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                        {['admin', 'pm', 'member', 'intern'].map(role => {
+                          const rc = ROLE_COLORS[role] || ROLE_COLORS.member;
+                          const isActive = member.role === role;
+                          return (
+                            <button key={role} onClick={() => onUpdateRole(member.id, role)}
+                              style={{ padding: '5px 12px', borderRadius: 'var(--radius-md)', fontSize: '12px', fontWeight: isActive ? 700 : 500, cursor: isActive ? 'default' : 'pointer', border: `2px solid ${isActive ? rc.border : 'var(--border)'}`, background: isActive ? rc.bg : 'var(--bg-primary)', color: isActive ? rc.text : 'var(--text-secondary)' }}>
+                              {ROLE_LABELS[role]}
+                            </button>
+                          );
+                        })}
                       </div>
-                      <button onClick={() => onUpdatePermissions(member.id, perm.key, !isOn)}
-                        style={{ width: '36px', height: '20px', borderRadius: '10px', border: 'none', background: isOn ? 'var(--purple-primary)' : 'var(--border)', cursor: 'pointer', position: 'relative', flexShrink: 0 }}>
-                        <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: 'white', position: 'absolute', top: '3px', left: isOn ? '19px' : '3px', transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-                      </button>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
+                  )}
+
+                  {/* Permissions — 5 per row, full width */}
+                  <div style={{ marginBottom: '14px', paddingBottom: '14px', borderBottom: '1px solid var(--border)' }}>
+                    <p style={secLabel}>Permissions</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
+                      {PERMISSIONS.map(permCard)}
+                    </div>
+                  </div>
+
+                  {/* Task Tabs Visibility */}
+                  <div style={{ marginBottom: '14px', paddingBottom: '14px', borderBottom: '1px solid var(--border)' }}>
+                    <p style={secLabel}>Task Tabs Visible</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '8px' }}>
+                      {/* My Tasks — always on, locked */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#EAF7F0', borderRadius: 'var(--radius-md)', border: '1px solid #27AE60' }}>
+                        <p style={{ margin: 0, fontSize: '12px', fontWeight: 500, color: '#27AE60' }}>My Tasks</p>
+                        <span style={{ fontSize: '11px', color: '#27AE60', fontWeight: 700 }}>Always</span>
+                      </div>
+                      {TASK_TAB_PERMISSIONS.map(perm => {
+                        const isOn = !!member[perm.key];
+                        return (
+                          <div key={perm.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                            <p style={{ margin: 0, fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)' }}>{perm.label}</p>
+                            {toggle(perm.key, isOn, () => onUpdatePermissions(member.id, perm.key, !isOn))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Lab Meeting Rotor + Dashboard Access — side by side */}
+                  <div style={{ display: 'flex', gap: '32px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                    <div>
+                      <p style={secLabel}>Lab Meeting Rotor</p>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '8px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: `1px solid ${member.is_presenter ? 'rgba(123,63,160,0.3)' : 'var(--border)'}`, minWidth: 220 }}>
+                        <div>
+                          <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: member.is_presenter ? 'var(--purple-primary)' : 'var(--text-secondary)' }}>Presenter</p>
+                          <p style={{ margin: '1px 0 0', fontSize: '10px', color: 'var(--text-muted)' }}>Included in the lab meeting rotation</p>
+                        </div>
+                        {toggle('is_presenter', member.is_presenter, () => onUpdatePermissions(member.id, 'is_presenter', !member.is_presenter))}
+                      </div>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={secLabel}>Dashboard Access</p>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {DASHBOARD_PERMISSIONS.map(perm => {
+                          const isOn = member[perm.key] !== false;
+                          return (
+                            <div key={perm.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '8px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: `1px solid ${isOn ? 'rgba(123,63,160,0.3)' : 'var(--border)'}`, minWidth: 200 }}>
+                              <div>
+                                <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: isOn ? 'var(--purple-primary)' : 'var(--text-secondary)' }}>{perm.label}</p>
+                                <p style={{ margin: '1px 0 0', fontSize: '10px', color: 'var(--text-muted)' }}>{perm.description}</p>
+                              </div>
+                              {toggle(perm.key, isOn, () => onUpdatePermissions(member.id, perm.key, !isOn))}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
           </td>
         </tr>
       )}

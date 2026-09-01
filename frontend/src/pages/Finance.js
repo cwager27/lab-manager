@@ -87,6 +87,8 @@ function getFiscalYear(dateStr) {
   const fyYear = d.getUTCMonth() >= 8 ? d.getUTCFullYear() + 1 : d.getUTCFullYear();
   return `fy${String(fyYear).slice(2)}`;
 }
+// Use stored fiscal_year (set at import time) so file-level FY label wins over date-computed FY
+function orderFY(o) { return o.fiscal_year || getFiscalYear(o.order_date); }
 
 // Levenshtein distance for fuzzy "Did you mean?" matching
 function levenshtein(a, b) {
@@ -153,6 +155,119 @@ function AutocompleteInput({ value, onChange, onBlur, options, placeholder, styl
   );
 }
 
+function panelBtnStyle(bg, color, border = 'none') {
+  return { fontSize: '11px', padding: '5px 10px', borderRadius: 5, background: bg, color, border, cursor: 'pointer', fontWeight: 600, outline: 'none' };
+}
+
+function StReagentCell({ row, reagentList, nanoseqList, onChange, canEdit }) {
+  const [open, setOpen] = useState(false);
+  const [step, setStep] = useState('root');
+  const [pendingType, setPendingType] = useState(null);
+  const [fuzzyMatch, setFuzzyMatch] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const ref = useRef(null);
+  const current = row.st_reagent_type || 'none';
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setStep('root'); } };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  function close() { setOpen(false); setStep('root'); setPendingType(null); setFuzzyMatch(null); }
+
+  async function commit(type) {
+    setSaving(true);
+    await onChange(row, type);
+    setSaving(false);
+    close();
+  }
+
+  function handleTypeSelect(type) {
+    const cat = (row.catalog_number || '').trim().toLowerCase();
+    const list = type === 'misc' ? reagentList : nanoseqList;
+    const field = type === 'misc' ? 'catalog_number' : 'code';
+
+    const exact = list.find(r => (r[field] || '').trim().toLowerCase() === cat);
+    if (exact) { commit(type); return; }
+
+    let best = null, bestDist = Infinity;
+    for (const r of list) {
+      const d = levenshtein(cat, (r[field] || '').trim().toLowerCase());
+      if (d < bestDist) { bestDist = d; best = r; }
+    }
+    const threshold = Math.min(3, Math.max(1, Math.floor(cat.length / 4)));
+    if (best && bestDist <= threshold) {
+      setPendingType(type);
+      setFuzzyMatch({ entry: best, field });
+      setStep('fuzzy');
+      return;
+    }
+
+    commit(type);
+  }
+
+  const typeCfg = {
+    misc:    { label: 'Misc',    bg: '#EAF7F0', color: '#27AE60' },
+    nanoseq: { label: 'Nanoseq', bg: '#EBF5FB', color: '#2980B9' },
+    none:    { label: 'None',    bg: 'var(--bg-secondary)', color: 'var(--text-muted)' },
+  };
+  const cfg = typeCfg[current] || typeCfg.none;
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        onClick={() => { if (canEdit) { setStep('root'); setPendingType(null); setFuzzyMatch(null); setOpen(o => !o); } }}
+        style={{ fontSize: '11px', padding: '3px 8px', borderRadius: 4, border: '1px solid var(--border)', background: cfg.bg, color: cfg.color, fontWeight: 600, cursor: canEdit ? 'pointer' : 'default', outline: 'none', whiteSpace: 'nowrap' }}
+      >
+        {cfg.label}{canEdit && <span style={{ opacity: 0.5, fontSize: '9px', marginLeft: 3 }}>▼</span>}
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 500, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: '12px', minWidth: '230px' }}>
+          {step === 'root' && (
+            <>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>Standard reagent?</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button onClick={() => setStep('type')} style={panelBtnStyle('#7B3FA0', 'white')}>Yes — set type</button>
+                {current !== 'none' && (
+                  <button onClick={() => commit('none')} style={panelBtnStyle('var(--bg-secondary)', 'var(--text-muted)', '1px solid var(--border)')}>Remove</button>
+                )}
+                <button onClick={close} style={panelBtnStyle('var(--bg-secondary)', 'var(--text-muted)', '1px solid var(--border)')}>Cancel</button>
+              </div>
+            </>
+          )}
+          {step === 'type' && (
+            <>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>Select type</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => handleTypeSelect('misc')} style={panelBtnStyle('#EAF7F0', '#27AE60', '1px solid #27AE60')}>Misc</button>
+                <button onClick={() => handleTypeSelect('nanoseq')} style={panelBtnStyle('#EBF5FB', '#2980B9', '1px solid #2980B9')}>Nanoseq</button>
+                <button onClick={() => setStep('root')} style={panelBtnStyle('var(--bg-secondary)', 'var(--text-muted)', '1px solid var(--border)')}>Back</button>
+              </div>
+            </>
+          )}
+          {step === 'fuzzy' && fuzzyMatch && (
+            <>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Close match found</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.4 }}>
+                Existing: <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{fuzzyMatch.entry[fuzzyMatch.field]}</span>
+                {fuzzyMatch.entry.name ? ` — ${fuzzyMatch.entry.name}` : ''}
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button onClick={() => commit(pendingType)} style={panelBtnStyle('#7B3FA0', 'white')}>Use existing</button>
+                <button onClick={() => commit(pendingType)} style={panelBtnStyle('var(--bg-secondary)', 'var(--text-muted)', '1px solid var(--border)')}>Add as new</button>
+                <button onClick={() => setStep('type')} style={panelBtnStyle('var(--bg-secondary)', 'var(--text-muted)', '1px solid var(--border)')}>Back</button>
+              </div>
+            </>
+          )}
+          {saving && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 8 }}>Saving…</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Finance({ userRole }) {
   const [grants, setGrants] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -171,6 +286,7 @@ export default function Finance({ userRole }) {
   const [previewNanoseq, setPreviewNanoseq] = useState(null);
   const [showAddNanoseq, setShowAddNanoseq] = useState(false);
   const [nanoseqForm, setNanoseqForm] = useState({ protocol: '', name: '', company: '', code: '', link: '', cost: '', amount: '', n_reactions: '' });
+  const [newOrderStReagent, setNewOrderStReagent] = useState('none');
   const [newOrder, setNewOrder] = useState({
     item: '', vendor: '', catalog_number: '', category: '', grant_name: '',
     requisition_id: '', unit_description: '', unit_price: '', units: '',
@@ -218,7 +334,7 @@ export default function Finance({ userRole }) {
   const chartData = useMemo(() => {
     const real = orders.filter(o => {
       if (!o.item || o.item.trim() === '' || o.status === 'deleted') return false;
-      if (selectedGlobalYears.length > 0 && !selectedGlobalYears.includes(getFiscalYear(o.order_date))) return false;
+      if (selectedGlobalYears.length > 0 && !selectedGlobalYears.includes(orderFY(o))) return false;
       return true;
     });
 
@@ -285,6 +401,8 @@ export default function Finance({ userRole }) {
   const [confirmDeleteOrder, setConfirmDeleteOrder] = useState(false);
   const [ordersYearTab, setOrdersYearTab] = useState(getCurrentFY);
   const [importError, setImportError] = useState(null);
+  const [normalizingCategories, setNormalizingCategories] = useState(false);
+  const [normalizeCatResult, setNormalizeCatResult] = useState(null);
   const [showImportFYModal, setShowImportFYModal] = useState(false);
   const [importFYInput, setImportFYInput] = useState('');
   const [importFYError, setImportFYError] = useState('');
@@ -299,6 +417,8 @@ export default function Finance({ userRole }) {
   const [confirmDeleteGrant, setConfirmDeleteGrant] = useState(false);
   const [reagentsSortCol, setReagentsSortCol] = useState(null);
   const [reagentsSortDir, setReagentsSortDir] = useState('asc');
+  const [nanoseqSortCol, setNanoseqSortCol] = useState(null);
+  const [nanoseqSortDir, setNanoseqSortDir] = useState('asc');
   const [importReagentError, setImportReagentError] = useState(null);
   const [showAddReagent, setShowAddReagent] = useState(false);
   const [reagentForm, setReagentForm] = useState({ name: '', vendor: '', catalog_number: '', category: '', unit_description: '', unit_price: '', units: '', quantity_in_lab: '', fy24_purchases: '', fy25_purchases: '', fy26_purchases: '' });
@@ -315,7 +435,7 @@ export default function Finance({ userRole }) {
   const allFYs = useMemo(() => {
     const cur = getCurrentFY();
     const s = new Set(['fy26', 'fy25', 'fy24']);
-    orders.forEach(o => { if (o.order_date) s.add(getFiscalYear(o.order_date)); });
+    orders.forEach(o => { if (o.order_date) s.add(orderFY(o)); });
     return [...s].filter(fy => fy <= cur).sort().reverse();
   }, [orders]);
 
@@ -333,13 +453,20 @@ export default function Finance({ userRole }) {
 
   const { widths: grantsWidths, onColMouseDown: grantsResize } = useResizableColumns(8);
   const { widths: ordersWidths, onColMouseDown: ordersResize } = useResizableColumns(14);
-  const { widths: reagentsWidths, onColMouseDown: reagentsResize } = useResizableColumns(10);
-  const { widths: nanoseqWidths, onColMouseDown: nanoseqResize } = useResizableColumns(8 + allFYs.length + 1);
 
   const canManage = userRole === 'admin' || userRole === 'pm';
 
   useEffect(() => { localStorage.setItem('finance_tab', activeTab); }, [activeTab]);
   useEffect(() => { fetchData(); }, []);
+  // Snap orders year tab to latest FY with data when the current calendar FY has no orders yet
+  useEffect(() => {
+    if (!orders.length) return;
+    const cal = getCurrentFY();
+    if (!orders.some(o => orderFY(o) === cal)) {
+      const latest = [...new Set(orders.map(o => orderFY(o)))].sort().reverse()[0];
+      if (latest) setOrdersYearTab(latest);
+    }
+  }, [orders]);
 
   async function fetchData() {
     setLoading(true);
@@ -411,16 +538,38 @@ export default function Finance({ userRole }) {
       units:       parseInt(newOrder.units) || null,
       total_price: parseFloat(newOrder.unit_price) * parseInt(newOrder.units),
       order_date:  newOrder.order_date || null,
+      requestor:   newOrder.requestor?.trim() || 'Unknown',
     };
     const { data, error } = await supabase.from('orders').insert([toInsert]).select().single();
     if (!error && data) {
       setOrders(prev => [...prev, data]);
+      // Optionally add to standards table
+      if (newOrderStReagent !== 'none' && newOrder.catalog_number.trim()) {
+        const cat = newOrder.catalog_number.trim();
+        const catLower = cat.toLowerCase();
+        if (newOrderStReagent === 'misc') {
+          const exists = reagents.some(r => (r.catalog_number || '').trim().toLowerCase() === catLower);
+          if (!exists) {
+            const payload = { name: newOrder.item, vendor: newOrder.vendor || null, catalog_number: cat, category: newOrder.category || null, unit_description: newOrder.unit_description || null, unit_price: parseFloat(newOrder.unit_price) || null, units: parseInt(newOrder.units) || null };
+            const { data: rd } = await supabase.from('reagents').insert([payload]).select().single();
+            if (rd) setReagents(prev => [...prev, rd]);
+          }
+        } else if (newOrderStReagent === 'nanoseq') {
+          const exists = nanoseq.some(r => (r.code || '').trim().toLowerCase() === catLower);
+          if (!exists) {
+            const payload = { name: newOrder.item, company: newOrder.vendor || null, code: cat, protocol: null, amount: newOrder.unit_description || null };
+            const { data: rd } = await supabase.from('nanoseq_reagents').insert([payload]).select().single();
+            if (rd) setNanoseq(prev => [...prev, rd]);
+          }
+        }
+      }
       setShowAddOrder(false);
       setAddOrderError('');
       setDupWarning(null);
       setDupConfirmed(false);
       setItemSuggestion(null);
       setRequestorSuggestion(null);
+      setNewOrderStReagent('none');
       setNewOrder({ item: '', vendor: '', catalog_number: '', category: '', grant_name: '', requisition_id: '', unit_description: '', unit_price: '', units: '', order_date: '', requestor: '', status: 'pending', notes: '' });
     } else if (error) {
       setAddOrderError(error.message);
@@ -457,6 +606,25 @@ export default function Finance({ userRole }) {
     importFileInputRef.current?.click();
   }
 
+  async function handleNormalizeCategories() {
+    if (!window.confirm('This will update all orders in the database that have old category names (e.g. "lab reagents", "TC reagents") to the current standard names. Continue?')) return;
+    setNormalizingCategories(true);
+    setNormalizeCatResult(null);
+    try {
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/admin/normalize-categories`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setNormalizeCatResult(`Updated ${data.updated} orders. ${data.skipped} already correct.`);
+        fetchData();
+      } else {
+        setNormalizeCatResult(`Error: ${data.error}`);
+      }
+    } catch (e) {
+      setNormalizeCatResult(`Error: ${e.message}`);
+    }
+    setNormalizingCategories(false);
+  }
+
   async function handleConfirmImport() {
     if (!previewData) return;
     const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/import-orders`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orders: previewData }) });
@@ -487,8 +655,8 @@ export default function Finance({ userRole }) {
   const userCatData = useMemo(() => {
     const real = orders.filter(o => {
       if (!o.item || o.item.trim() === '' || o.status === 'deleted') return false;
-      if (selectedUsers.length > 0 && !selectedUsers.includes(o.requestor)) return false;
-      if (selectedGlobalYears.length > 0 && !selectedGlobalYears.includes(getFiscalYear(o.order_date))) return false;
+      if (selectedUsers.length > 0 && !selectedUsers.some(u => (o.requestor || '').toLowerCase().includes(u.toLowerCase()))) return false;
+      if (selectedGlobalYears.length > 0 && !selectedGlobalYears.includes(orderFY(o))) return false;
       return true;
     });
     const monthMap = {};
@@ -518,7 +686,7 @@ export default function Finance({ userRole }) {
       if (o.unit_description) r.unit_description = o.unit_description;
       if (o.unit_price != null) r.unit_price = o.unit_price;
       if (o.units != null) r.units = o.units;
-      const fy = getFiscalYear(o.order_date);
+      const fy = orderFY(o);
       const units = parseInt(o.units) || 0;
       if (fy) r.fyCounts[fy] = (r.fyCounts[fy] || 0) + units;
       r.total += units;
@@ -595,7 +763,7 @@ export default function Finance({ userRole }) {
     const activeCatsFilter = vcSelectedCategories.length > 0 ? new Set(vcSelectedCategories) : null;
     const real = orders.filter(o =>
       o.item && o.status !== 'deleted' && o.total_price != null && o.vendor &&
-      activeV.includes(o.vendor) && (activeYrs.length === 0 || activeYrs.includes(getFiscalYear(o.order_date))) &&
+      activeV.includes(o.vendor) && (activeYrs.length === 0 || activeYrs.includes(orderFY(o))) &&
       (!activeCatsFilter || activeCatsFilter.has(o.category))
     );
     const monthMap = {};
@@ -612,7 +780,7 @@ export default function Finance({ userRole }) {
     activeV.forEach(v => { vendorYearSpend[v] = {}; });
     real.forEach(o => {
       if (!o.vendor || !activeV.includes(o.vendor) || o.total_price == null) return;
-      const fy = getFiscalYear(o.order_date);
+      const fy = orderFY(o);
       if (fy) vendorYearSpend[o.vendor][fy] = (vendorYearSpend[o.vendor][fy] || 0) + Number(o.total_price);
     });
     // Sort vendors by total spend desc for consistent colour assignment
@@ -637,7 +805,7 @@ export default function Finance({ userRole }) {
 
     orders.forEach(o => {
       if (!o.item || o.item.trim() === '' || o.status === 'deleted' || !o.order_date || o.total_price == null) return;
-      const fy = getFiscalYear(o.order_date);
+      const fy = orderFY(o);
       if (!activeYears.includes(fy)) return;
       const price = Number(o.total_price);
       if (!price || isNaN(price)) return;
@@ -657,7 +825,7 @@ export default function Finance({ userRole }) {
 
     const monthlyData = MON_ABBR.map((m, mi) => {
       const row = { month: m };
-      activeYears.forEach(fy => { row[fy] = monthlyByFY[fy][mi] || 0; });
+      activeYears.forEach(fy => { const v = monthlyByFY[fy][mi]; row[fy] = v > 0 ? v : null; });
       return row;
     });
 
@@ -679,7 +847,7 @@ export default function Finance({ userRole }) {
     return { fyTotals, monthlyData, catData, fyTotalsData, activeYears };
   }, [orders, annualSummaryYears, allFYs]);
 
-  async function commitOrderSelectEdit(id, col, value) {
+async function commitOrderSelectEdit(id, col, value) {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, [col]: value } : o));
     await supabase.from('orders').update({ [col]: value }).eq('id', id);
   }
@@ -941,6 +1109,19 @@ export default function Finance({ userRole }) {
     });
   }, [reagents, reagentSearch, reagentsSortCol, reagentsSortDir]);
 
+  const sortedNanoseq = useMemo(() => {
+    const q = reagentSearch.toLowerCase();
+    const filtered = q ? nanoseq.filter(r => ['protocol','name','company','code','amount'].some(k => r[k] != null && String(r[k]).toLowerCase().includes(q))) : nanoseq;
+    if (!nanoseqSortCol) return filtered;
+    return [...filtered].sort((a, b) => {
+      const av = a[nanoseqSortCol], bv = b[nanoseqSortCol];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1; if (bv == null) return -1;
+      const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv));
+      return nanoseqSortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [nanoseq, reagentSearch, nanoseqSortCol, nanoseqSortDir]);
+
   const activeGrantsTotals = selectedGrantsTotals.length === 0 ? GRANT_NAMES : selectedGrantsTotals;
   const filteredGrantOptionsTotals = GRANT_NAMES.filter(g => g.toLowerCase().includes(grantSearchTotals.toLowerCase()));
   const totalComplete = activeGrantsTotals.reduce((sum, g) =>
@@ -973,7 +1154,7 @@ export default function Finance({ userRole }) {
   const activeGrantsExpType = selectedGrantsExpType.length === 0 ? GRANT_NAMES : selectedGrantsExpType;
   const ordersReal = orders.filter(o => {
     if (!o.item || o.item.trim() === '' || o.status === 'deleted') return false;
-    if (selectedGlobalYears.length > 0 && !selectedGlobalYears.includes(getFiscalYear(o.order_date))) return false;
+    if (selectedGlobalYears.length > 0 && !selectedGlobalYears.includes(orderFY(o))) return false;
     return true;
   });
   const expTypeOrders = activeGrantsExpType.length === GRANT_NAMES.length && selectedGrantsExpType.length === 0 ? ordersReal : ordersReal.filter(o => activeGrantsExpType.includes(o.grant_name));
@@ -1081,8 +1262,9 @@ export default function Finance({ userRole }) {
 
   const orderFYTabs = useMemo(() => {
     const cur = getCurrentFY();
-    const fySet = new Set(orders.map(o => getFiscalYear(o.order_date)));
-    fySet.add(cur);
+    const fySet = new Set(orders.map(o => orderFY(o)));
+    // Only add the current FY tab if there's at least one order in it
+    if ([...fySet].some(fy => fy === cur)) fySet.add(cur);
     return [...fySet]
       .filter(fy => fy <= cur)
       .sort((a, b) => b.localeCompare(a))
@@ -1090,7 +1272,7 @@ export default function Finance({ userRole }) {
   }, [orders]);
 
   const filteredOrders = useMemo(() => orders.filter(o => {
-    if (getFiscalYear(o.order_date) !== ordersYearTab) return false;
+    if (orderFY(o) !== ordersYearTab) return false;
     if (searchQuery === '') return true;
     const q = searchQuery.toLowerCase();
     return o.item?.toLowerCase().includes(q) || o.vendor?.toLowerCase().includes(q) || o.requisition_id?.toLowerCase().includes(q);
@@ -1139,8 +1321,13 @@ export default function Finance({ userRole }) {
     XLSX.utils.book_append_sheet(wb, ws, 'Orders');
     XLSX.writeFile(wb, 'orders_import_template.xlsx');
   }
-  const curFY = getCurrentFY();
-  const curFYSpend = orders.filter(o => o.order_date && getFiscalYear(o.order_date) === curFY).reduce((sum, o) => sum + (o.total_price || 0), 0);
+  // Use most recent FY with actual data so dashboard doesn't show $0 when a new FY just started
+  const curFY = useMemo(() => {
+    const cal = getCurrentFY();
+    if (orders.some(o => o.order_date && orderFY(o) === cal)) return cal;
+    return allFYs[0] || cal;
+  }, [orders, allFYs]);
+  const curFYSpend = orders.filter(o => o.order_date && orderFY(o) === curFY).reduce((sum, o) => sum + (o.total_price || 0), 0);
   const alertGrants = grants.filter(g => { const pct = g.total_amount && g.remaining_balance ? (g.remaining_balance / g.total_amount) * 100 : null; const daysLeft = g.end_date ? Math.ceil((new Date(g.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null; return (pct !== null && pct < 25) || (daysLeft !== null && daysLeft <= 90); });
 
 
@@ -1216,7 +1403,10 @@ export default function Finance({ userRole }) {
                 setUploadingFile(false);
                 e.target.value = '';
               }} />
-              <button onClick={() => setShowAddOrder(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Order</button>
+<button onClick={handleNormalizeCategories} disabled={normalizingCategories} title="Remap old category names (lab reagents, TC reagents, etc.) to current standard names" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: normalizingCategories ? 'default' : 'pointer', opacity: normalizingCategories ? 0.6 : 1 }}>
+                  {normalizingCategories ? 'Normalizing…' : 'Fix Categories'}
+                </button>
+<button onClick={() => setShowAddOrder(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Order</button>
             </>
           )}
           {activeTab === 'reagents' && reagentTab === 'misc' && (
@@ -1393,6 +1583,12 @@ export default function Finance({ userRole }) {
 
           {activeTab === 'orders' && (
             <>
+              {normalizeCatResult && (
+                <div style={{ background: normalizeCatResult.startsWith('Error') ? '#FDEDEC' : '#EAF7EE', border: `1px solid ${normalizeCatResult.startsWith('Error') ? '#E74C3C' : '#27AE60'}`, borderRadius: 'var(--radius-md)', padding: '10px 16px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <p style={{ fontSize: '13px', fontWeight: 600, color: normalizeCatResult.startsWith('Error') ? '#E74C3C' : '#27AE60', margin: 0 }}>{normalizeCatResult}</p>
+                  <button onClick={() => setNormalizeCatResult(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'var(--text-muted)', lineHeight: 1, padding: '0 0 0 12px' }}>×</button>
+                </div>
+              )}
               {importError && (
                 <div style={{ background: '#FDEDEC', border: '1px solid #E74C3C', borderRadius: 'var(--radius-md)', padding: '14px 16px', marginBottom: '16px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -1525,7 +1721,7 @@ export default function Finance({ userRole }) {
                   )}
                 </div>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                  {reagentTab === 'misc' ? `${sortedReagents.length} reagents` : `${nanoseq.length} reagents`}
+                  {reagentTab === 'misc' ? `${sortedReagents.length} reagents` : `${sortedNanoseq.length} reagents`}
                 </span>
               </div>
 
@@ -1542,87 +1738,115 @@ export default function Finance({ userRole }) {
                 </div>
               )}
 
-              {reagentTab === 'misc' && (
-                <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflowX: 'auto' }}>
-                  <table className="resizable-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-                    <colgroup>{reagentsWidths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
-                    <thead>
-                      <tr style={{ background: 'var(--bg-secondary)' }}>
-                        {[
-                          ['category', 'Category'],
-                          ['name', 'Item (name)'],
-                          ['vendor', 'Vendor'],
-                          ['catalog_number', 'Cat number'],
-                          ['unit_description', 'Units'],
-                          ['since_opened', 'Since Lab Opened'],
-                          ['quantity_in_lab', 'In Lab'],
-                          ['fy24_purchases', "FY'24"],
-                          ['fy25_purchases', "FY'25"],
-                          ['fy26_purchases', "FY'26"],
-                        ].map(([key, label], i) => (
-                          <th key={key} onClick={() => { if (reagentsSortCol === key) { setReagentsSortDir(d => d === 'asc' ? 'desc' : 'asc'); } else { setReagentsSortCol(key); setReagentsSortDir('asc'); } }}
-                            style={{ padding: '10px 12px', textAlign: i >= 5 ? 'center' : 'left', fontSize: '11px', color: reagentsSortCol === key ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', position: 'relative' }}>
-                            {label}{reagentsSortCol === key ? (reagentsSortDir === 'asc' ? ' ↑' : ' ↓') : ''}<ColResizer colIdx={i} totalCols={10} onColMouseDown={reagentsResize} />
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedReagents.length === 0 && (
-                        <tr><td colSpan={10} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>{reagentSearch ? `No reagents match "${reagentSearch}"` : 'No reagents yet.'}</td></tr>
-                      )}
-                      {sortedReagents.map(r => {
-                        const sinceOpened = (r.fy24_purchases || 0) + (r.fy25_purchases || 0) + (r.fy26_purchases || 0);
-                        const fyCell = (val) => <td style={{ padding: '10px 12px', fontSize: '12px', color: val ? 'var(--purple-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: val ? 600 : 400 }}>{val ?? '—'}</td>;
-                        return (
-                          <tr key={r.id} onClick={() => canManage && openEditReagent(r)} style={{ borderTop: '1px solid var(--border)', cursor: canManage ? 'pointer' : 'default' }}
-                            onMouseEnter={e => { if (canManage) e.currentTarget.style.background = 'var(--bg-secondary)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = ''; }}>
-                            <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{r.category || '—'}</td>
-                            <td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-primary)', whiteSpace: 'normal', wordBreak: 'break-word' }}>{r.name || '—'}</td>
-                            <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{r.vendor || '—'}</td>
-                            <td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{r.catalog_number || '—'}</td>
-                            <td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'normal', wordBreak: 'break-word' }}>{r.unit_description || '—'}</td>
-                            <td style={{ padding: '10px 12px', fontSize: '12px', color: sinceOpened ? 'var(--text-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: sinceOpened ? 600 : 400 }}>{sinceOpened || '—'}</td>
-                            <td style={{ padding: '6px 12px', textAlign: 'center' }} onClick={e => { e.stopPropagation(); setInlineQtyId(r.id); setInlineQtyVal(r.quantity_in_lab ?? ''); }}>
-                              {inlineQtyId === r.id
-                                ? <input autoFocus type="number" value={inlineQtyVal} onChange={e => setInlineQtyVal(e.target.value)} onBlur={() => handleInlineQtySave(r.id, inlineQtyVal)} onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setInlineQtyId(null); }} style={{ width: 60, padding: '3px 6px', border: '1px solid var(--purple-primary)', borderRadius: 4, fontSize: '12px', textAlign: 'center', outline: 'none' }} />
-                                : <span style={{ fontSize: '12px', color: r.quantity_in_lab != null ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: r.quantity_in_lab != null ? 600 : 400, cursor: 'pointer', padding: '4px 8px', borderRadius: 4, display: 'inline-block' }} title="Click to edit">{r.quantity_in_lab ?? '—'}</span>
-                              }
-                            </td>
-                            {fyCell(r.fy24_purchases)}
-                            {fyCell(r.fy25_purchases)}
-                            {fyCell(r.fy26_purchases)}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {reagentTab === 'nanoseq' && (() => {
-                const q = reagentSearch.toLowerCase();
-                const filteredNanoseq = q
-                  ? nanoseq.filter(r => ['protocol','name','company','code','amount'].some(k => r[k] != null && String(r[k]).toLowerCase().includes(q)))
-                  : nanoseq;
+              {reagentTab === 'misc' && (() => {
+                const thS = (key, center) => ({ padding: '8px 10px', textAlign: center ? 'center' : 'left', fontSize: '11px', color: reagentsSortCol === key ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', fontWeight: 600 });
+                const tdS = (opts = {}) => ({ padding: '7px 10px', fontSize: '12px', color: opts.color || 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: opts.center ? 'center' : 'left', fontFamily: opts.mono ? 'monospace' : undefined, fontWeight: opts.bold ? 700 : undefined });
+                const toggleSort = (key) => { if (reagentsSortCol === key) setReagentsSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setReagentsSortCol(key); setReagentsSortDir('asc'); } };
+                const sortMark = (key) => reagentsSortCol === key ? (reagentsSortDir === 'asc' ? ' ↑' : ' ↓') : '';
+                const cols = [['name','Item'],['vendor','Vendor'],['category','Category'],['catalog_number','Cat #'],['unit_description','Unit description'],['unit_price','Unit price'],['units','Units (n)']];
+                const centerKeys = new Set(['unit_price','units','quantity_in_lab']);
                 return (
-                <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-                  {nanoseq.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>No Nanoseq reagents loaded yet. Click Import Nanoseq to upload.</div>
-                  ) : (
-                    <table className="resizable-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-                      <colgroup>{nanoseqWidths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
-                      <thead><tr style={{ background: 'var(--bg-secondary)' }}>{['Protocol','Item','Vendor','Code','Cost','Amount','nRxn','Link'].map((h, i) => <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', position: 'relative' }}>{h}<ColResizer colIdx={i} totalCols={8 + allFYs.length + 1} onColMouseDown={nanoseqResize} /></th>)}{allFYs.map((fy, fi) => <th key={fy} style={{ padding: '10px 12px', textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', position: 'relative' }}>{fyLabel(fy)}<ColResizer colIdx={8 + fi} totalCols={8 + allFYs.length + 1} onColMouseDown={nanoseqResize} /></th>)}<th style={{ padding: '10px 12px', textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Total</th></tr></thead>
+                  <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: 'var(--bg-secondary)' }}>
+                          {cols.map(([key, label]) => (
+                            <th key={key} onClick={() => toggleSort(key)} style={thS(key, centerKeys.has(key))}>
+                              {label}{sortMark(key)}
+                            </th>
+                          ))}
+                          <th onClick={() => toggleSort('quantity_in_lab')} style={thS('quantity_in_lab', true)}>In Lab{sortMark('quantity_in_lab')}</th>
+                          {allFYs.map(fy => <th key={fy} style={{ padding: '8px 10px', textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', fontWeight: 600 }}>{fyLabel(fy)}</th>)}
+                          <th style={{ padding: '8px 10px', textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', fontWeight: 600 }}>Total</th>
+                        </tr>
+                      </thead>
                       <tbody>
-                        {filteredNanoseq.length === 0 && (
-                          <tr><td colSpan={8 + allFYs.length + 1} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No reagents match "{reagentSearch}"</td></tr>
+                        {sortedReagents.length === 0 && (
+                          <tr><td colSpan={cols.length + 2 + allFYs.length} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>{reagentSearch ? `No reagents match "${reagentSearch}"` : 'No reagents yet.'}</td></tr>
                         )}
-                        {filteredNanoseq.map(r => { const fyData = catalogByNum[r.code]?.fyCounts || {}; const total = Object.values(fyData).reduce((s,n) => s+n, 0); return <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.protocol}</td><td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-primary)', whiteSpace: 'normal', wordBreak: 'break-word' }}>{r.name}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{r.company}</td><td style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{r.code}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-primary)' }}>{r.cost ? `$${r.cost.toLocaleString()}` : '—'}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{r.amount}</td><td style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>{r.n_reactions ?? '—'}</td><td style={{ padding: '10px 12px', fontSize: '12px' }}>{r.link && <a href={r.link} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--purple-primary)', textDecoration: 'none', fontSize: '11px' }}>View</a>}</td>{allFYs.map(fy => { const cnt = fyData[fy] || 0; return <td key={fy} style={{ padding: '10px 12px', fontSize: '12px', color: cnt ? 'var(--purple-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: cnt ? 600 : 400 }}>{cnt || '—'}</td>; })}<td style={{ padding: '10px 12px', fontSize: '12px', color: total ? 'var(--text-primary)' : 'var(--text-muted)', textAlign: 'center', fontWeight: total ? 600 : 400 }}>{total || '—'}</td></tr>; })}
+                        {sortedReagents.map((r, i) => {
+                          const fyData = catalogByNum[r.catalog_number]?.fyCounts || {};
+                          const total = Object.values(fyData).reduce((s, n) => s + n, 0);
+                          return (
+                            <tr key={r.id} onClick={() => canManage && openEditReagent(r)}
+                              style={{ borderTop: '1px solid var(--border)', cursor: canManage ? 'pointer' : 'default', background: i % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}
+                              onMouseEnter={e => { if (canManage) e.currentTarget.style.background = 'rgba(123,63,160,0.04)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'var(--bg-secondary)'; }}>
+                              <td style={{ ...tdS(), whiteSpace: 'normal', minWidth: '160px' }}>{r.name || '—'}</td>
+                              <td style={tdS({ maxW: '120px' })}>{r.vendor || '—'}</td>
+                              <td style={tdS({ maxW: '140px' })}>{r.category || '—'}</td>
+                              <td style={tdS({ mono: true, color: 'var(--text-muted)' })}>{r.catalog_number || '—'}</td>
+                              <td style={tdS()}>{r.unit_description || '—'}</td>
+                              <td style={tdS({ center: true })}>{r.unit_price != null ? `$${Number(r.unit_price).toLocaleString()}` : '—'}</td>
+                              <td style={tdS({ center: true })}>{r.units ?? '—'}</td>
+                              <td style={{ ...tdS({ center: true }), overflow: 'visible' }} onClick={e => { e.stopPropagation(); setInlineQtyId(r.id); setInlineQtyVal(r.quantity_in_lab ?? ''); }}>
+                                {inlineQtyId === r.id
+                                  ? <input autoFocus type="number" value={inlineQtyVal} onChange={e => setInlineQtyVal(e.target.value)} onBlur={() => handleInlineQtySave(r.id, inlineQtyVal)} onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setInlineQtyId(null); }} style={{ width: 60, padding: '3px 6px', border: '1px solid var(--purple-primary)', borderRadius: 4, fontSize: '12px', textAlign: 'center', outline: 'none' }} />
+                                  : <span style={{ fontSize: '12px', color: r.quantity_in_lab != null ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: r.quantity_in_lab != null ? 600 : 400, cursor: 'pointer', padding: '4px 8px', borderRadius: 4, display: 'inline-block' }} title="Click to edit">{r.quantity_in_lab ?? '—'}</span>
+                                }
+                              </td>
+                              {allFYs.map(fy => { const cnt = fyData[fy] || 0; return <td key={fy} style={tdS({ center: true, color: cnt ? 'var(--purple-primary)' : 'var(--text-muted)', bold: !!cnt })}>{cnt || '—'}</td>; })}
+                              <td style={tdS({ center: true, bold: !!total, color: total ? 'var(--text-primary)' : 'var(--text-muted)' })}>{total || '—'}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
-                  )}
-                </div>
+                  </div>
+                );
+              })()}
+
+              {reagentTab === 'nanoseq' && (() => {
+                const thS = (key, center) => ({ padding: '8px 10px', textAlign: center ? 'center' : 'left', fontSize: '11px', color: nanoseqSortCol === key ? 'var(--purple-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', fontWeight: 600 });
+                const tdS = (opts = {}) => ({ padding: '7px 10px', fontSize: '12px', color: opts.color || 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: opts.center ? 'center' : 'left', fontFamily: opts.mono ? 'monospace' : undefined, fontWeight: opts.bold ? 700 : undefined });
+                const toggleSort = (key) => { if (nanoseqSortCol === key) setNanoseqSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setNanoseqSortCol(key); setNanoseqSortDir('asc'); } };
+                const sortMark = (key) => nanoseqSortCol === key ? (nanoseqSortDir === 'asc' ? ' ↑' : ' ↓') : '';
+                const cols = [['protocol','Protocol'],['name','Item'],['company','Company'],['code','Code'],['cost','Cost'],['amount','Amount'],['n_reactions','nRxn']];
+                const centerKeys = new Set(['cost','n_reactions']);
+                return (
+                  <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflowX: 'auto' }}>
+                    {nanoseq.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontSize: '13px' }}>No Nanoseq reagents loaded yet. Click Import Nanoseq to upload.</div>
+                    ) : (
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--bg-secondary)' }}>
+                            {cols.map(([key, label]) => (
+                              <th key={key} onClick={() => toggleSort(key)} style={thS(key, centerKeys.has(key))}>
+                                {label}{sortMark(key)}
+                              </th>
+                            ))}
+                            <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', fontWeight: 600 }}>Link</th>
+                            {allFYs.map(fy => <th key={fy} style={{ padding: '8px 10px', textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', fontWeight: 600 }}>{fyLabel(fy)}</th>)}
+                            <th style={{ padding: '8px 10px', textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', fontWeight: 600 }}>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sortedNanoseq.length === 0 && (
+                            <tr><td colSpan={cols.length + 2 + allFYs.length} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No reagents match "{reagentSearch}"</td></tr>
+                          )}
+                          {sortedNanoseq.map((r, i) => {
+                            const fyData = catalogByNum[r.code]?.fyCounts || {};
+                            const total = Object.values(fyData).reduce((s, n) => s + n, 0);
+                            return (
+                              <tr key={r.id} style={{ borderTop: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
+                                <td style={tdS()}>{r.protocol || '—'}</td>
+                                <td style={{ ...tdS(), whiteSpace: 'normal', minWidth: '160px' }}>{r.name || '—'}</td>
+                                <td style={tdS({ maxW: '120px' })}>{r.company || '—'}</td>
+                                <td style={tdS({ mono: true, color: 'var(--text-muted)' })}>{r.code || '—'}</td>
+                                <td style={tdS({ center: true })}>{r.cost ? `$${Number(r.cost).toLocaleString()}` : '—'}</td>
+                                <td style={tdS()}>{r.amount || '—'}</td>
+                                <td style={tdS({ center: true })}>{r.n_reactions ?? '—'}</td>
+                                <td style={tdS()}>{r.link ? <a href={r.link} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--purple-primary)', textDecoration: 'none', fontSize: '11px' }}>View</a> : '—'}</td>
+                                {allFYs.map(fy => { const cnt = fyData[fy] || 0; return <td key={fy} style={tdS({ center: true, color: cnt ? 'var(--purple-primary)' : 'var(--text-muted)', bold: !!cnt })}>{cnt || '—'}</td>; })}
+                                <td style={tdS({ center: true, bold: !!total, color: total ? 'var(--text-primary)' : 'var(--text-muted)' })}>{total || '—'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
                 );
               })()}
             </div>
@@ -1823,7 +2047,6 @@ export default function Finance({ userRole }) {
                       </tfoot>
                     </table>
                   </div>
-                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)' }} />
                   </div>
                 </div>
               </div>
@@ -1911,7 +2134,6 @@ export default function Finance({ userRole }) {
                       </tfoot>
                     </table>
                   </div>
-                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)' }} />
                   </div>
                 </div>
               </div>
@@ -2008,7 +2230,7 @@ export default function Finance({ userRole }) {
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
-                  <div style={{ position: 'relative', flex: '1 1 0', minWidth: '240px' }}>
+                  <div style={{ flex: '1 1 0', minWidth: '240px' }}>
                   <div style={{ maxHeight: '420px', overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
                     <table style={{ borderCollapse: 'collapse', fontSize: '11px', minWidth: '280px' }}>
                       <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
@@ -2050,7 +2272,6 @@ export default function Finance({ userRole }) {
                       </tfoot>
                     </table>
                   </div>
-                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)' }} />
                   </div>
                 </div>
               </div>
@@ -2219,8 +2440,7 @@ export default function Finance({ userRole }) {
                         </tfoot>
                       </table>
                     </div>
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)' }} />
-                    </div>
+                      </div>
                   </div>
                 </div>
 
@@ -2271,8 +2491,7 @@ export default function Finance({ userRole }) {
                         </tfoot>
                       </table>
                     </div>
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)' }} />
-                    </div>
+                      </div>
                   </div>
                 </div>
 
@@ -2483,17 +2702,14 @@ export default function Finance({ userRole }) {
                           <td style={tdStyle()}>{r.unit_description || '—'}</td>
                           <td style={tdStyle({ center: true })}>{r.unit_price != null ? `$${Number(r.unit_price).toLocaleString()}` : '—'}</td>
                           <td style={tdStyle({ center: true })}>{r.units ?? '—'}</td>
-                          <td style={{ ...tdStyle({ center: true }) }}>
-                            <select
-                              value={r.st_reagent_type || 'none'}
-                              onChange={e => handleStReagentChange(r, e.target.value)}
-                              onClick={e => e.stopPropagation()}
-                              style={{ fontSize: '11px', padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)', background: r.st_reagent_type === 'misc' ? '#EAF7F0' : r.st_reagent_type === 'nanoseq' ? '#EBF5FB' : 'var(--bg-secondary)', color: r.st_reagent_type === 'misc' ? '#27AE60' : r.st_reagent_type === 'nanoseq' ? '#2980B9' : 'var(--text-muted)', fontWeight: 600, cursor: 'pointer', outline: 'none' }}
-                            >
-                              <option value="none">None</option>
-                              <option value="misc">Misc</option>
-                              <option value="nanoseq">Nanoseq</option>
-                            </select>
+                          <td style={{ ...tdStyle({ center: true }), overflow: 'visible' }}>
+                            <StReagentCell
+                              row={r}
+                              reagentList={reagents}
+                              nanoseqList={nanoseq}
+                              onChange={handleStReagentChange}
+                              canEdit={canManage}
+                            />
                           </td>
                           {allFYs.map(fy => <td key={fy} style={tdStyle({ center: true, color: r.fyCounts[fy] ? 'var(--purple-primary)' : 'var(--text-muted)', bold: !!r.fyCounts[fy] })}>{r.fyCounts[fy] || '—'}</td>)}
                           <td style={tdStyle({ center: true, bold: true, color: 'var(--text-primary)' })}>{r.total}</td>
@@ -2775,6 +2991,31 @@ export default function Finance({ userRole }) {
                 <select value={newOrder.status} onChange={e => setNewOrder(p => ({ ...p, status: e.target.value }))} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '13px', outline: 'none' }}>
                   <option value="pending">Pending</option><option value="processing">Processing</option><option value="complete">Complete</option><option value="cancelled">Cancelled</option>
                 </select>
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Standardized Reagent</label>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
+                  {[['none', 'None'], ['misc', 'Misc'], ['nanoseq', 'Nanoseq']].map(([val, label]) => (
+                    <button key={val} type="button" onClick={() => setNewOrderStReagent(val)} style={{ padding: '6px 14px', borderRadius: 5, border: `1px solid ${newOrderStReagent === val ? 'transparent' : 'var(--border)'}`, background: newOrderStReagent === val ? (val === 'misc' ? '#27AE60' : val === 'nanoseq' ? '#2980B9' : 'var(--purple-primary)') : 'var(--bg-secondary)', color: newOrderStReagent === val ? 'white' : 'var(--text-muted)', fontWeight: 600, fontSize: '12px', cursor: 'pointer', outline: 'none' }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {(() => {
+                  if (newOrderStReagent === 'none') return null;
+                  const cat = newOrder.catalog_number.trim();
+                  if (!cat) return <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 4 }}>Enter a catalog number to check against existing standards.</div>;
+                  const catLow = cat.toLowerCase();
+                  const list = newOrderStReagent === 'misc' ? reagents : nanoseq;
+                  const field = newOrderStReagent === 'misc' ? 'catalog_number' : 'code';
+                  const exact = list.find(r => (r[field] || '').trim().toLowerCase() === catLow);
+                  if (exact) return <div style={{ fontSize: '11px', color: '#27AE60', fontWeight: 600, marginTop: 4 }}>✓ Already in standards — {exact.name || cat}. No duplicate will be created.</div>;
+                  let best = null, bestDist = Infinity;
+                  for (const r of list) { const d = levenshtein(catLow, (r[field] || '').trim().toLowerCase()); if (d < bestDist) { bestDist = d; best = r; } }
+                  const threshold = Math.min(3, Math.max(1, Math.floor(cat.length / 4)));
+                  if (best && bestDist <= threshold) return <div style={{ fontSize: '11px', color: '#B7770D', marginTop: 4 }}>⚠ Close match: <strong>{best[field]}</strong>{best.name ? ` — ${best.name}` : ''}. Will add as new standard.</div>;
+                  return <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 4 }}>Will be added as a new standard on submit.</div>;
+                })()}
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Notes</label>

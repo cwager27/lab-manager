@@ -218,8 +218,14 @@ function pickerFor(freq, value, onChange) {
 
 export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const canManage = userRole === 'admin' || userRole === 'pm' || myProfile?.can_view_task_tabs;
+  const canTabRecurrent   = canManage || !!myProfile?.can_view_recurrent_tab;
+  const canTabAdhoc       = canManage || !!myProfile?.can_view_adhoc_tab;
+  const canTabCalendar    = canManage || !!myProfile?.can_view_calendar_tab;
+  const canTabProductivity = canManage || !!myProfile?.can_view_productivity_tab;
+  const canTabAssignments = canManage || !!myProfile?.can_view_assignments_tab;
   const [tab, setTab] = useState(() => {
-    if (!canManage) return 'my-tasks';
+    const hasAnyMgmtTab = canManage || myProfile?.can_view_recurrent_tab || myProfile?.can_view_adhoc_tab || myProfile?.can_view_calendar_tab || myProfile?.can_view_productivity_tab || myProfile?.can_view_assignments_tab;
+    if (!hasAnyMgmtTab) return 'my-tasks';
     return localStorage.getItem('tasks2_tab') || 'view-all';
   });
 
@@ -4470,13 +4476,11 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
 
   const tabs = [
-    ...(canManage ? [
-      { id: 'view-all',     label: 'Recurrent Tasks' },
-      { id: 'oneoff',       label: 'Ad hoc Tasks' },
-      { id: 'calendar',     label: 'Calendar' },
-      { id: 'productivity', label: 'Productivity' },
-      { id: 'assigned',     label: 'Recurrent Task Assignments', badge: unassignedCount || null },
-    ] : []),
+    ...(canTabRecurrent    ? [{ id: 'view-all',     label: 'Recurrent Tasks' }] : []),
+    ...(canTabAdhoc        ? [{ id: 'oneoff',       label: 'Ad hoc Tasks' }] : []),
+    ...(canTabCalendar     ? [{ id: 'calendar',     label: 'Calendar' }] : []),
+    ...(canTabProductivity ? [{ id: 'productivity', label: 'Productivity' }] : []),
+    ...(canTabAssignments  ? [{ id: 'assigned',     label: 'Recurrent Task Assignments', badge: unassignedCount || null }] : []),
     { id: 'my-tasks', label: 'My Tasks', badge: null },
   ];
 

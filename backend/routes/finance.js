@@ -4,6 +4,7 @@ const { createClient } = require('@supabase/supabase-js');
 const multer = require('multer');
 const XLSX = require('xlsx');
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+const { supabaseAdmin } = require('../lib/supabaseAdmin');
 const upload = multer({ storage: multer.memoryStorage() });
 const transporter = require('../lib/mailer');
 
@@ -25,11 +26,85 @@ function excelDateToString(excelDate) {
   return null;
 }
 
-const ORDERS_HEADERS = ['Item','Vendor','Catalog Number','Category','Grant ID','Requsition ID','Unit description','Unit price','Units (n)','Total price','Date','Requestor','Status','Notes'];
+// Normalize old lowercase/abbreviated category names to current CATEGORIES values
+const CATEGORY_MAP = {
+  'lab reagents':               'General Lab Chemicals',
+  'lab supplies':               'Disposable Supplies',
+  'lab suppies':                'Disposable Supplies',   // typo in source data
+  'tc reagents':                'Tissue Culture Reagents',
+  'tc supplies':                'Tissue Culture Reagents',
+  'office supplies':            'Disposable Supplies',
+  'computer hardware':          'Subcapital',
+  'capital':                    'Capital',
+  'subcapital':                 'Subcapital',
+  'subscriptions':              'Subscriptions',
+  'meals and fun':              'Meals and fun',
+  'shipping':                   'Shipping',
+  'travel and conferences':     'Travel & Conferences',
+  'core facilities':            'Cores',
+  'co':                         'CR/CO',
+  'cr':                         'CR/CO',
+  'purchased services':         'Cores',
+  'internal purchased services':'Cores',
+};
+
+function normalizeCategory(raw) {
+  if (!raw) return raw;
+  const key = String(raw).trim().toLowerCase();
+  return CATEGORY_MAP[key] || raw;
+}
+
+// Canonical → accepted aliases (FY24/FY25 files use different column names)
+const COLUMN_ALIASES = {
+  'Item':            ['Item', 'Item Name'],
+  'Vendor':          ['Vendor'],
+  'Catalog Number':  ['Catalog Number', 'CATALOG NUMBER'],
+  'Category':        ['Category', 'Category '],
+  'Grant ID':        ['Grant ID'],
+  'Requsition ID':   ['Requsition ID', 'Requisition ID'],
+  'Unit description':['Unit description', 'UNIT DESCRIPTION (eg 100 flasks; 15 bottles of 500mL; 100 pipettes; 4 boxes of 96 tips each)'],
+  'Unit price':      ['Unit price', 'Unit Price'],
+  'Units (n)':       ['Units (n)', 'Units'],
+  'Total price':     ['Total price', 'Total Price'],
+  'Date':            ['Date', 'Month ordered'],   // Month ordered accepted as date source
+  'Requestor':       ['Requestor', 'PERSON'],
+  'Status':          ['Status'],
+  'Notes':           ['Notes'],
+};
 
 function missingColumns(fileHeaders, required) {
   const present = new Set(fileHeaders.map(h => String(h ?? '').trim()));
-  return required.filter(h => !present.has(h));
+  if (required) {
+    // Simple exact-match check for non-orders routes (reagents, nanoseq)
+    return required.filter(h => !present.has(h));
+  }
+  // Alias-aware check for orders routes
+  return Object.entries(COLUMN_ALIASES)
+    .filter(([, aliases]) => !aliases.some(a => present.has(a)))
+    .map(([canonical]) => canonical);
+}
+
+// Normalize a row so all downstream code can use canonical column names regardless of file format
+function normalizeRow(row) {
+  const g = (...keys) => { for (const k of keys) { const v = row[k]; if (v != null && v !== '') return v; } return null; };
+  // Build date: prefer explicit Date column; fall back to Month ordered + Year ordered + Date ordered
+  let date = g('Date', 'date', 'Order Date');
+  if (!date && row['Month ordered'] && row['Year ordered']) {
+    const yr = parseInt(row['Year ordered']);
+    const fullYear = yr < 100 ? 2000 + yr : yr;
+    const m = String(row['Month ordered']).padStart(2, '0');
+    const d = String(row['Date ordered'] || 1).padStart(2, '0');
+    date = `${fullYear}-${m}-${d}`;
+  }
+  return {
+    ...row,
+    'Item':            g('Item', 'Item Name'),
+    'Catalog Number':  g('Catalog Number', 'CATALOG NUMBER'),
+    'Unit description':g('Unit description', 'UNIT DESCRIPTION (eg 100 flasks; 15 bottles of 500mL; 100 pipettes; 4 boxes of 96 tips each)'),
+    'Date':            date,
+    'Requestor':       g('Requestor', 'requestor', 'PERSON'),
+    'Category':        normalizeCategory(g('Category', 'Category ')),
+  };
 }
 
 // Derive fallback date for dateless rows: FY27 → 2026-07-01
@@ -43,15 +118,16 @@ function fyFallbackDate(fiscalYear) {
 // Preview new orders from uploaded file
 router.post('/preview-orders', upload.single('file'), async (req, res) => {
   try {
+    const importFY = (req.body.fiscalYear || '').toLowerCase().trim() || null;
     const fallbackDate = fyFallbackDate(req.body.fiscalYear);
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheet = workbook.Sheets['Orders'] || workbook.Sheets[workbook.SheetNames[0]];
 
     const rawHeaders = (XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null })[0] || []).map(h => String(h ?? '').trim());
-    const missing = missingColumns(rawHeaders, ORDERS_HEADERS);
+    const missing = missingColumns(rawHeaders);
     if (missing.length > 0) return res.status(400).json({ error: `File rejected — ${missing.length} required column(s) missing. Column order does not matter.`, details: missing.map(h => `Missing: "${h}"`) });
 
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: null }).map(normalizeRow);
 
     // Build dedup set from DB — paginate to get all rows past Supabase 1000-row limit.
     // Key: req_id::catalog_number when catalog is real (stable even if item names change between exports)
@@ -78,33 +154,34 @@ router.post('/preview-orders', upload.single('file'), async (req, res) => {
 
     const newOrders = [];
     for (const row of rows) {
-      const item = String(row['Item'] || row['item'] || '').trim();
+      const item = String(row['Item'] || '').trim();
       if (!item) continue;
       const reqId = String(row['Requsition ID'] || row['Requisition ID'] || 'NA').trim();
-      const catNum = String(row['Catalog Number'] || row['Catalog #'] || row['catalog_number'] || '').trim();
+      const catNum = String(row['Catalog Number'] || '').trim();
 
       const key = makeKey(reqId, catNum, item);
       if (existingSet.has(key)) continue;
       existingSet.add(key);
 
-      const rawUnitPrice = String(row['Unit Price'] || row['Unit price'] || row['unit_price'] || '').replace(/[$,]/g, '');
-      const rawTotalPrice = String(row['Total Price'] || row['Total price'] || row['total_price'] || '').replace(/[$,]/g, '');
+      const rawUnitPrice = String(row['Unit price'] || '').replace(/[$,]/g, '');
+      const rawTotalPrice = String(row['Total price'] || '').replace(/[$,]/g, '');
 
       newOrders.push({
         item,
-        vendor: row['Vendor'] || row['vendor'] || null,
+        vendor: row['Vendor'] || null,
         catalog_number: catNum || null,
-        category: String(row['Category '] ?? row['Category'] ?? row['category'] ?? '').trim() || null,
-        grant_name: String(row['Grant ID'] ?? row['Grant Name'] ?? row['Grant'] ?? row['grant_name'] ?? '').trim() || null,
+        category: String(row['Category'] ?? '').trim() || null,
+        grant_name: String(row['Grant ID'] ?? row['Grant Name'] ?? row['Grant'] ?? '').trim() || null,
         requisition_id: reqId,
-        unit_description: String(row['Unit Description'] ?? row['Unit description'] ?? row['unit_description'] ?? '').trim() || null,
+        unit_description: String(row['Unit description'] ?? '').trim() || null,
         unit_price: parseFloat(rawUnitPrice) || null,
-        units: parseInt(row['Units (n)'] || row['Units'] || row['units']) || null,
+        units: parseInt(row['Units (n)'] || row['Units'] || '') || null,
         total_price: parseFloat(rawTotalPrice) || null,
-        order_date: excelDateToString(row['Date'] || row['Order Date'] || row['date']) || fallbackDate,
-        requestor: (row['Requestor'] || row['requestor'] || '').trim() || null,
-        status: (row['Status'] || row['status'] || 'pending').trim().toLowerCase(),
-        notes: (row['Notes'] || row['notes'] || '').trim() || null
+        order_date: excelDateToString(row['Date']) || fallbackDate,
+        requestor: (row['Requestor'] || '').trim() || 'Unknown',
+        status: (row['Status'] || 'pending').trim().toLowerCase(),
+        notes: (row['Notes'] || '').trim() || null,
+        fiscal_year: importFY,
       });
     }
 
@@ -118,33 +195,35 @@ router.post('/preview-orders', upload.single('file'), async (req, res) => {
 // Delete all orders and replace with CSV contents
 router.post('/replace-all-orders', upload.single('file'), async (req, res) => {
   try {
+    const importFY = (req.body.fiscalYear || '').toLowerCase().trim() || null;
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheet = workbook.Sheets['Orders'] || workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: null }).map(normalizeRow);
 
     const allOrders = [];
     for (const row of rows) {
-      const item = String(row['Item'] || row['item'] || '').trim();
+      const item = String(row['Item'] || '').trim();
       if (!item) continue;
       const reqId = String(row['Requsition ID'] || row['Requisition ID'] || 'NA').trim();
-      const catNum = String(row['Catalog Number'] || row['Catalog #'] || row['catalog_number'] || '').trim();
-      const rawUnitPrice = String(row['Unit Price'] || row['Unit price'] || row['unit_price'] || '').replace(/[$,]/g, '');
-      const rawTotalPrice = String(row['Total Price'] || row['Total price'] || row['total_price'] || '').replace(/[$,]/g, '');
+      const catNum = String(row['Catalog Number'] || '').trim();
+      const rawUnitPrice = String(row['Unit price'] || '').replace(/[$,]/g, '');
+      const rawTotalPrice = String(row['Total price'] || '').replace(/[$,]/g, '');
       allOrders.push({
         item,
-        vendor: row['Vendor'] || row['vendor'] || null,
+        vendor: row['Vendor'] || null,
         catalog_number: catNum || null,
-        category: String(row['Category '] ?? row['Category'] ?? row['category'] ?? '').trim() || null,
-        grant_name: String(row['Grant ID'] ?? row['Grant Name'] ?? row['Grant'] ?? row['grant_name'] ?? '').trim() || null,
+        category: String(row['Category'] ?? '').trim() || null,
+        grant_name: String(row['Grant ID'] ?? row['Grant Name'] ?? row['Grant'] ?? '').trim() || null,
         requisition_id: reqId,
-        unit_description: String(row['Unit Description'] ?? row['Unit description'] ?? row['unit_description'] ?? '').trim() || null,
+        unit_description: String(row['Unit description'] ?? '').trim() || null,
         unit_price: parseFloat(rawUnitPrice) || null,
-        units: parseInt(row['Units (n)'] || row['Units'] || row['units']) || null,
+        units: parseInt(row['Units (n)'] || row['Units'] || '') || null,
         total_price: parseFloat(rawTotalPrice) || null,
-        order_date: excelDateToString(row['Date'] || row['Order Date'] || row['date']),
-        requestor: (row['Requestor'] || row['requestor'] || '').trim() || null,
-        status: (row['Status'] || row['status'] || 'pending').trim().toLowerCase(),
-        notes: (row['Notes'] || row['notes'] || '').trim() || null,
+        order_date: excelDateToString(row['Date']),
+        requestor: (row['Requestor'] || '').trim() || 'Unknown',
+        status: (row['Status'] || 'pending').trim().toLowerCase(),
+        notes: (row['Notes'] || '').trim() || null,
+        fiscal_year: importFY,
       });
     }
 
@@ -152,10 +231,14 @@ router.post('/replace-all-orders', upload.single('file'), async (req, res) => {
     const { error: deleteError } = await supabase.from('orders').delete().not('id', 'is', null);
     if (deleteError) return res.status(500).json({ error: deleteError.message });
 
+    const { error: colCheck } = await supabase.from('orders').select('fiscal_year').limit(0);
+    const hasFYCol = !colCheck;
+
     // Insert all rows from CSV
     let imported = 0;
     for (const order of allOrders) {
-      const { error } = await supabase.from('orders').insert(order);
+      const payload = hasFYCol ? order : (({ fiscal_year, ...rest }) => rest)(order);
+      const { error } = await supabase.from('orders').insert(payload);
       if (error) console.error('Replace insert error:', error.message, order.item);
       else imported++;
     }
@@ -167,13 +250,74 @@ router.post('/replace-all-orders', upload.single('file'), async (req, res) => {
   }
 });
 
+// Delete all orders from FY23 (order_date before Sep 1 2023)
+router.post('/admin/delete-fy23', async (req, res) => {
+  try {
+    console.log('[delete-fy23] starting');
+    const { data, error } = await supabaseAdmin
+      .from('orders')
+      .delete()
+      .lt('order_date', '2023-09-01')
+      .select('id');
+    if (error) {
+      console.error('[delete-fy23] error:', error.message);
+      return res.status(500).json({ error: error.message });
+    }
+    console.log('[delete-fy23] deleted', data?.length ?? 0, 'rows');
+    res.json({ success: true, deleted: data?.length ?? 0 });
+  } catch (error) {
+    console.error('[delete-fy23] caught:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Normalize old category names on all existing orders in the DB
+router.post('/admin/normalize-categories', async (req, res) => {
+  try {
+    console.log('[normalize-categories] starting');
+    let updated = 0;
+    let skipped = 0;
+    const PAGE = 1000;
+    let from = 0;
+    while (true) {
+      const { data: rows, error } = await supabaseAdmin
+        .from('orders').select('id, category').range(from, from + PAGE - 1);
+      if (error) return res.status(500).json({ error: error.message });
+      if (!rows?.length) break;
+      for (const row of rows) {
+        const normalized = normalizeCategory(row.category);
+        if (normalized !== row.category) {
+          const { error: upErr } = await supabaseAdmin
+            .from('orders').update({ category: normalized }).eq('id', row.id);
+          if (upErr) console.error('[normalize-categories] update error', row.id, upErr.message);
+          else updated++;
+        } else {
+          skipped++;
+        }
+      }
+      if (rows.length < PAGE) break;
+      from += PAGE;
+    }
+    console.log('[normalize-categories] done — updated:', updated, 'unchanged:', skipped);
+    res.json({ success: true, updated, skipped });
+  } catch (error) {
+    console.error('[normalize-categories] caught:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Import confirmed orders
 router.post('/import-orders', async (req, res) => {
   const { orders } = req.body;
   try {
+    // Check once whether the fiscal_year column exists
+    const { error: colCheck } = await supabase.from('orders').select('fiscal_year').limit(0);
+    const hasFYCol = !colCheck;
+
     let imported = 0;
     for (const order of orders) {
-      const { error } = await supabase.from('orders').insert(order);
+      const payload = hasFYCol ? order : (({ fiscal_year, ...rest }) => rest)(order);
+      const { error } = await supabase.from('orders').insert(payload);
       if (error) console.error('Order insert error:', error.message, order.item);
       else imported++;
     }
