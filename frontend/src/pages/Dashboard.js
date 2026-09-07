@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle, DollarSign, UserX, BarChart2, Crown, User } from 'lucide-react';
+import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle, BarChart2, Crown, User, Layers } from 'lucide-react';
 
 
 function ExpandableText({ text, color, fontWeight, isOverdue }) {
@@ -701,51 +701,39 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
               <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
 
                 {/* Grants */}
-                <div style={{ flex: '3 1 0', minWidth: 0 }}>
+                <div style={{ flex: '1 1 0', minWidth: 0 }}>
                   <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-                    <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 7 }}>
-                      <DollarSign size={13} color="#1A7F4B" />
-                      <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Grants</span>
+                    <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Layers size={15} color="#1A7F4B" />
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>Grants</span>
+                      <button onClick={() => setCurrentPage('finance')} style={{ fontSize: 11, color: '#1A7F4B', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>View all →</button>
                     </div>
                     {grants.length === 0 ? (
                       <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No grants on file.</p>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        {/* Header row */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 90px 100px', gap: 8, padding: '6px 14px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
-                          {['Grant', 'Balance', 'Remaining', 'Expires'].map(h => (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 80px 90px', gap: 8, padding: '6px 14px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                          {['Grant', 'Balance', 'Spenddown', 'Expires'].map(h => (
                             <span key={h} style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</span>
                           ))}
                         </div>
                         {grants.map((g, i) => {
                           const pct = g.total_amount && g.remaining_balance != null ? (g.remaining_balance / g.total_amount) * 100 : null;
+                          const spendPct = pct !== null ? Math.max(0, Math.round(100 - pct)) : null;
                           const daysLeft = g.end_date ? Math.ceil((new Date(g.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null;
                           const lowBalance = pct !== null && pct < 25;
                           const urgent = daysLeft !== null && daysLeft <= 14;
                           const expiringSoon = daysLeft !== null && daysLeft <= 90;
                           const rowAlert = lowBalance || urgent;
                           return (
-                            <div key={g.id} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 90px 100px', gap: 8, padding: '9px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: rowAlert ? '#FEF5F5' : undefined, alignItems: 'center' }}>
+                            <div key={g.id} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 80px 90px', gap: 8, padding: '9px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none', background: rowAlert ? '#FEF5F5' : undefined, alignItems: 'center' }}>
                               <span style={{ fontSize: 13, fontWeight: 600, color: rowAlert ? '#E74C3C' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.name}</span>
-                              <div>
-                                {pct !== null ? (
-                                  <>
-                                    <div style={{ height: 6, borderRadius: 3, background: '#E5E5EA', overflow: 'hidden', marginBottom: 3 }}>
-                                      <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: pct < 10 ? '#E74C3C' : pct < 25 ? '#F39C12' : '#27AE60', borderRadius: 3, transition: 'width 0.3s ease' }} />
-                                    </div>
-                                    <span style={{ fontSize: 11, color: lowBalance ? '#E74C3C' : 'var(--text-muted)' }}>
-                                      ${g.remaining_balance?.toLocaleString()} / ${g.total_amount?.toLocaleString()}
-                                    </span>
-                                  </>
-                                ) : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>}
-                              </div>
-                              <div>
-                                {pct !== null ? (
-                                  <span style={{ padding: '2px 7px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: lowBalance ? '#FDEDEC' : '#EAF7F0', color: lowBalance ? '#E74C3C' : '#27AE60' }}>
-                                    {pct.toFixed(0)}%
-                                  </span>
-                                ) : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>}
-                              </div>
+                              <span style={{ fontSize: 12, color: lowBalance ? '#E74C3C' : 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {pct !== null ? `$${g.remaining_balance?.toLocaleString()} / $${g.total_amount?.toLocaleString()}` : '—'}
+                              </span>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: spendPct === null ? 'var(--text-muted)' : spendPct > 75 ? '#E74C3C' : spendPct > 50 ? '#F39C12' : '#1A7F4B' }}>
+                                {spendPct !== null ? `${spendPct}%` : '—'}
+                              </span>
                               <div>
                                 {daysLeft !== null ? (
                                   <span style={{ padding: '2px 7px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: urgent ? '#FDEDEC' : expiringSoon ? '#FEF9E7' : 'var(--bg-secondary)', color: urgent ? '#E74C3C' : expiringSoon ? '#F39C12' : 'var(--text-muted)' }}>
@@ -756,24 +744,24 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                             </div>
                           );
                         })}
+                        <div style={{ padding: '10px 14px', textAlign: 'center', borderTop: '1px solid var(--border)' }}>
+                          <button onClick={() => setCurrentPage('finance')} style={{ fontSize: 12, fontWeight: 600, color: '#1A7F4B', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>View all grants →</button>
+                        </div>
                       </div>
                     )}
                   </div>
                 </div>
 
                 {/* Unassigned tasks */}
-                <div style={{ flex: '2 1 0', minWidth: 0 }}>
+                <div style={{ flex: '1 1 0', minWidth: 0 }}>
                   <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-                    <button
-                      onClick={() => { localStorage.setItem('tasks2_tab', 'assigned'); setCurrentPage('tasks2'); }}
-                      style={{ width: '100%', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 7, background: 'none', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer', textAlign: 'left' }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                    >
-                      <UserX size={13} color="#E74C3C" />
+                    <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 22, height: 22, borderRadius: 6, background: 'var(--purple-faint)', border: '1px solid var(--purple-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <ClipboardList size={13} color="var(--purple-primary)" />
+                      </div>
                       <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>Unassigned tasks</span>
-                      <span style={{ fontSize: 11, color: 'var(--purple-primary)', fontWeight: 600 }}>View →</span>
-                    </button>
+                      <button onClick={() => { localStorage.setItem('tasks2_tab', 'assigned'); setCurrentPage('tasks2'); }} style={{ fontSize: 11, color: 'var(--purple-primary)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>View all →</button>
+                    </div>
                     {/* Stat pills */}
                     <div style={{ display: 'flex', gap: 10, padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
                       <div style={{ flex: 1, background: unassigned7.length > 0 ? '#FDEDEC' : '#EAF7F0', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
@@ -785,12 +773,11 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                         <div style={{ fontSize: 11, fontWeight: 600, color: unassigned30.length > 0 ? '#F39C12' : '#27AE60', marginTop: 2 }}>Next 30 days</div>
                       </div>
                     </div>
-                    {/* Next 7 days task list */}
+                    {/* Task list */}
                     {unassigned7.length === 0 ? (
                       <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No unassigned tasks in next 7 days.</p>
                     ) : (
-                      <>
-                        <div style={{ position: 'relative' }}>
+                      <div style={{ position: 'relative' }}>
                         <div style={{ maxHeight: 280, overflowY: 'auto' }}>
                           {unassigned7.map((t, i) => {
                             const overdue = t.due_date && t.due_date < today;
@@ -798,38 +785,21 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                             const isExpanded = expandedUnassignedId === t.id;
                             const activeMembers = teamMembers.filter(m => m.lab_status !== 'alumni');
                             return (
-                              <div key={t.id} style={{ borderTop: i > 0 ? '1px solid var(--border)' : '1px solid var(--border)', background: overdue ? '#FEF5F5' : undefined }}>
+                              <div key={t.id} style={{ borderTop: '1px solid var(--border)', background: overdue ? '#FEF5F5' : undefined }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px' }}>
-                                  <button
-                                    onClick={() => setExpandedUnassignedId(isExpanded ? null : t.id)}
-                                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', flex: 1, minWidth: 0, textAlign: 'left' }}
-                                    title="Click to view full task"
-                                  >
+                                  <button onClick={() => setExpandedUnassignedId(isExpanded ? null : t.id)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', flex: 1, minWidth: 0, textAlign: 'left' }} title="Click to view full task">
                                     <span style={{ fontSize: 13, color: overdue ? '#C0392B' : 'var(--text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
                                       {(() => { const title = t.task_def?.title || '(no title)'; return title.length > 38 ? title.slice(0, 38) + '…' : title; })()}
                                     </span>
                                   </button>
-                                  <select
-                                    defaultValue=""
-                                    onChange={async e => {
-                                      if (!e.target.value) return;
-                                      await supabase.from('task_occurrences').update({ assigned_to: e.target.value, status: 'assigned' }).eq('id', t.id);
-                                      setUnassignedTasks(prev => prev.filter(x => x.id !== t.id));
-                                      if (expandedUnassignedId === t.id) setExpandedUnassignedId(null);
-                                    }}
-                                    style={{ fontSize: 11, border: '1px solid var(--border)', borderRadius: 6, padding: '3px 4px', color: 'var(--text-secondary)', background: 'var(--bg-primary)', flexShrink: 0, maxWidth: 110, cursor: 'pointer' }}
-                                  >
+                                  <select defaultValue="" onChange={async e => { if (!e.target.value) return; await supabase.from('task_occurrences').update({ assigned_to: e.target.value, status: 'assigned' }).eq('id', t.id); setUnassignedTasks(prev => prev.filter(x => x.id !== t.id)); if (expandedUnassignedId === t.id) setExpandedUnassignedId(null); }} style={{ fontSize: 11, border: '1px solid var(--border)', borderRadius: 6, padding: '3px 4px', color: 'var(--text-secondary)', background: 'var(--bg-primary)', flexShrink: 0, maxWidth: 110, cursor: 'pointer' }}>
                                     <option value="">Assign…</option>
-                                    {activeMembers.map(m => (
-                                      <option key={m.id} value={m.id}>{m.full_name.split(' ')[0]}</option>
-                                    ))}
+                                    {activeMembers.map(m => <option key={m.id} value={m.id}>{m.full_name.split(' ')[0]}</option>)}
                                   </select>
                                   {t.due_date && (
                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0 }}>
                                       <span style={{ fontSize: 11, color: overdue ? '#E74C3C' : 'var(--text-muted)', whiteSpace: 'nowrap', fontWeight: overdue ? 600 : 400 }}>{formatDate(t.due_date)}</span>
-                                      {overdue && daysOverdue > 0 && (
-                                        <span style={{ fontSize: 10, color: '#C0392B', whiteSpace: 'nowrap' }}>{daysOverdue === 1 ? '1d overdue' : `${daysOverdue}d overdue`}</span>
-                                      )}
+                                      {overdue && daysOverdue > 0 && <span style={{ fontSize: 10, color: '#C0392B', whiteSpace: 'nowrap' }}>{daysOverdue === 1 ? '1d overdue' : `${daysOverdue}d overdue`}</span>}
                                     </div>
                                   )}
                                 </div>
@@ -849,56 +819,37 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                           })}
                         </div>
                         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none' }} />
-                        </div>
-                      </>
+                      </div>
                     )}
+                    <div style={{ padding: '10px 14px', textAlign: 'center', borderTop: '1px solid var(--border)' }}>
+                      <button onClick={() => { localStorage.setItem('tasks2_tab', 'assigned'); setCurrentPage('tasks2'); }} style={{ fontSize: 12, fontWeight: 600, color: 'var(--purple-primary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>View all tasks →</button>
+                    </div>
                   </div>
                 </div>
 
                 {/* Pending time off approvals */}
-                <div style={{ flex: '2 1 0', minWidth: 0, alignSelf: 'stretch', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', maxHeight: '100%' }}>
-                    <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                        <Palmtree size={13} color="#F39C12" />
-                        <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Time off approvals</span>
-                        {pendingVacations.length > 0 && (
-                          <span style={{ fontSize: 11, fontWeight: 700, background: '#FEF9E7', color: '#B7950B', border: '1px solid #F9E79F', borderRadius: 10, padding: '1px 7px' }}>{pendingVacations.length}</span>
-                        )}
-                      </div>
-                      <button onClick={() => setCurrentPage('vacation')} style={{ fontSize: 11, color: 'var(--purple-primary)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>View all →</button>
+                <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                  <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                    <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Star size={15} color="#F59E0B" />
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>Time off approvals</span>
+                      {pendingVacations.length > 0 && (
+                        <span style={{ fontSize: 11, fontWeight: 700, background: '#FEF9E7', color: '#B7950B', border: '1px solid #F9E79F', borderRadius: 10, padding: '1px 7px' }}>{pendingVacations.length}</span>
+                      )}
+                      <button onClick={() => setCurrentPage('vacation')} style={{ fontSize: 11, color: 'var(--purple-primary)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 0 8px', whiteSpace: 'nowrap' }}>View all →</button>
                     </div>
                     {pendingVacations.length === 0 ? (
                       <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No pending requests.</p>
                     ) : (
-                      <div style={{ position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-                        <div style={{ overflowY: 'auto', maxHeight: '100%' }}>
-                          {pendingVacations.map((r, i) => (
-                            <div key={r.id} style={{ padding: '9px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
-                                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{r.requester?.full_name || 'Unknown'}</span>
-                                <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                                  {formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}
-                                </span>
-                              </div>
-                              <div style={{ display: 'flex', gap: 6 }}>
-                                <button
-                                  onClick={() => handleVacationAction(r.id, 'approved')}
-                                  disabled={vacActioning === r.id}
-                                  style={{ flex: 1, padding: '4px 0', fontSize: 11, fontWeight: 600, background: '#EAF7F0', color: '#1A7F4B', border: '1px solid #A9DFC3', borderRadius: 6, cursor: 'pointer', opacity: vacActioning === r.id ? 0.5 : 1 }}>
-                                  Approve
-                                </button>
-                                <button
-                                  onClick={() => handleVacationAction(r.id, 'denied')}
-                                  disabled={vacActioning === r.id}
-                                  style={{ flex: 1, padding: '4px 0', fontSize: 11, fontWeight: 600, background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', opacity: vacActioning === r.id ? 0.5 : 1 }}>
-                                  Deny
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none' }} />
+                      <div>
+                        {pendingVacations.map((r, i) => (
+                          <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.requester?.full_name || 'Unknown'}</span>
+                            <button onClick={() => handleVacationAction(r.id, 'approved')} disabled={vacActioning === r.id} style={{ padding: '4px 12px', fontSize: 11, fontWeight: 600, background: '#EAF7F0', color: '#1A7F4B', border: '1.5px solid #A9DFC3', borderRadius: 6, cursor: 'pointer', opacity: vacActioning === r.id ? 0.5 : 1, whiteSpace: 'nowrap', flexShrink: 0 }}>Approve</button>
+                            <button onClick={() => handleVacationAction(r.id, 'denied')} disabled={vacActioning === r.id} style={{ padding: '4px 12px', fontSize: 11, fontWeight: 600, background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', opacity: vacActioning === r.id ? 0.5 : 1, whiteSpace: 'nowrap', flexShrink: 0 }}>Deny</button>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}</span>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
