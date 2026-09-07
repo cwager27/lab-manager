@@ -5,7 +5,11 @@ import Navigation from './components/Navigation';
 import Login from './pages/Login';
 import SetNewPassword from './pages/SetNewPassword';
 import Onboarding from './pages/Onboarding';
-import { Search, Bell } from 'lucide-react';
+import {
+  Search, Bell,
+  LayoutDashboard, ClipboardList, Palmtree, Calendar,
+  FlaskConical, ShieldCheck, BookOpen, DollarSign, Scale, Terminal, Users,
+} from 'lucide-react';
 
 const Dashboard         = lazy(() => import('./pages/Dashboard'));
 const Tasks2            = lazy(() => import('./pages/Tasks2'));
@@ -38,7 +42,12 @@ export default function App() {
   // Always start loading so we never flash Login before the auth state is known
   const [loading, setLoading] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showBell, setShowBell] = useState(false);
   const errorTimeoutRef = useRef(null);
+  const bellRef = useRef(null);
+  const searchInputRef = useRef(null);
   // Track recovery mode in a ref so the onAuthStateChange closure always has the latest value
   const inRecoveryRef = useRef(isRecoveryUrl);
 
@@ -138,6 +147,27 @@ export default function App() {
     setProfile(null);
   }
 
+  useEffect(() => {
+    if (showSearch) setTimeout(() => searchInputRef.current?.focus(), 50);
+  }, [showSearch]);
+
+  useEffect(() => {
+    function handleKey(e) {
+      if (e.key === 'Escape') { setShowSearch(false); setSearchQuery(''); setShowBell(false); }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setShowSearch(v => !v); setSearchQuery(''); }
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, []);
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (bellRef.current && !bellRef.current.contains(e.target)) setShowBell(false);
+    }
+    if (showBell) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showBell]);
+
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-secondary)' }}>
@@ -189,6 +219,29 @@ export default function App() {
   const avatarInitials = (profile?.full_name || '?')
     .split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
 
+  const ALL_PAGES = [
+    { id: 'dashboard',  label: 'Dashboard',          icon: LayoutDashboard },
+    { id: 'tasks2',     label: 'Tasks',               icon: ClipboardList },
+    { id: 'vacation',   label: 'Time Off',            icon: Palmtree },
+    { id: 'meetings',   label: 'Team Meetings',       icon: Calendar },
+    { id: 'inventory',  label: 'Sample Inventory',    icon: FlaskConical },
+    { id: 'compliance', label: 'Compliance',          icon: ShieldCheck },
+    { id: 'policies',   label: 'Lab Policies & SOPs', icon: BookOpen },
+    { id: 'finance',    label: 'Finance',             icon: DollarSign, requiresFinance: true },
+    { id: 'legal',      label: 'Legal Documents',     icon: Scale, managerOnly: true },
+    { id: 'tips',       label: 'Computational Tips',  icon: Terminal },
+    { id: 'contacts',   label: 'Contacts',            icon: Users, contactsOnly: true },
+  ].filter(p =>
+    (!p.managerOnly && !p.contactsOnly && !p.requiresFinance) ||
+    (p.managerOnly && canManage) ||
+    (p.requiresFinance && permissions.can_view_finance) ||
+    (p.contactsOnly && (permissions.can_view_contacts || canManage))
+  );
+
+  const searchResults = searchQuery.trim()
+    ? ALL_PAGES.filter(p => p.label.toLowerCase().includes(searchQuery.toLowerCase()))
+    : ALL_PAGES;
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-secondary)' }}>
       <Navigation
@@ -202,6 +255,59 @@ export default function App() {
         collapsed={navCollapsed}
         onToggleCollapse={() => setNavCollapsed(v => { const next = !v; try { localStorage.setItem('nav_collapsed', next); } catch {} return next; })}
       />
+
+      {/* Search overlay */}
+      {showSearch && (
+        <div
+          onClick={() => { setShowSearch(false); setSearchQuery(''); }}
+          style={{ position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(0,0,0,0.35)', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 130 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: 'var(--bg-primary)', borderRadius: 14, width: 480, boxShadow: '0 12px 40px rgba(0,0,0,0.22)', overflow: 'hidden', animation: 'fadeIn 0.12s ease' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
+              <Search size={16} color="var(--text-muted)" />
+              <input
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search pages…"
+                style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, color: 'var(--text-primary)', background: 'transparent' }}
+              />
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border)', fontFamily: 'monospace' }}>esc</span>
+            </div>
+            <div style={{ maxHeight: 320, overflowY: 'auto', padding: '6px 0' }}>
+              {searchResults.length === 0 ? (
+                <p style={{ padding: '12px 18px', fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>No pages found.</p>
+              ) : searchResults.map(p => {
+                const Icon = p.icon;
+                const active = currentPage === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => { setCurrentPage(p.id); setShowSearch(false); setSearchQuery(''); }}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', border: 'none', background: active ? 'var(--purple-faint)' : 'transparent', cursor: 'pointer', textAlign: 'left' }}
+                    onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--bg-secondary)'; }}
+                    onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <div style={{ width: 30, height: 30, borderRadius: 8, background: active ? 'var(--purple-primary)' : 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Icon size={15} color={active ? 'white' : 'var(--text-muted)'} />
+                    </div>
+                    <span style={{ fontSize: 14, fontWeight: active ? 600 : 400, color: active ? 'var(--purple-primary)' : 'var(--text-primary)' }}>{p.label}</span>
+                    {active && <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--purple-primary)', fontWeight: 600 }}>Current</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ padding: '8px 18px', borderTop: '1px solid var(--border)', display: 'flex', gap: 16 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>↑↓ navigate</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>↵ open</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>esc close</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Top header bar */}
       <header style={{
@@ -218,21 +324,39 @@ export default function App() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <button
-            title="Search"
-            style={{ width: 36, height: 36, borderRadius: 8, border: 'none', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            title="Search (⌘K)"
+            onClick={() => { setShowSearch(v => !v); setSearchQuery(''); }}
+            style={{ width: 36, height: 36, borderRadius: 8, border: 'none', background: showSearch ? 'var(--purple-faint)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: showSearch ? 'var(--purple-primary)' : 'var(--text-muted)' }}
+            onMouseEnter={e => { if (!showSearch) e.currentTarget.style.background = 'var(--bg-secondary)'; }}
+            onMouseLeave={e => { if (!showSearch) e.currentTarget.style.background = 'transparent'; }}
           >
             <Search size={17} />
           </button>
-          <button
-            title="Notifications"
-            style={{ width: 36, height: 36, borderRadius: 8, border: 'none', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-          >
-            <Bell size={17} />
-          </button>
+
+          {/* Bell with dropdown */}
+          <div ref={bellRef} style={{ position: 'relative' }}>
+            <button
+              title="Notifications"
+              onClick={() => setShowBell(v => !v)}
+              style={{ width: 36, height: 36, borderRadius: 8, border: 'none', background: showBell ? 'var(--purple-faint)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: showBell ? 'var(--purple-primary)' : 'var(--text-muted)' }}
+              onMouseEnter={e => { if (!showBell) e.currentTarget.style.background = 'var(--bg-secondary)'; }}
+              onMouseLeave={e => { if (!showBell) e.currentTarget.style.background = 'transparent'; }}
+            >
+              <Bell size={17} />
+            </button>
+            {showBell && (
+              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 280, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 12, boxShadow: 'var(--shadow-lg)', zIndex: 200, overflow: 'hidden' }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Notifications</span>
+                </div>
+                <div style={{ padding: '28px 16px', textAlign: 'center' }}>
+                  <Bell size={28} color="var(--border)" style={{ marginBottom: 10 }} />
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>No new notifications</p>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--purple-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, flexShrink: 0 }}>
             <span style={{ color: 'white', fontSize: 12, fontWeight: 700, lineHeight: 1, letterSpacing: '0.02em' }}>{avatarInitials}</span>
           </div>

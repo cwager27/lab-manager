@@ -4,13 +4,6 @@ import {
   LayoutDashboard, LogOut, DollarSign, BookOpen, Terminal, Scale,
 } from 'lucide-react';
 
-const ROLE_LABELS = {
-  admin: 'Supervisor',
-  pm: 'Program Manager',
-  member: 'Lab Member',
-  intern: 'Intern'
-};
-
 export default function Navigation({ currentPage, setCurrentPage, userRole, profile, onLogout, canManage, permissions, collapsed, onToggleCollapse }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, always: true },
@@ -114,28 +107,18 @@ export default function Navigation({ currentPage, setCurrentPage, userRole, prof
         })}
       </div>
 
-      {/* Footer */}
+      {/* Footer — logout only; name/role shown in header avatar */}
       <div style={{
-        padding: collapsed ? '16px 0' : '16px 20px',
+        padding: '12px 0',
         borderTop: '1px solid var(--border)',
         display: 'flex', alignItems: 'center',
-        justifyContent: collapsed ? 'center' : 'space-between',
-        gap: 8, flexShrink: 0,
+        justifyContent: 'center',
+        flexShrink: 0,
       }}>
-        {!collapsed && (
-          <div style={{ overflow: 'hidden' }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {profile?.full_name || profile?.email || 'Lab Member'}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--purple-primary)', fontWeight: 500 }}>
-              {ROLE_LABELS[userRole] || 'Lab Member'}
-            </div>
-          </div>
-        )}
         <button
           onClick={onLogout}
           title="Sign out"
-          style={{ background: 'none', border: 'none', color: 'var(--text-muted)', padding: 6, borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', flexShrink: 0, cursor: 'pointer' }}
+          style={{ background: 'none', border: 'none', color: 'var(--text-muted)', padding: 8, borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
           onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
           onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
         >
