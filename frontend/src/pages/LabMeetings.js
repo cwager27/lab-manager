@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { fmtName, sortByLast } from '../lib/nameUtils';
-import { Plus, X, Star, AlertTriangle, CheckCircle, ExternalLink, Pencil } from 'lucide-react';
+import { Plus, X, Star, AlertTriangle, CheckCircle, ExternalLink, Pencil, Calendar, Users } from 'lucide-react';
 
 const ZOOM_KEY_OPTIONS = ['Meeting ID', 'Passcode', 'Webinar ID', 'Other'];
 const ZOOM_SHORT = { 'Meeting ID': 'ID', 'Passcode': 'PW', 'Webinar ID': 'WID' };
@@ -736,9 +736,14 @@ export default function LabMeetings({ userRole, userId, profile }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '10px' }}>
           <div>
-            <h2 style={{ fontSize: '21px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
-              {isLab ? 'Lab Meetings' : 'Ad-hoc Meetings'}
-            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: isLab ? 8 : 0 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 9, background: isLab ? 'var(--purple-primary)' : '#3B5BDB', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {isLab ? <Users size={16} color="white" /> : <Calendar size={16} color="white" />}
+              </div>
+              <h2 style={{ fontSize: '19px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+                {isLab ? 'Lab Meetings' : 'Ad-hoc Meetings'}
+              </h2>
+            </div>
             {isLab && (
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', background: '#EBEBEB', padding: '2px 10px', borderRadius: '8px' }}>{seriesInfo.time}</span>

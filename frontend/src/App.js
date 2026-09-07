@@ -5,6 +5,7 @@ import Navigation from './components/Navigation';
 import Login from './pages/Login';
 import SetNewPassword from './pages/SetNewPassword';
 import Onboarding from './pages/Onboarding';
+import { Search, Bell } from 'lucide-react';
 
 const Dashboard         = lazy(() => import('./pages/Dashboard'));
 const Tasks2            = lazy(() => import('./pages/Tasks2'));
@@ -185,6 +186,9 @@ export default function App() {
     can_view_task_tabs: profile?.can_view_task_tabs,
   };
 
+  const avatarInitials = (profile?.full_name || '?')
+    .split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-secondary)' }}>
       <Navigation
@@ -198,7 +202,44 @@ export default function App() {
         collapsed={navCollapsed}
         onToggleCollapse={() => setNavCollapsed(v => { const next = !v; try { localStorage.setItem('nav_collapsed', next); } catch {} return next; })}
       />
-      <main style={{ marginLeft: navCollapsed ? '64px' : '240px', flex: 1, padding: '32px', maxWidth: `calc(100vw - ${navCollapsed ? '64px' : '240px'})`, transition: 'margin-left 0.2s ease, max-width 0.2s ease' }}>
+
+      {/* Top header bar */}
+      <header style={{
+        position: 'fixed', top: 0,
+        left: navCollapsed ? '64px' : '240px',
+        right: 0, height: 56,
+        background: 'var(--bg-primary)',
+        borderBottom: '1px solid var(--border)',
+        display: 'flex', alignItems: 'center',
+        justifyContent: 'flex-end',
+        padding: '0 32px', zIndex: 90,
+        boxShadow: 'var(--shadow-sm)',
+        transition: 'left 0.2s ease',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button
+            title="Search"
+            style={{ width: 36, height: 36, borderRadius: 8, border: 'none', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            <Search size={17} />
+          </button>
+          <button
+            title="Notifications"
+            style={{ width: 36, height: 36, borderRadius: 8, border: 'none', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            <Bell size={17} />
+          </button>
+          <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--purple-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, flexShrink: 0 }}>
+            <span style={{ color: 'white', fontSize: 12, fontWeight: 700, lineHeight: 1, letterSpacing: '0.02em' }}>{avatarInitials}</span>
+          </div>
+        </div>
+      </header>
+
+      <main style={{ marginLeft: navCollapsed ? '64px' : '240px', flex: 1, padding: '32px', paddingTop: 'calc(56px + 28px)', maxWidth: `calc(100vw - ${navCollapsed ? '64px' : '240px'})`, transition: 'margin-left 0.2s ease, max-width 0.2s ease' }}>
         <Suspense fallback={<PageLoader />}>
         {currentPage === 'dashboard' && <Dashboard profile={profile} userRole={userRole} userId={user.id} setCurrentPage={setCurrentPage} />}
         {currentPage === 'tasks2' && <Tasks2 userRole={userRole} userId={user.id} profile={profile} />}

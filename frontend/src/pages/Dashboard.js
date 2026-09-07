@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle, DollarSign, UserX } from 'lucide-react';
+import { Calendar, Palmtree, Star, ClipboardList, AlertTriangle, DollarSign, UserX, BarChart2, Crown, User } from 'lucide-react';
 
 
 function ExpandableText({ text, color, fontWeight, isOverdue }) {
@@ -401,10 +401,13 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
 
   return (
     <div>
-      <div style={{ marginBottom: '20px' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>
-          Welcome back, {profile?.full_name?.split(' ')[0] || 'there'}
+      <div style={{ marginBottom: '24px' }}>
+        <h1 style={{ fontSize: '26px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          Welcome back, {profile?.full_name?.split(' ')[0] || 'there'} 💜
         </h1>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: '5px 0 0' }}>
+          Here's what's happening in your lab today.
+        </p>
       </div>
 
       {loading ? (
@@ -413,8 +416,13 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', animation: 'fadeIn 0.25s ease both' }}>
 
           {/* ══ LAB DASHBOARD ══ */}
-          {showLabDash && <div style={{ background: '#F0F4FF', border: '1px solid #D8E0F5', borderRadius: '16px', padding: '20px' }}>
-            <h2 style={{ fontSize: '26px', fontWeight: 800, color: '#3B5BDB', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: '10px', borderLeft: '3px solid #3B5BDB', lineHeight: 1.2, margin: '0 0 16px' }}>Lab Dashboard</h2>
+          {showLabDash && <div style={{ background: 'var(--purple-faint)', border: '1px solid var(--purple-border)', borderRadius: '16px', padding: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--purple-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <BarChart2 size={18} color="white" />
+              </div>
+              <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--purple-primary)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>Lab Dashboard</h2>
+            </div>
             <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
 
               {/* Col 1 — Recurrent lab task productivity */}
@@ -683,8 +691,13 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
 
           {/* ══ LEADERSHIP DASHBOARD ══ */}
           {showLeadershipDash && (
-            <div style={{ background: '#F5FFF8', border: '1px solid #C8EDD8', borderRadius: '16px', padding: '20px' }}>
-              <h2 style={{ fontSize: '26px', fontWeight: 800, color: '#1A7F4B', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: '10px', borderLeft: '3px solid #1A7F4B', lineHeight: 1.2, margin: '0 0 16px' }}>Leadership Dashboard</h2>
+            <div style={{ background: '#F2FBF6', border: '1px solid #C8EDD8', borderRadius: '16px', padding: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: '#1A7F4B', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Crown size={18} color="white" />
+                </div>
+                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#1A7F4B', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>Leadership Dashboard</h2>
+              </div>
               <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
 
                 {/* Grants */}
@@ -896,8 +909,13 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
           )}
 
           {/* ══ PERSONAL DASHBOARD ══ */}
-          {showPersonalDash && <div style={{ background: '#FBF8FF', border: '1px solid #E4D9F5', borderRadius: '16px', padding: '20px' }}>
-            <h2 style={{ fontSize: '26px', fontWeight: 800, color: '#7B3FA0', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: '10px', borderLeft: '3px solid #7B3FA0', lineHeight: 1.2, margin: '0 0 16px' }}>Personal Dashboard</h2>
+          {showPersonalDash && <div style={{ background: '#FBF8FF', border: '1px solid var(--purple-border)', borderRadius: '16px', padding: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--purple-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <User size={18} color="white" />
+              </div>
+              <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--purple-primary)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>Personal Dashboard</h2>
+            </div>
 
             {/* Grant Alerts — full width above columns */}
             {showGrantAlert && alertGrants.length > 0 && (

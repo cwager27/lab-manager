@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useResizableColumns, ColResizer } from '../lib/useResizableColumns';
 import { supabase } from '../lib/supabase';
-import { AlertTriangle, Upload, Plus, Search, CheckCircle, Download } from 'lucide-react';
+import { AlertTriangle, Upload, Plus, Search, CheckCircle, Download, BarChart2, FileText } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Vendors from './Vendors';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
@@ -2518,8 +2518,13 @@ async function commitOrderSelectEdit(id, col, value) {
               {/* Vendor spending chart */}
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '20px 24px' }}>
                 <div style={{ marginBottom: '16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                    <h3 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Spending by Vendor</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--purple-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <BarChart2 size={15} color="white" />
+                      </div>
+                      <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--purple-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Spending by Vendor</h3>
+                    </div>
                     <button onClick={handleExportVendorChart} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
                   </div>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -2668,9 +2673,14 @@ async function commitOrderSelectEdit(id, col, value) {
               {/* Catalog table */}
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '20px 24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                  <h3 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Orders by Catalog Number <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>({sortedCatalogRows.length} unique)</span>
-                  </h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--purple-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <FileText size={15} color="white" />
+                    </div>
+                    <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--purple-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      Orders by Catalog Number <span style={{ fontWeight: 500, color: 'var(--text-muted)', fontSize: 13, textTransform: 'none', letterSpacing: 0 }}>({sortedCatalogRows.length} unique)</span>
+                    </h3>
+                  </div>
                   <button onClick={handleExportCatalog} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
