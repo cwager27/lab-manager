@@ -177,7 +177,6 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
   const [vacActioning, setVacActioning] = useState(null);
   const [loading, setLoading] = useState(true);
   const [overlapWarning, setOverlapWarning] = useState(null);
-  const [expandedUnassignedId, setExpandedUnassignedId] = useState(null);
 
   // Productivity state
   const [recurPeriod, setRecurPeriod] = useState('30d');
@@ -782,17 +781,14 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                           {unassigned7.map((t, i) => {
                             const overdue = t.due_date && t.due_date < today;
                             const daysOverdue = overdue ? Math.ceil((new Date(today) - new Date(t.due_date)) / 86400000) : 0;
-                            const isExpanded = expandedUnassignedId === t.id;
                             const activeMembers = teamMembers.filter(m => m.lab_status !== 'alumni');
                             return (
                               <div key={t.id} style={{ borderTop: '1px solid var(--border)', background: overdue ? '#FEF5F5' : undefined }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px' }}>
-                                  <button onClick={() => setExpandedUnassignedId(isExpanded ? null : t.id)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', flex: 1, minWidth: 0, textAlign: 'left' }} title="Click to view full task">
-                                    <span style={{ fontSize: 13, color: overdue ? '#C0392B' : 'var(--text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
-                                      {(() => { const title = t.task_def?.title || '(no title)'; return title.length > 38 ? title.slice(0, 38) + '…' : title; })()}
-                                    </span>
-                                  </button>
-                                  <select defaultValue="" onChange={async e => { if (!e.target.value) return; await supabase.from('task_occurrences').update({ assigned_to: e.target.value, status: 'assigned' }).eq('id', t.id); setUnassignedTasks(prev => prev.filter(x => x.id !== t.id)); if (expandedUnassignedId === t.id) setExpandedUnassignedId(null); }} style={{ fontSize: 11, border: '1px solid var(--border)', borderRadius: 6, padding: '3px 4px', color: 'var(--text-secondary)', background: 'var(--bg-primary)', flexShrink: 0, maxWidth: 110, cursor: 'pointer' }}>
+                                  <span style={{ fontSize: 13, color: overdue ? '#C0392B' : 'var(--text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+                                    {(() => { const title = t.task_def?.title || '(no title)'; return title.length > 38 ? title.slice(0, 38) + '…' : title; })()}
+                                  </span>
+                                  <select defaultValue="" onChange={async e => { if (!e.target.value) return; await supabase.from('task_occurrences').update({ assigned_to: e.target.value, status: 'assigned' }).eq('id', t.id); setUnassignedTasks(prev => prev.filter(x => x.id !== t.id)); }} style={{ fontSize: 11, border: '1px solid var(--border)', borderRadius: 6, padding: '3px 4px', color: 'var(--text-secondary)', background: 'var(--bg-primary)', flexShrink: 0, maxWidth: 110, cursor: 'pointer' }}>
                                     <option value="">Assign…</option>
                                     {activeMembers.map(m => <option key={m.id} value={m.id}>{m.full_name.split(' ')[0]}</option>)}
                                   </select>
@@ -803,17 +799,6 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                                     </div>
                                   )}
                                 </div>
-                                {isExpanded && (
-                                  <div style={{ padding: '6px 14px 10px', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)' }}>
-                                    <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 6px' }}>{t.task_def?.title || '(no title)'}</p>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                      {t.task_def?.category && <span style={{ fontSize: 11, background: '#EDE7F6', color: '#6A1B9A', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{t.task_def.category}</span>}
-                                      {t.task_def?.frequency && <span style={{ fontSize: 11, background: '#E3F2FD', color: '#1565C0', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{t.task_def.frequency}</span>}
-                                      {t.task_def?.audit_area && <span style={{ fontSize: 11, background: '#E8F5E9', color: '#2E7D32', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{t.task_def.audit_area}</span>}
-                                      {t.task_def?.group_name && <span style={{ fontSize: 11, background: '#FFF3E0', color: '#E65100', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>{t.task_def.group_name}</span>}
-                                    </div>
-                                  </div>
-                                )}
                               </div>
                             );
                           })}
