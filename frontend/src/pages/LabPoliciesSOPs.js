@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { TabInputModal, TabConfirmModal, PillTabs, TabContextMenu, SectionContextMenu, SubsectionBlock, makeSubsectionHandlers } from '../components/SOPSection';
 import { useResizableColumns, ColResizer } from '../lib/useResizableColumns';
-import { FileText, Clock, Printer, X, Plus, ExternalLink, Trash2, Link, Search } from 'lucide-react';
+import { FileText, Clock, Printer, X, Plus, ExternalLink, Trash2, Link, Search, BookOpen } from 'lucide-react';
 import LabPolicies from './LabPolicies';
 import MeetingStandards from './MeetingStandards';
 import BenchlingPolicy from './BenchlingPolicy';
@@ -1602,7 +1602,10 @@ export default function LabPoliciesSOPs({ userRole, userId, profile, permissions
       {/* Left sidebar */}
       <div style={{ width: 228, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h1 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Lab Policies & SOPs</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--purple-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><BookOpen size={14} color="white" /></div>
+            <h1 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Lab Policies & SOPs</h1>
+          </div>
           {canEdit && (
             <button onClick={() => setShowAddModal(true)} title="Add new SOP"
               style={{ padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-primary)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>

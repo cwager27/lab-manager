@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import {
-  Plus, Search, Copy, Check, Edit2, Trash2, X, ChevronDown,
+  Plus, Search, Copy, Check, Edit2, Trash2, X, ChevronDown, Terminal,
 } from 'lucide-react';
 
 const CATEGORIES = ['All', 'R', 'Python', 'Shell', 'Bioinformatics', 'HPC', 'Software', 'General'];
@@ -390,7 +390,10 @@ export default function ComputationalTips({ userRole, userId, profile }) {
       {activeCategory === 'All' && (
         <div style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>BigPurple HPC — Tips &amp; Tricks</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--purple-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Terminal size={15} color="white" /></div>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>BigPurple HPC — Tips &amp; Tricks</h2>
+            </div>
             <a href="/BigPurple_HPC_Tips_and_Tricks.pdf" target="_blank" rel="noopener noreferrer"
               style={{ fontSize: 12, fontWeight: 600, color: 'var(--purple-primary)', textDecoration: 'none' }}>
               Open PDF ↗

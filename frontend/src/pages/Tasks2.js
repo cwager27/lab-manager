@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { fmtName, sortByLast } from '../lib/nameUtils';
-import { CheckCircle, XCircle, AlertTriangle, Upload, Clock, Search, ChevronDown, Bell, Trash2, Plus, Check, Globe, Pencil, X } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, Upload, Clock, Search, ChevronDown, Trash2, Plus, Check, Globe, Pencil, X } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -55,63 +55,7 @@ function fmtDate(iso) {
   return `${MONTHS_SHORT[Number(m) - 1]} ${Number(d)}, ${y}`;
 }
 
-// ── Range list picker (Year / Quarter / Month / Week) ────────────────────────
-
-function RangeList({ items, value, onChange }) {
-  // value = { start: ISO-date-string, end: ISO-date-string }
-  function click(item) {
-    if (!value?.start) {
-      onChange({ start: item.startISO, end: null });
-    } else if (item.startISO < value.start) {
-      onChange({ start: item.startISO, end: null });
-    } else if (!value.end || item.endISO !== value.end) {
-      onChange({ start: value.start, end: item.endISO });
-    } else {
-      onChange({ start: value.start, end: null });
-    }
-  }
-
-  function inRange(item) {
-    if (!value?.start) return false;
-    if (!value?.end) return item.startISO === value.start;
-    return item.startISO >= value.start && item.endISO <= value.end;
-  }
-
-  const selecting = !value?.start ? 'start' : !value?.end ? 'end' : 'done';
-
-  return (
-    <div>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, height: 18 }}>
-        {selecting === 'start' && 'Click to set start'}
-        {selecting === 'end' && 'Click to set end'}
-        {value?.start && (
-          <button onClick={() => onChange({ start: null, end: null })} style={{ ...linkBtn, fontSize: 11, marginLeft: 8 }}>
-            Reset
-          </button>
-        )}
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {items.map(item => {
-          const active = inRange(item);
-          const isEdge = (value?.start && item.startISO === value.start) || (value?.end && item.endISO === value.end);
-          return (
-            <button key={item.key} onClick={() => click(item)} style={{
-              padding: '6px 14px', borderRadius: 8, fontSize: 13, cursor: 'pointer',
-              border: active ? '2px solid var(--purple-primary)' : '1.5px solid var(--border)',
-              background: active ? 'rgba(123,63,160,0.1)' : 'var(--bg-primary)',
-              fontWeight: isEdge ? 700 : 400,
-              color: active ? 'var(--purple-primary)' : 'var(--text-primary)',
-            }}>
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── Date range inputs (biweekly / daily) ─────────────────────────────────────
+// ── Date range inputs ─────────────────────────────────────────────────────────
 
 function DateRangeInputs({ value, onChange }) {
   return (
@@ -131,87 +75,6 @@ function DateRangeInputs({ value, onChange }) {
   );
 }
 
-// ── Item generators ───────────────────────────────────────────────────────────
-
-function yearItems() {
-  const y = new Date().getFullYear();
-  return Array.from({ length: 5 }, (_, i) => ({
-    key: String(y + i), label: String(y + i),
-    startISO: `${y + i}-01-01`, endISO: `${y + i}-12-31`,
-  }));
-}
-
-function quarterItems() {
-  const y = new Date().getFullYear();
-  const items = [];
-  for (let yr = y; yr <= y + 1; yr++) {
-    for (let q = 1; q <= 4; q++) {
-      const sm = (q - 1) * 3 + 1;
-      const em = q * 3;
-      const ld = new Date(yr, em, 0).getDate();
-      items.push({
-        key: `${yr}-Q${q}`, label: `Q${q} ${yr}`,
-        startISO: `${yr}-${String(sm).padStart(2,'0')}-01`,
-        endISO: `${yr}-${String(em).padStart(2,'0')}-${ld}`,
-      });
-    }
-  }
-  return items;
-}
-
-function monthItems() {
-  const now = new Date();
-  return Array.from({ length: 24 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-    const y = d.getFullYear(); const m = d.getMonth() + 1;
-    const ld = new Date(y, m, 0).getDate();
-    const iso = `${y}-${String(m).padStart(2,'0')}`;
-    return {
-      key: iso, label: `${MONTHS_SHORT[m-1]} ${y}`,
-      startISO: `${iso}-01`, endISO: `${iso}-${ld}`,
-    };
-  });
-}
-
-function weekItems() {
-  const now = new Date();
-  const sun = new Date(now); sun.setDate(now.getDate() - now.getDay());
-  return Array.from({ length: 26 }, (_, i) => {
-    const s = new Date(sun); s.setDate(sun.getDate() + i * 7);
-    const e = new Date(s); e.setDate(s.getDate() + 6);
-    const startISO = s.toISOString().split('T')[0];
-    const endISO = e.toISOString().split('T')[0];
-    return { key: startISO, label: `Week of ${MONTHS_SHORT[s.getMonth()]} ${s.getDate()}`, startISO, endISO };
-  });
-}
-
-function bimonthlyItems() {
-  const now = new Date();
-  const items = [];
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + i * 2, 1);
-    const y = d.getFullYear(); const m = d.getMonth();
-    const m2 = m + 1;
-    const ld = new Date(y, m2 + 1, 0).getDate();
-    items.push({
-      key: `${y}-${String(m + 1).padStart(2,'0')}`,
-      label: `${MONTHS_SHORT[m]}–${MONTHS_SHORT[m2]} ${y}`,
-      startISO: `${y}-${String(m + 1).padStart(2,'0')}-01`,
-      endISO: `${y}-${String(m2 + 1).padStart(2,'0')}-${ld}`,
-    });
-  }
-  return items;
-}
-
-function pickerFor(freq, value, onChange) {
-  if (freq === 'yearly') return <RangeList items={yearItems()} value={value} onChange={onChange} />;
-  if (freq === 'quarterly') return <RangeList items={quarterItems()} value={value} onChange={onChange} />;
-  if (freq === 'bimonthly') return <RangeList items={bimonthlyItems()} value={value} onChange={onChange} />;
-  if (freq === 'monthly') return <RangeList items={monthItems()} value={value} onChange={onChange} />;
-  if (freq === 'weekly') return <RangeList items={weekItems()} value={value} onChange={onChange} />;
-  return <DateRangeInputs value={value} onChange={onChange} />;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -220,9 +83,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const canManage = userRole === 'admin' || userRole === 'pm' || myProfile?.can_view_task_tabs;
   const canTabRecurrent   = canManage || !!myProfile?.can_view_recurrent_tab;
   const canTabAdhoc       = canManage || !!myProfile?.can_view_adhoc_tab;
-  const canTabCalendar    = canManage || !!myProfile?.can_view_calendar_tab;
   const canTabProductivity = canManage || !!myProfile?.can_view_productivity_tab;
-  const canTabAssignments = canManage || !!myProfile?.can_view_assignments_tab;
   const [tab, setTab] = useState(() => {
     const hasAnyMgmtTab = canManage || myProfile?.can_view_recurrent_tab || myProfile?.can_view_adhoc_tab || myProfile?.can_view_calendar_tab || myProfile?.can_view_productivity_tab || myProfile?.can_view_assignments_tab;
     if (!hasAnyMgmtTab) return 'my-tasks';
@@ -237,18 +98,15 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
   // ── Wizard state ──────────────────────────────────────────────────────────
   const [step, setStep] = useState(1);
-  const [step1Cat, setStep1Cat] = useState('');
-  const [step1Freq, setStep1Freq] = useState('');
+  const [wizardRange, setWizardRange] = useState({ start: null, end: null });
   const [selectedTaskIds, setSelectedTaskIds] = useState(new Set());
-  const [expandedGroups, setExpandedGroups] = useState(new Set());
   const [assigneeIds, setAssigneeIds] = useState([]);
   const [rotateEvery, setRotateEvery] = useState(1);
-  const [dateRanges, setDateRanges] = useState({});
-  const [freqSubStep, setFreqSubStep] = useState(0);
-  const [applyAllAsked, setApplyAllAsked] = useState(false);
   const [occs, setOccs] = useState([]);
   const [occsLoading, setOccsLoading] = useState(false);
   const [checkedIds, setCheckedIds] = useState(new Set());
+  const [step2Cat, setStep2Cat] = useState('');
+  const [step2Freq, setStep2Freq] = useState('');
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -268,22 +126,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const [vatExpandedAuditAreas, setVatExpandedAuditAreas] = useState(new Set());
   const [vatLoading, setVatLoading] = useState(false);
   const [vatLoaded, setVatLoaded] = useState(false);
-  // ── Assigned Tasks log state ──────────────────────────────────────────────
-  const [assignedOccs, setAssignedOccs] = useState([]);
-  const [assignedLoading, setAssignedLoading] = useState(false);
-  const [unassignedOccs, setUnassignedOccs] = useState([]);
-  const [unassignedOccsLoading, setUnassignedOccsLoading] = useState(false);
-  const [unassignedTimeTab, setUnassignedTimeTab] = useState('month');
-  const [unassignedMinimized, setUnassignedMinimized] = useState(false);
-  const [assignedPersonTab, setAssignedPersonTab] = useState('all');
-  const [assignedTimePeriod, setAssignedTimePeriod] = useState('all');
-  const [assignedFrom] = useState(() => new Date().toISOString().split('T')[0]);
-  const [assignedTo] = useState(() => `${new Date().getFullYear()}-12-31`);
-  const [editingOccId, setEditingOccId] = useState(null);
-  const [editAssigneeId, setEditAssigneeId] = useState('');
-  const [editSaving, setEditSaving] = useState(false);
-  const [remindingId, setRemindingId] = useState(null);
-  const [remindedIds, setRemindedIds] = useState(new Set());
 
   // ── Productivity state ────────────────────────────────────────────────────
   const [prodPeriod, setProdPeriod] = useState('current');
@@ -314,7 +156,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const persistedCompletionsRef = useRef(new Set());
 
   // PM reminder counts keyed by occurrence ID, persisted in localStorage
-  const [pmReminders, setPmReminders] = useState(() => {
+  const [pmReminders] = useState(() => {
     try { return JSON.parse(localStorage.getItem('lab_pm_reminders') || '{}'); } catch { return {}; }
   });
 
@@ -332,7 +174,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
   // ── Unassigned state ──────────────────────────────────────────────────────
   const [unassigned, setUnassigned] = useState([]);
-  const unassignedCount = unassigned.length;
   const [uLoading, setULoading] = useState(false);
   const [quickAssign, setQuickAssign] = useState(null);
   const [qaAssignees, setQaAssignees] = useState([]);
@@ -372,10 +213,9 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       .catch(() => setDataLoading(false));
   }, []);
 
-  useEffect(() => { if (tab === 'calendar') { loadCalendar(); loadCalSummary(); } }, [tab, calYear, calMonth]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (tab === 'view-all') { loadCalendar(); loadCalSummary(); } }, [tab, calYear, calMonth]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (tab === 'unassigned') loadUnassigned(); }, [tab]);
   useEffect(() => { if (tab === 'view-all' && !vatLoaded) loadVatData(); }, [tab, vatLoaded]); // eslint-disable-line
-  useEffect(() => { if (tab === 'assigned') { loadAssignedTasks(assignedFrom, assignedTo); loadUnassignedOccs(); } }, [tab, assignedFrom, assignedTo]); // eslint-disable-line
   useEffect(() => { if (tab === 'productivity') loadProductivity(prodPeriod); }, [tab, prodPeriod, profiles.length, prodDirty]); // eslint-disable-line
   useEffect(() => { if (tab === 'oneoff') loadOneOffTab(); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (tab === 'my-tasks' && userId) { loadMyTasks(); if (!vatLoaded) loadVatData(); } }, [tab, userId]); // eslint-disable-line
@@ -470,21 +310,25 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   }, [vatResponses, sopExceptions]); // eslint-disable-line
 
 
-  function loadCalendar() {
+  function loadCalendar({ skipGenerate = false } = {}) {
     setCalLoading(true);
     setCalDayPanel(null);
-    // Generate any missing occurrences first (180-day window), then fetch calendar data.
-    // Generation is idempotent — safe to call on every load.
-    fetch(`${API}/api/tasks/generate-occurrences`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ windowDays: 180 }),
-    })
-      .catch(() => {})
-      .then(() => fetch(`${API}/api/tasks2/calendar?year=${calYear}&month=${calMonth}`))
-      .then(r => r.json())
-      .then(d => { setCalData(Array.isArray(d) ? d : []); setCalLoading(false); })
-      .catch(() => setCalLoading(false));
+    const doFetch = () =>
+      fetch(`${API}/api/tasks2/calendar?year=${calYear}&month=${calMonth}`)
+        .then(r => r.json())
+        .then(d => { setCalData(Array.isArray(d) ? d : []); setCalLoading(false); })
+        .catch(() => setCalLoading(false));
+    if (skipGenerate) {
+      doFetch();
+    } else {
+      fetch(`${API}/api/tasks/generate-occurrences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ windowDays: 180 }),
+      })
+        .catch(() => {})
+        .then(doFetch);
+    }
   }
 
   function loadCalSummary() {
@@ -1019,12 +863,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     setSopExceptions(p => ({ ...p, [task.id]: { ...p[task.id], submitting: false, submitted: true, photoUrl } }));
   }
 
-  // ── Wizard helpers ────────────────────────────────────────────────────────
-
-  const orderedFreqs = FREQ_ORDER.filter(f =>
-    tasks.some(t => selectedTaskIds.has(t.id) && t.frequency?.toLowerCase() === f)
-  );
-
   // ── Scope tree helpers ────────────────────────────────────────────────────
 
   const CAT_ORDER = (() => {
@@ -1037,134 +875,18 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     });
   })();
 
-  function buildTree() {
-    const catFreqs = {};
-    tasks.forEach(t => {
-      const c = t.category || 'MISC';
-      const f = t.frequency?.toLowerCase();
-      if (!f) return;
-      if (!catFreqs[c]) catFreqs[c] = new Set();
-      catFreqs[c].add(f);
-    });
-    return CAT_ORDER.filter(c => catFreqs[c]).map(c => ({
-      cat: c,
-      freqs: FREQ_ORDER.filter(f => catFreqs[c].has(f)),
-    }));
-  }
-
-  function tasksInLeaf(cat, freq) {
-    return tasks.filter(t => t.category === cat && t.frequency?.toLowerCase() === freq);
-  }
-
-  function selectedInLeaf(cat, freq) {
-    return tasksInLeaf(cat, freq).filter(t => selectedTaskIds.has(t.id));
-  }
-
-  function getAuditAreasForLeaf(cat, freq) {
-    const areaMap = new Map();
-    tasksInLeaf(cat, freq).forEach(t => {
-      const area = t.audit_area || t.group_name || t.title;
-      if (!areaMap.has(area)) areaMap.set(area, { name: area, groupMap: new Map() });
-      const groupKey = t.group_name || t.title;
-      const aEntry = areaMap.get(area);
-      if (!aEntry.groupMap.has(groupKey)) aEntry.groupMap.set(groupKey, { name: groupKey, tasks: [] });
-      aEntry.groupMap.get(groupKey).tasks.push(t);
-    });
-    return [...areaMap.values()].map(a => ({ name: a.name, groups: [...a.groupMap.values()] }));
-  }
-
-  function selectAllGroup(group) {
-    const ids = group.tasks.map(t => t.id);
-    const allSelected = ids.every(id => selectedTaskIds.has(id));
-    setSelectedTaskIds(prev => { const n = new Set(prev); allSelected ? ids.forEach(id => n.delete(id)) : ids.forEach(id => n.add(id)); return n; });
-  }
-
-  function getScopedGroups() {
-    const scoped = tasks.filter(t => selectedTaskIds.has(t.id));
-    const groupMap = new Map();
-    scoped.forEach(t => {
-      const key = t.group_name || t.title;
-      if (!groupMap.has(key)) groupMap.set(key, { name: key, category: t.category, frequency: t.frequency, tasks: [] });
-      groupMap.get(key).tasks.push(t);
-    });
-    return [...groupMap.values()];
-  }
-
-  function toggleGroup(group) {
-    const ids = group.tasks.map(t => t.id);
-    const allSelected = ids.every(id => selectedTaskIds.has(id));
-    setSelectedTaskIds(prev => {
-      const next = new Set(prev);
-      if (allSelected) ids.forEach(id => next.delete(id));
-      else ids.forEach(id => next.add(id));
-      return next;
-    });
-  }
-
-  function toggleTask(id) {
-    setSelectedTaskIds(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
-
-  async function loadOccurrences(rangesOverride) {
-    const rangesToUse = rangesOverride || dateRanges;
-    if (!selectedTaskIds.size) return;
+  async function loadAllUnassignedOccs(range) {
+    if (!range?.start || !range?.end) return;
     setOccsLoading(true);
-
-    // Group selected task IDs by frequency using `tasks` (always loaded at mount)
-    const tasksByFreq = {};
-    tasks.forEach(t => {
-      if (!selectedTaskIds.has(t.id)) return;
-      const freq = t.frequency || 'daily';
-      if (!tasksByFreq[freq]) tasksByFreq[freq] = [];
-      tasksByFreq[freq].push(t.id);
-    });
-
-    // Fallback: if tasks aren't loaded yet, use a single combined range
-    if (Object.keys(tasksByFreq).length === 0) {
-      const ranges = Object.values(rangesToUse).filter(r => r?.start && r?.end);
-      if (ranges.length) {
-        const start = ranges.map(r => r.start).sort()[0];
-        const end = ranges.map(r => r.end).sort().reverse()[0];
-        await fetch(`${API}/api/tasks2/ensure-occurrences`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ taskIds: [...selectedTaskIds], start, end }),
-        }).catch(() => {});
-        const data = await fetch(`${API}/api/tasks2/occurrences?taskIds=${[...selectedTaskIds].join(',')}&start=${start}&end=${end}`)
-          .then(r => r.json()).catch(() => []);
-        setOccs(data);
-        setCheckedIds(new Set(data.map(o => o.id)));
-      }
-      setOccsLoading(false);
-      setStep(5);
-      return;
-    }
-
-    // Ensure occurrences exist in DB (backfills gaps for past/new tasks), then fetch
-    const allData = [];
-    for (const [freq, taskIds] of Object.entries(tasksByFreq)) {
-      const range = rangesToUse[freq];
-      if (!range?.start || !range?.end) continue;
-      // Fill any missing occurrence rows (e.g. past dates or newly-created tasks)
-      await fetch(`${API}/api/tasks2/ensure-occurrences`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskIds, start: range.start, end: range.end }),
-      }).catch(() => {});
-      const fetched = await fetch(
-        `${API}/api/tasks2/occurrences?taskIds=${taskIds.join(',')}&start=${range.start}&end=${range.end}`
-      ).then(r => r.json()).catch(() => []);
-      allData.push(...fetched);
-    }
-
-    setOccs(allData);
-    setCheckedIds(new Set(allData.map(o => o.id)));
+    // Use the same calendar-range endpoint the calendar view uses so counts always match.
+    const data = await fetch(`${API}/api/tasks2/calendar-range?start=${range.start}&end=${range.end}`)
+      .then(r => r.json()).catch(() => []);
+    const unassigned = data.filter(o => o.status === 'unassigned');
+    setOccs(unassigned);
+    setSelectedTaskIds(new Set(unassigned.map(o => o.task_definition_id)));
+    setCheckedIds(new Set(unassigned.map(o => o.id)));
     setOccsLoading(false);
-    setStep(5);
+    setStep(2);
   }
 
   async function loadPreview() {
@@ -1181,7 +903,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     }).then(r => r.json()).catch(() => null);
     setPreview(data?.preview || []);
     setPreviewLoading(false);
-    setStep(6);
+    setStep(4);
   }
 
   async function submitAssignment() {
@@ -1197,94 +919,24 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     }).catch(() => {});
     setSubmitting(false);
     setSubmitDone(true);
+    loadCalendar({ skipGenerate: true });
+    loadCalSummary();
   }
 
   function resetWizard() {
-    setStep(1); setStep1Cat(''); setStep1Freq('');
-    setSelectedTaskIds(new Set()); setExpandedGroups(new Set());
+    setStep(1);
+    setWizardRange({ start: null, end: null });
+    setSelectedTaskIds(new Set());
     setAssigneeIds([]); setRotateEvery(1);
-    setDateRanges({}); setFreqSubStep(0); setApplyAllAsked(false);
-    setOccs([]); setCheckedIds(new Set()); setPreview(null); setSubmitDone(false);
-  }
-
-  function hasVacation(profileId) {
-    const t = today();
-    return vacations.some(v => v.requested_by === profileId && v.end_date >= t);
+    setOccs([]); setCheckedIds(new Set());
+    setStep2Cat(''); setStep2Freq('');
+    setPreview(null); setSubmitDone(false);
   }
 
   function profileName(id) {
     return profiles.find(p => p.id === id)?.full_name || id;
   }
 
-  // ── Assigned Tasks log helpers ────────────────────────────────────────────
-
-  async function loadAssignedTasks(from, to) {
-    setAssignedLoading(true);
-    const { data } = await supabase
-      .from('task_occurrences')
-      .select('id, due_date, status, assigned_to, completed_at, notes, task_def:tasks_definitions(id, title, category, frequency, audit_area, group_name), assignee:profiles!assigned_to(id, full_name)')
-      .gte('due_date', from)
-      .lte('due_date', to)
-      .order('due_date');
-    setAssignedOccs(data || []);
-    setAssignedLoading(false);
-  }
-
-  async function loadUnassignedOccs() {
-    setUnassignedOccsLoading(true);
-    const todayStr = new Date().toISOString().split('T')[0];
-    const endOfYear = `${new Date().getFullYear()}-12-31`;
-    const { data } = await supabase
-      .from('task_occurrences')
-      .select('id, due_date, task_def:tasks_definitions(id, title, category, frequency, audit_area, group_name)')
-      .is('assigned_to', null)
-      .gte('due_date', todayStr)
-      .lte('due_date', endOfYear)
-      .order('due_date');
-    setUnassignedOccs(data || []);
-    setUnassignedOccsLoading(false);
-  }
-
-  async function saveAssignment(occId) {
-    setEditSaving(true);
-    const newAssignee = editAssigneeId || null;
-    await supabase
-      .from('task_occurrences')
-      .update({ assigned_to: newAssignee, status: newAssignee ? 'assigned' : 'unassigned' })
-      .eq('id', occId);
-    const assigneeProfile = profiles.find(p => p.id === newAssignee);
-    setAssignedOccs(prev => prev.map(o => o.id !== occId ? o : {
-      ...o,
-      assigned_to: newAssignee,
-      assignee: newAssignee && assigneeProfile ? { id: newAssignee, full_name: assigneeProfile.full_name } : null,
-      status: newAssignee ? 'assigned' : 'unassigned',
-    }));
-    setEditingOccId(null);
-    setEditSaving(false);
-    loadUnassignedOccs();
-  }
-
-  async function sendReminder(occId) {
-    setRemindingId(occId);
-    try {
-      await fetch(`${API}/tasks2/remind`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ occurrenceId: occId }),
-      });
-      setRemindedIds(p => new Set([...p, occId]));
-      setTimeout(() => setRemindedIds(p => { const n = new Set(p); n.delete(occId); return n; }), 3000);
-      // Track PM reminder count
-      setPmReminders(prev => {
-        const updated = { ...prev, [occId]: (prev[occId] || 0) + 1 };
-        localStorage.setItem('lab_pm_reminders', JSON.stringify(updated));
-        return updated;
-      });
-    } catch (e) {
-      console.error('Reminder failed', e);
-    }
-    setRemindingId(null);
-  }
 
   async function loadProductivity(period) {
     setProdLoading(true);
@@ -1719,7 +1371,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                     ? <div style={{ padding: '16px 18px', fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No tasks.</div>
                     : threeMoFiltered.map(occ => <TaskRow key={occ.id} occ={occ} />)}
                 </div>
-                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none' }} />
                 </div>
               )}
             </div>
@@ -1747,7 +1398,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                       </div>
                     ))}
                   </div>
-                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none' }} />
                   </div>
                 )}
             </div>
@@ -1807,7 +1457,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                   <div style={{ maxHeight: 400, overflowY: 'auto' }}>
                     {historyTasks.map(occ => <TaskRow key={occ.id} occ={occ} />)}
                   </div>
-                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none' }} />
                   </div>
                 )}
             </div>
@@ -1935,7 +1584,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         setMyTaskOneOffs(prev => prev.map(x => x.id === t.id ? { ...x, notes: trimmed || null } : x));
       };
       const isOverdue = bucketId === 'overdue' && !isDone;
-      const isUpcoming = (bucketId === 'week') && !isDone;
+      const isUpcoming = !isDone && !isOverdue && bucketId !== 'nodate';
       const daysOverdueCount = isOverdue && t.due_date ? Math.ceil((new Date(today) - new Date(t.due_date)) / 86400000) : 0;
       const daysUntilCount = isUpcoming && t.due_date ? Math.ceil((new Date(t.due_date) - new Date(today)) / 86400000) : 0;
       const cardBg = isDone ? '#EAF7F0' : isOverdue ? '#FEF2F2' : isUpcoming ? '#FFFBEB' : 'var(--bg-card)';
@@ -2496,333 +2145,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     );
   }
 
-  function renderAssignedTab() {
-    const todayDate = new Date();
-    const today = todayDate.toISOString().split('T')[0];
-    const members = sortByLast(profiles);
-
-    // ── Unassigned section (top) ──────────────────────────────────────────────
-    const unassignedTimeTabs = [
-      { id: 'month', label: 'This Month', end: (() => { const d = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0); return d.toISOString().split('T')[0]; })() },
-      { id: '3mo',   label: '3 Months',   end: (() => { const d = new Date(todayDate); d.setMonth(d.getMonth() + 3); return d.toISOString().split('T')[0]; })() },
-      { id: '6mo',   label: '6 Months',   end: (() => { const d = new Date(todayDate); d.setMonth(d.getMonth() + 6); return d.toISOString().split('T')[0]; })() },
-      { id: 'year',  label: 'Current Year', end: `${todayDate.getFullYear()}-12-31` },
-    ];
-    const activeTimeTab = unassignedTimeTabs.find(t => t.id === unassignedTimeTab) || unassignedTimeTabs[0];
-    const filteredUnassigned = unassignedOccs.filter(o => o.due_date <= activeTimeTab.end);
-
-    // Build category → audit_area → occurrences tree
-    const unassignedTree = {};
-    filteredUnassigned.forEach(occ => {
-      const cat = occ.task_def?.category || 'MISC';
-      const aa  = occ.task_def?.audit_area || '';
-      if (!unassignedTree[cat]) unassignedTree[cat] = {};
-      if (!unassignedTree[cat][aa]) unassignedTree[cat][aa] = [];
-      unassignedTree[cat][aa].push(occ);
-    });
-    const catOrder = CAT_ORDER.filter(c => unassignedTree[c]);
-
-    const renderUnassignedRow = occ => {
-      const taskDef = occ.task_def;
-      const freq = taskDef?.frequency || '';
-      const fc = FREQ_COLORS[freq] || {};
-      const isEditing = editingOccId === occ.id;
-      const dateStr = new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const thStyle = { padding: '9px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' };
-      if (isEditing) {
-        return (
-          <tr key={occ.id} style={{ background: '#F0EBF8' }}>
-            <td colSpan={4} style={{ ...thStyle, borderLeft: '3px solid var(--purple-primary)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', flexShrink: 0 }}>{dateStr}</span>
-                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{taskDef?.title || '—'}</span>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>Assign to:</span>
-                <select value={editAssigneeId} onChange={e => setEditAssigneeId(e.target.value)}
-                  style={{ padding: '5px 8px', border: '1px solid var(--purple-primary)', borderRadius: 'var(--radius-sm)', fontSize: 12, background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}>
-                  <option value="">— Select —</option>
-                  {members.map(m => <option key={m.id} value={m.id}>{fmtName(m.full_name)}</option>)}
-                </select>
-                <button onClick={() => saveAssignment(occ.id)} disabled={!editAssigneeId || editSaving}
-                  style={{ padding: '5px 12px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
-                  {editSaving ? '…' : 'Save'}
-                </button>
-                <button onClick={() => setEditingOccId(null)} style={{ padding: '5px 8px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 12, cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0 }}>✕</button>
-              </div>
-            </td>
-          </tr>
-        );
-      }
-      return (
-        <tr key={occ.id} style={{ background: 'var(--bg-card)' }}>
-          <td style={{ ...thStyle, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{dateStr}</td>
-          <td style={{ ...thStyle, fontSize: 13, color: 'var(--text-primary)', maxWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{taskDef?.title || '—'}</td>
-          <td style={{ ...thStyle, whiteSpace: 'nowrap' }}>
-            <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: fc.bg || 'var(--bg-secondary)', color: fc.text || 'var(--text-muted)', border: `1px solid ${fc.border || 'var(--border)'}` }}>
-              {freq ? freq.charAt(0).toUpperCase() + freq.slice(1) : '—'}
-            </span>
-          </td>
-          <td style={{ ...thStyle, textAlign: 'right' }}>
-            <button onClick={() => { setEditingOccId(occ.id); setEditAssigneeId(''); }}
-              style={{ padding: '4px 12px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-              Assign
-            </button>
-          </td>
-        </tr>
-      );
-    };
-
-    const assignedList = assignedOccs.filter(o => o.assigned_to);
-
-    return (
-      <div>
-        {/* ══ UNASSIGNED (top) ══════════════════════════════════════════════════ */}
-        <div style={{ marginBottom: 36 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-            <button onClick={() => setUnassignedMinimized(p => !p)} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-              <ChevronDown size={16} style={{ transform: unassignedMinimized ? 'rotate(-90deg)' : 'none', transition: 'transform 0.2s', color: 'var(--text-muted)' }} />
-              <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Unassigned</span>
-            </button>
-            <span style={{ fontSize: 11, fontWeight: 700, background: filteredUnassigned.length > 0 ? '#F5EEF8' : 'var(--bg-secondary)', color: filteredUnassigned.length > 0 ? '#7B3FA0' : 'var(--text-muted)', borderRadius: 10, padding: '1px 8px', border: `1px solid ${filteredUnassigned.length > 0 ? '#D7BDE2' : 'var(--border)'}` }}>{filteredUnassigned.length}</span>
-            <button onClick={loadUnassignedOccs} style={{ marginLeft: 'auto', padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'transparent', fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer' }}>Refresh</button>
-          </div>
-
-          {!unassignedMinimized && <>{/* Time period tabs */}
-          <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 3, width: 'fit-content', marginBottom: 16 }}>
-            {unassignedTimeTabs.map(t => (
-              <button key={t.id} onClick={() => setUnassignedTimeTab(t.id)}
-                style={{ padding: '6px 16px', borderRadius: 'var(--radius-sm)', border: 'none', fontSize: 12, fontWeight: unassignedTimeTab === t.id ? 600 : 400, background: unassignedTimeTab === t.id ? 'var(--purple-primary)' : 'transparent', color: unassignedTimeTab === t.id ? 'white' : 'var(--text-secondary)', cursor: 'pointer' }}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {unassignedOccsLoading ? (
-            <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
-          ) : filteredUnassigned.length === 0 ? (
-            <div style={{ padding: 24, textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: 13 }}>All tasks in this window are assigned. 🎉</div>
-          ) : (
-            <div>
-              {catOrder.map(cat => (
-                <div key={cat} style={{ marginBottom: 24 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 8, paddingBottom: 4, borderBottom: '1px solid var(--border)' }}>{cat}</div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-                    <thead>
-                      <tr style={{ background: 'var(--bg-secondary)' }}>
-                        <th style={{ width: 100, padding: '8px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '2px solid var(--border)' }}>Due Date</th>
-                        <th style={{ padding: '8px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '2px solid var(--border)' }}>Task</th>
-                        <th style={{ width: 140, padding: '8px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '2px solid var(--border)' }}>Recurrence</th>
-                        <th style={{ width: 80, padding: '8px 14px', borderBottom: '2px solid var(--border)' }}></th>
-                      </tr>
-                    </thead>
-                    {Object.entries(unassignedTree[cat]).map(([aa, occs]) => (
-                      <tbody key={aa || '__none__'}>
-                        {aa && (
-                          <tr style={{ background: '#F5EEF8' }}>
-                            <td colSpan={4} style={{ padding: '5px 14px', fontSize: 12, fontWeight: 600, color: 'var(--purple-primary)', borderBottom: '1px solid #E8D5F0' }}>{aa}</td>
-                          </tr>
-                        )}
-                        {occs.map(occ => renderUnassignedRow(occ))}
-                      </tbody>
-                    ))}
-                  </table>
-                </div>
-              ))}
-            </div>
-          )}
-          </>}
-        </div>
-
-        <div style={{ borderTop: '2px solid var(--border)', paddingTop: 28, marginBottom: 24 }}>
-          {/* ══ ASSIGNED (below) ══════════════════════════════════════════════ */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Assigned</span>
-            <span style={{ fontSize: 11, background: 'var(--bg-secondary)', color: 'var(--text-muted)', borderRadius: 10, padding: '1px 8px', border: '1px solid var(--border)' }}>{assignedList.length}</span>
-            <button onClick={() => loadAssignedTasks(assignedFrom, assignedTo)} style={{ marginLeft: 'auto', padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'transparent', fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer' }}>Refresh</button>
-          </div>
-
-          {(() => {
-            const todayD = new Date();
-            const assignedPeriods = [
-              { id: 'all',   label: 'All Tasks',    end: '9999-12-31' },
-              { id: 'month', label: 'This Month',   end: new Date(todayD.getFullYear(), todayD.getMonth() + 1, 0).toISOString().split('T')[0] },
-              { id: '3mo',   label: '3 Months',     end: (() => { const d = new Date(todayD); d.setMonth(d.getMonth() + 3); return d.toISOString().split('T')[0]; })() },
-              { id: '6mo',   label: '6 Months',     end: (() => { const d = new Date(todayD); d.setMonth(d.getMonth() + 6); return d.toISOString().split('T')[0]; })() },
-              { id: 'year',  label: 'Current Year', end: `${todayD.getFullYear()}-12-31` },
-            ];
-            const activePeriod = assignedPeriods.find(p => p.id === assignedTimePeriod) || assignedPeriods[0];
-            const timeFiltered = assignedList.filter(o => o.due_date <= activePeriod.end);
-
-            const personsMap = new Map();
-            timeFiltered.forEach(o => {
-              if (o.assigned_to && !personsMap.has(o.assigned_to)) {
-                personsMap.set(o.assigned_to, o.assignee?.full_name || o.assigned_to);
-              }
-            });
-            const persons = [...personsMap.entries()].sort((a, b) => (a[1] || '').localeCompare(b[1] || ''));
-
-            const displayList = assignedPersonTab === 'all'
-              ? timeFiltered
-              : timeFiltered.filter(o => o.assigned_to === assignedPersonTab);
-
-            const showAssignedTo = assignedPersonTab === 'all';
-            const numCols = showAssignedTo ? 6 : 5;
-            const thStyle = { padding: '8px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '2px solid var(--border)', background: 'var(--bg-secondary)' };
-            const tdStyle = { padding: '10px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' };
-
-            return (
-              <>
-                {/* Time period selector */}
-                <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 3, width: 'fit-content', marginBottom: 16 }}>
-                  {assignedPeriods.map(p => (
-                    <button key={p.id} onClick={() => setAssignedTimePeriod(p.id)}
-                      style={{ padding: '6px 16px', borderRadius: 'var(--radius-sm)', border: 'none', fontSize: 12, fontWeight: assignedTimePeriod === p.id ? 600 : 400, background: assignedTimePeriod === p.id ? 'var(--purple-primary)' : 'transparent', color: assignedTimePeriod === p.id ? 'white' : 'var(--text-secondary)', cursor: 'pointer' }}>
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Person tabs */}
-                {persons.length > 0 && (
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
-                    <button onClick={() => setAssignedPersonTab('all')}
-                      style={{ padding: '6px 14px', borderRadius: 20, border: `1px solid ${assignedPersonTab === 'all' ? 'var(--purple-primary)' : 'var(--border)'}`, background: assignedPersonTab === 'all' ? 'var(--purple-primary)' : 'transparent', color: assignedPersonTab === 'all' ? 'white' : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                      All
-                    </button>
-                    {persons.map(([pid, name]) => (
-                      <button key={pid} onClick={() => setAssignedPersonTab(pid)}
-                        style={{ padding: '6px 14px', borderRadius: 20, border: `1px solid ${assignedPersonTab === pid ? 'var(--purple-primary)' : 'var(--border)'}`, background: assignedPersonTab === pid ? 'var(--purple-primary)' : 'transparent', color: assignedPersonTab === pid ? 'white' : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                        {fmtName(name)}
-                        <span style={{ marginLeft: 6, fontSize: 10, background: assignedPersonTab === pid ? 'rgba(255,255,255,0.25)' : 'var(--bg-secondary)', borderRadius: 8, padding: '1px 5px' }}>
-                          {timeFiltered.filter(o => o.assigned_to === pid).length}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Table */}
-                {assignedLoading ? (
-                  <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
-                ) : displayList.length === 0 ? (
-                  <div style={{ padding: 20, textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: 13 }}>No assigned tasks in this window.</div>
-                ) : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid var(--border)' }}>
-                    <thead>
-                      <tr>
-                        <th style={{ ...thStyle, width: 100 }}>Due Date</th>
-                        <th style={thStyle}>Task</th>
-                        <th style={{ ...thStyle, width: 130 }}>Recurrence</th>
-                        {showAssignedTo && <th style={{ ...thStyle, width: 150 }}>Assigned To</th>}
-                        <th style={{ ...thStyle, width: 110 }}>Status</th>
-                        <th style={{ ...thStyle, width: 70 }}></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {displayList.map(occ => {
-                        const isDone    = occ.status === 'done' || !!occ.completed_at;
-                        const isOverdue = !isDone && occ.due_date < today;
-                        const taskDef   = occ.task_def;
-                        const freq      = taskDef?.frequency || '';
-                        const fc        = FREQ_COLORS[freq] || {};
-                        const statusChip = isDone
-                          ? { label: 'Done',     color: '#27AE60', bg: '#EAF7F0' }
-                          : isOverdue
-                            ? { label: 'Overdue',  color: '#E74C3C', bg: '#FDEDEC' }
-                            : { label: 'Upcoming', color: '#2980B9', bg: '#EBF5FB' };
-                        const isEditing   = editingOccId === occ.id;
-                        const isReminding = remindingId === occ.id;
-                        const wasReminded = remindedIds.has(occ.id);
-
-                        if (isEditing) {
-                          return (
-                            <tr key={occ.id} style={{ background: '#F0EBF8' }}>
-                              <td colSpan={numCols} style={{ ...tdStyle, borderLeft: '3px solid var(--purple-primary)' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', flexShrink: 0 }}>
-                                    {new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                  </span>
-                                  <span style={{ fontSize: 13, fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{taskDef?.title || '—'}</span>
-                                  <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>Assign to:</span>
-                                  <select value={editAssigneeId} onChange={e => setEditAssigneeId(e.target.value)}
-                                    style={{ padding: '5px 8px', border: '1px solid var(--purple-primary)', borderRadius: 'var(--radius-sm)', fontSize: 12, background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}>
-                                    <option value="">— Unassign —</option>
-                                    {members.map(m => <option key={m.id} value={m.id}>{fmtName(m.full_name)}</option>)}
-                                  </select>
-                                  <button onClick={() => saveAssignment(occ.id)} disabled={editSaving}
-                                    style={{ padding: '5px 14px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
-                                    {editSaving ? 'Saving…' : 'Save'}
-                                  </button>
-                                  <button onClick={() => setEditingOccId(null)}
-                                    style={{ padding: '5px 10px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>
-                                    Cancel
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        }
-
-                        return (
-                          <tr key={occ.id} style={{ background: 'var(--bg-card)', opacity: isDone ? 0.75 : 1 }}>
-                            <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: isOverdue ? '#E74C3C' : 'var(--text-primary)' }}>
-                                {new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                              </div>
-                              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                                {new Date(occ.due_date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric' })}
-                              </div>
-                            </td>
-                            <td style={{ ...tdStyle, fontSize: 13, color: 'var(--text-primary)', fontWeight: 500, maxWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {taskDef?.title || '—'}
-                            </td>
-                            <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
-                              <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: fc.bg || 'var(--bg-secondary)', color: fc.text || 'var(--text-muted)', border: `1px solid ${fc.border || 'var(--border)'}` }}>
-                                {freq ? freq.charAt(0).toUpperCase() + freq.slice(1) : '—'}
-                              </span>
-                            </td>
-                            {showAssignedTo && (
-                              <td style={{ ...tdStyle, fontSize: 13, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {fmtName(occ.assignee?.full_name) || '—'}
-                              </td>
-                            )}
-                            <td style={tdStyle}>
-                              <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 10, background: statusChip.bg, color: statusChip.color, whiteSpace: 'nowrap' }}>
-                                {statusChip.label}
-                              </span>
-                              {isDone && occ.completed_at && (
-                                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                                  {new Date(occ.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                </div>
-                              )}
-                            </td>
-                            <td style={{ ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                              <div style={{ display: 'flex', gap: 5, alignItems: 'center', justifyContent: 'flex-end' }}>
-                                <button onClick={() => { setEditingOccId(occ.id); setEditAssigneeId(occ.assigned_to || ''); }}
-                                  style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13 }}
-                                  title="Edit assignee">✎
-                                </button>
-                                <button onClick={() => sendReminder(occ.id)} disabled={isReminding || wasReminded}
-                                  title={`Remind ${occ.assignee?.full_name || 'assignee'}`}
-                                  style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: wasReminded ? '#EAF7F0' : 'transparent', border: `1px solid ${wasReminded ? '#A9DFBF' : 'var(--border)'}`, borderRadius: 'var(--radius-sm)', cursor: isReminding ? 'wait' : 'pointer', color: wasReminded ? '#27AE60' : 'var(--text-muted)', transition: 'all 0.2s' }}>
-                                  <Bell size={12} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
-              </>
-            );
-          })()}
-        </div>
-
-      </div>
-    );
-  }
-
   // ── View All Tasks render ─────────────────────────────────────────────────
 
   function renderViewAll() {
@@ -3124,147 +2446,24 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   // ── Step renders ──────────────────────────────────────────────────────────
 
   function renderStep1() {
-    const tree = buildTree();
-    const categories = tree.map(n => n.cat);
-    const activeCat = (step1Cat && categories.includes(step1Cat)) ? step1Cat : categories[0] || '';
-    const catNode = tree.find(n => n.cat === activeCat);
-    const freqs = catNode?.freqs || [];
-    const activeFreq = (step1Freq && freqs.includes(step1Freq)) ? step1Freq : freqs[0] || '';
-    const areas = getAuditAreasForLeaf(activeCat, activeFreq);
-
+    const rangeSet = wizardRange.start && wizardRange.end;
     return (
       <div>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Select task scope</div>
-
-        {/* Category tabs */}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg-secondary)' }}>
-          {categories.map(cat => {
-            const sel = tasks.filter(t => t.category === cat && selectedTaskIds.has(t.id)).length;
-            const isActive = cat === activeCat;
-            return (
-              <button key={cat} onClick={() => { setStep1Cat(cat); setStep1Freq(''); setExpandedGroups(new Set()); }}
-                style={{ padding: '6px 16px', borderRadius: 20, cursor: 'pointer', userSelect: 'none',
-                         background: isActive ? 'rgba(123,63,160,0.12)' : 'var(--bg-primary)',
-                         color: isActive ? 'var(--purple-primary)' : 'var(--text-primary)',
-                         fontWeight: isActive ? 700 : 500, fontSize: 13,
-                         border: isActive ? '1px solid rgba(123,63,160,0.3)' : '1px solid var(--border)' }}>
-                {cat}
-                {sel > 0 && (
-                  <span style={{ marginLeft: 6, background: 'var(--purple-primary)', color: 'white', borderRadius: 10, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{sel}</span>
-                )}
-              </button>
-            );
-          })}
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Select date range</div>
+        <div style={{ marginBottom: 8 }}>
+          <DateRangeInputs value={wizardRange} onChange={r => setWizardRange(r)} />
         </div>
-
-        {/* Frequency pills */}
-        {freqs.length > 0 && (
-          <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-            {freqs.map(freq => {
-              const count = tasksInLeaf(activeCat, freq).length;
-              const selCount = selectedInLeaf(activeCat, freq).length;
-              const isActive = freq === activeFreq;
-              return (
-                <button key={freq} onClick={() => { setStep1Freq(freq); setExpandedGroups(new Set()); }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 20, cursor: 'pointer', userSelect: 'none',
-                           border: `1px solid ${isActive ? 'var(--purple-primary)' : 'var(--border)'}`,
-                           background: isActive ? 'rgba(123,63,160,0.08)' : 'var(--bg-primary)',
-                           color: isActive ? 'var(--purple-primary)' : 'var(--text-secondary)',
-                           fontWeight: isActive ? 700 : 400, fontSize: 12 }}>
-                  <Clock size={11} />
-                  {FREQ_LABEL[freq]}
-                  <span style={{ background: isActive ? 'var(--purple-primary)' : 'var(--bg-secondary)', color: isActive ? 'white' : 'var(--text-muted)', borderRadius: 10, padding: '1px 6px', fontSize: 11, fontWeight: 700 }}>
-                    {selCount > 0 ? `${selCount}/${count}` : count}
-                  </span>
-                </button>
-              );
-            })}
+        {wizardRange.start && wizardRange.end && (
+          <div style={{ fontSize: 13, color: 'var(--purple-primary)', marginTop: 8 }}>
+            {fmtDate(wizardRange.start)} → {fmtDate(wizardRange.end)}
           </div>
         )}
-
-        {/* Audit area bars → group sub-rows → individual tasks */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {areas.map(area => {
-            const areaAllIds = area.groups.flatMap(g => g.tasks.map(t => t.id));
-            const areaSelCount = areaAllIds.filter(id => selectedTaskIds.has(id)).length;
-            const areaAllSel = areaSelCount === areaAllIds.length;
-            const areaKey = `area::${area.name}`;
-            const isAreaExpanded = expandedGroups.has(areaKey);
-            const selectAllArea = () => {
-              setSelectedTaskIds(prev => { const n = new Set(prev); areaAllSel ? areaAllIds.forEach(id => n.delete(id)) : areaAllIds.forEach(id => n.add(id)); return n; });
-            };
-            return (
-              <div key={area.name} style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(123,63,160,0.3)' }}>
-                {/* Audit area header */}
-                <div onClick={() => setExpandedGroups(prev => { const n = new Set(prev); n.has(areaKey) ? n.delete(areaKey) : n.add(areaKey); return n; })}
-                  style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', gap: 10, cursor: 'pointer', background: 'var(--purple-primary)', color: 'white', userSelect: 'none' }}>
-                  <span style={{ flex: 1, fontSize: 13, fontWeight: 700 }}>{area.name}</span>
-                  <span style={{ fontSize: 12, opacity: 0.85 }}>{areaSelCount}/{areaAllIds.length}</span>
-                  <button onClick={e => { e.stopPropagation(); selectAllArea(); }}
-                    style={{ background: 'rgba(255,255,255,0.18)', border: 'none', cursor: 'pointer', color: 'white', fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 6, whiteSpace: 'nowrap' }}>
-                    {areaAllSel ? 'Deselect all' : 'Select all'}
-                  </button>
-                  <ChevronDown size={14} style={{ flexShrink: 0, transform: isAreaExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
-                </div>
-
-                {/* Group sub-rows */}
-                {isAreaExpanded && area.groups.map(g => {
-                  const gIds = g.tasks.map(t => t.id);
-                  const gSelCount = gIds.filter(id => selectedTaskIds.has(id)).length;
-                  const gAllSel = gSelCount === gIds.length;
-                  const grpKey = `grp::${area.name}::${g.name}`;
-                  const isGrpExpanded = expandedGroups.has(grpKey);
-                  const isSingleGroup = area.groups.length === 1 && g.name === area.name;
-                  return (
-                    <div key={g.name} style={{ borderTop: '1px solid var(--border)' }}>
-                      {/* Show group header only if there are multiple groups or group name differs from area */}
-                      {!isSingleGroup && (
-                        <div onClick={() => setExpandedGroups(prev => { const n = new Set(prev); n.has(grpKey) ? n.delete(grpKey) : n.add(grpKey); return n; })}
-                          style={{ display: 'flex', alignItems: 'center', padding: '8px 16px 8px 28px', gap: 10, cursor: 'pointer', background: gSelCount > 0 ? 'rgba(123,63,160,0.04)' : 'var(--bg-secondary)', userSelect: 'none' }}>
-                          <ChevronDown size={12} style={{ flexShrink: 0, color: 'var(--text-muted)', transform: isGrpExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
-                          <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
-                            {g.name}
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 6 }}>{gIds.length} task{gIds.length !== 1 ? 's' : ''}{gSelCount > 0 ? ` · ${gSelCount} selected` : ''}</span>
-                          </span>
-                          <button onClick={e => { e.stopPropagation(); selectAllGroup(g); }}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--purple-primary)', fontSize: 11, fontWeight: 600, padding: '2px 6px', whiteSpace: 'nowrap' }}>
-                            {gAllSel ? 'Deselect all' : 'Select all'}
-                          </button>
-                        </div>
-                      )}
-                      {/* Individual tasks — show when group expanded OR when it's a single group (auto-expand) */}
-                      {(isSingleGroup || isGrpExpanded) && g.tasks.map(t => (
-                        <div key={t.id} onClick={() => toggleTask(t.id)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 10,
-                                   padding: isSingleGroup ? '8px 16px 8px 28px' : '7px 16px 7px 48px',
-                                   borderTop: '1px solid var(--border)',
-                                   background: selectedTaskIds.has(t.id) ? 'rgba(123,63,160,0.04)' : 'var(--bg-primary)',
-                                   cursor: 'pointer', userSelect: 'none' }}>
-                          <input type="checkbox" checked={selectedTaskIds.has(t.id)} onChange={() => {}}
-                            style={{ width: 13, height: 13, accentColor: 'var(--purple-primary)', flexShrink: 0, pointerEvents: 'none' }} />
-                          <span style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.4 }}>{t.title}</span>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-          {areas.length === 0 && (
-            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, border: '1px dashed var(--border)', borderRadius: 8 }}>
-              No tasks found for this selection
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 20 }}>
-          <span style={{ fontSize: 13, color: selectedTaskIds.size ? 'var(--purple-primary)' : 'var(--text-muted)', fontWeight: selectedTaskIds.size ? 600 : 400 }}>
-            {selectedTaskIds.size > 0 ? `${selectedTaskIds.size} task${selectedTaskIds.size !== 1 ? 's' : ''} selected` : 'No tasks selected — use Select all or click individual tasks'}
-          </span>
-          <button onClick={() => setStep(2)} disabled={!selectedTaskIds.size}
-            style={{ ...btn('primary'), opacity: selectedTaskIds.size ? 1 : 0.4 }}>
-            Next: Review tasks →
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+          <button
+            onClick={() => loadAllUnassignedOccs(wizardRange)}
+            disabled={!rangeSet || occsLoading}
+            style={{ ...btn('primary'), opacity: rangeSet && !occsLoading ? 1 : 0.4 }}>
+            {occsLoading ? 'Loading…' : 'Find unassigned tasks →'}
           </button>
         </div>
       </div>
@@ -3272,79 +2471,182 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   }
 
   function renderStep2() {
-    const groups = getScopedGroups();
-    const allIds = groups.flatMap(g => g.tasks.map(t => t.id));
+    const someChecked = occs.some(o => checkedIds.has(o.id));
+
+    if (occsLoading) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Loading occurrences…</div>;
+
+    // Enrich each occ with its task definition
+    // Fall back to o.task (joined by calendar-range) when not in published tasks list
+    const occsWithDef = occs.map(o => ({ ...o, taskDef: tasks.find(t => t.id === o.task_definition_id) || o.task }));
+
+    // Categories that have unassigned occs
+    const activeCats = CAT_ORDER.filter(cat => occsWithDef.some(o => o.taskDef?.category === cat));
+    const activeCat = (step2Cat && activeCats.includes(step2Cat)) ? step2Cat : activeCats[0] || '';
+
+    // Frequencies for the active category that have unassigned occs
+    const activeFreqs = FREQ_ORDER.filter(freq =>
+      occsWithDef.some(o => o.taskDef?.category === activeCat && o.taskDef?.frequency?.toLowerCase() === freq)
+    );
+    const activeFreq = (step2Freq && activeFreqs.includes(step2Freq)) ? step2Freq : activeFreqs[0] || '';
+
+    // Occs visible in current cat+freq view
+    const visibleOccs = occsWithDef.filter(o =>
+      o.taskDef?.category === activeCat && o.taskDef?.frequency?.toLowerCase() === activeFreq
+    );
+
+    // Group visible occs by audit_area → task
+    const areaMap = new Map();
+    visibleOccs.forEach(o => {
+      const area = o.taskDef?.audit_area || o.taskDef?.group_name || o.taskDef?.title || '—';
+      if (!areaMap.has(area)) areaMap.set(area, new Map());
+      const taskKey = o.task_definition_id;
+      if (!areaMap.get(area).has(taskKey)) areaMap.get(area).set(taskKey, []);
+      areaMap.get(area).get(taskKey).push(o);
+    });
+
+    const toggleOccIds = (ids, forceCheck) => {
+      setCheckedIds(prev => {
+        const n = new Set(prev);
+        const allChecked = ids.every(id => n.has(id));
+        if (forceCheck !== undefined ? !forceCheck : allChecked) ids.forEach(id => n.delete(id));
+        else ids.forEach(id => n.add(id));
+        return n;
+      });
+    };
+
     return (
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <div>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>Task groups</span>
-            <span style={{ fontSize: 13, color: 'var(--text-muted)', marginLeft: 8 }}>
-              {groups.length} group{groups.length !== 1 ? 's' : ''}
-            </span>
-          </div>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>
+            {occs.length} unassigned occurrence{occs.length !== 1 ? 's' : ''} in range
+          </span>
           <div style={{ display: 'flex', gap: 4 }}>
-            <button onClick={() => setSelectedTaskIds(new Set(allIds))} style={linkBtn}>Select all</button>
-            <button onClick={() => setSelectedTaskIds(new Set())} style={{ ...linkBtn, color: 'var(--text-muted)' }}>Clear</button>
+            <button onClick={() => setCheckedIds(new Set(occs.map(o => o.id)))} style={linkBtn}>Select all</button>
+            <button onClick={() => setCheckedIds(new Set())} style={{ ...linkBtn, color: 'var(--text-muted)' }}>Clear</button>
           </div>
         </div>
 
-        <div style={{ position: 'relative' }}>
-        <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', maxHeight: 440, overflowY: 'auto' }}>
-          {groups.length === 0 && (
-            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-              No task groups in scope — go back and select at least one cadence
-            </div>
-          )}
-          {groups.map((g, i) => {
-            const allSel = g.tasks.every(t => selectedTaskIds.has(t.id));
-            const someSel = g.tasks.some(t => selectedTaskIds.has(t.id));
-            const expanded = expandedGroups.has(g.name);
-            return (
-              <div key={g.name} style={{ borderBottom: i < groups.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                <div style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', gap: 10, background: someSel ? 'rgba(123,63,160,0.04)' : 'transparent' }}>
-                  <input type="checkbox" checked={allSel}
-                    ref={el => { if (el) el.indeterminate = someSel && !allSel; }}
-                    onChange={() => toggleGroup(g)}
-                    style={{ width: 15, height: 15, accentColor: 'var(--purple-primary)', cursor: 'pointer' }} />
-                  <div style={{ flex: 1 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>{g.name}</span>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>
-                      {g.tasks.length} task{g.tasks.length !== 1 ? 's' : ''} · {FREQ_LABEL[g.frequency?.toLowerCase()] || g.frequency} · {g.category}
-                    </span>
-                    {someSel && !allSel && (
-                      <span style={{ fontSize: 11, color: 'var(--purple-primary)', marginLeft: 8, fontWeight: 700 }}>
-                        {g.tasks.filter(t => selectedTaskIds.has(t.id)).length}/{g.tasks.length}
-                      </span>
-                    )}
-                  </div>
-                  <button onClick={() => setExpandedGroups(prev => { const n = new Set(prev); n.has(g.name) ? n.delete(g.name) : n.add(g.name); return n; })}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11, padding: '2px 6px', userSelect: 'none' }}>
-                    {expanded ? '▲' : '▼'}
+        {occs.length === 0 && (
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, border: '1px solid var(--border)', borderRadius: 10 }}>
+            No unassigned occurrences in this date range.
+          </div>
+        )}
+
+        {occs.length > 0 && (
+          <>
+            {/* Category tabs */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg-secondary)' }}>
+              {activeCats.map(cat => {
+                const catCount = occsWithDef.filter(o => o.taskDef?.category === cat).length;
+                const isActive = cat === activeCat;
+                return (
+                  <button key={cat}
+                    onClick={() => { setStep2Cat(cat); setStep2Freq(''); }}
+                    style={{ padding: '6px 16px', borderRadius: 20, cursor: 'pointer', userSelect: 'none',
+                      background: isActive ? 'rgba(123,63,160,0.12)' : 'var(--bg-primary)',
+                      color: isActive ? 'var(--purple-primary)' : 'var(--text-primary)',
+                      fontWeight: isActive ? 700 : 500, fontSize: 13,
+                      border: isActive ? '1px solid rgba(123,63,160,0.3)' : '1px solid var(--border)' }}>
+                    {cat}
+                    <span style={{ marginLeft: 6, background: isActive ? 'var(--purple-primary)' : 'var(--bg-secondary)', color: isActive ? 'white' : 'var(--text-muted)', borderRadius: 10, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{catCount}</span>
                   </button>
-                </div>
-                {expanded && (
-                  <div style={{ background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)' }}>
-                    {g.tasks.map(t => (
-                      <label key={t.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 14px 8px 38px', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={selectedTaskIds.has(t.id)} onChange={() => toggleTask(t.id)}
-                          style={{ marginTop: 2, accentColor: 'var(--purple-primary)', cursor: 'pointer' }} />
-                        <span style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.4 }}>{t.title}</span>
-                      </label>
-                    ))}
+                );
+              })}
+            </div>
+
+            {/* Frequency pills */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+              {activeFreqs.map(freq => {
+                const freqCount = occsWithDef.filter(o => o.taskDef?.category === activeCat && o.taskDef?.frequency?.toLowerCase() === freq).length;
+                const isActive = freq === activeFreq;
+                return (
+                  <button key={freq}
+                    onClick={() => setStep2Freq(freq)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 20, cursor: 'pointer', userSelect: 'none',
+                      border: `1px solid ${isActive ? 'var(--purple-primary)' : 'var(--border)'}`,
+                      background: isActive ? 'rgba(123,63,160,0.08)' : 'var(--bg-primary)',
+                      color: isActive ? 'var(--purple-primary)' : 'var(--text-secondary)',
+                      fontWeight: isActive ? 700 : 400, fontSize: 12 }}>
+                    <Clock size={11} />
+                    {FREQ_LABEL[freq] || freq}
+                    <span style={{ background: isActive ? 'var(--purple-primary)' : 'var(--bg-secondary)', color: isActive ? 'white' : 'var(--text-muted)', borderRadius: 10, padding: '1px 6px', fontSize: 11, fontWeight: 700 }}>{freqCount}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Task list grouped by audit area */}
+            <div style={{ position: 'relative' }}>
+            <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', maxHeight: 420, overflowY: 'auto' }}>
+              {[...areaMap.entries()].map(([areaName, taskMap], ai) => {
+                const areaOccIds = [...taskMap.values()].flat().map(o => o.id);
+                const areaAllChecked = areaOccIds.every(id => checkedIds.has(id));
+                const areaSomeChecked = areaOccIds.some(id => checkedIds.has(id));
+                return (
+                  <div key={areaName}>
+                    {/* Audit area header */}
+                    <div style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', gap: 10, background: 'var(--purple-primary)', color: 'white', borderTop: ai > 0 ? '2px solid white' : 'none' }}>
+                      <input type="checkbox" checked={areaAllChecked}
+                        ref={el => { if (el) el.indeterminate = areaSomeChecked && !areaAllChecked; }}
+                        onChange={() => toggleOccIds(areaOccIds)}
+                        style={{ accentColor: 'white', cursor: 'pointer', width: 14, height: 14 }} />
+                      <span style={{ flex: 1, fontSize: 13, fontWeight: 700 }}>{areaName}</span>
+                      <span style={{ fontSize: 11, opacity: 0.85 }}>{areaOccIds.length} occurrence{areaOccIds.length !== 1 ? 's' : ''}</span>
+                      <button onClick={() => toggleOccIds(areaOccIds, !areaAllChecked)}
+                        style={{ background: 'rgba(255,255,255,0.18)', border: 'none', cursor: 'pointer', color: 'white', fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 6, whiteSpace: 'nowrap' }}>
+                        {areaAllChecked ? 'Deselect all' : 'Select all'}
+                      </button>
+                    </div>
+
+                    {/* Tasks within area */}
+                    {[...taskMap.entries()].map(([taskId, taskOccs], ti) => {
+                      const taskDef = taskOccs[0].taskDef;
+                      const taskLabel = taskDef?.title || taskId;
+                      const taskOccIds = taskOccs.map(o => o.id);
+                      const taskAllChecked = taskOccIds.every(id => checkedIds.has(id));
+                      const taskSomeChecked = taskOccIds.some(id => checkedIds.has(id));
+                      const sortedOccs = [...taskOccs].sort((a, b) => a.due_date.localeCompare(b.due_date));
+                      return (
+                        <div key={taskId} style={{ borderTop: '1px solid var(--border)' }}>
+                          {/* Task header row */}
+                          <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px 8px 20px', gap: 10, background: ti % 2 === 0 ? 'var(--bg-secondary)' : 'var(--bg-primary)' }}>
+                            <input type="checkbox" checked={taskAllChecked}
+                              ref={el => { if (el) el.indeterminate = taskSomeChecked && !taskAllChecked; }}
+                              onChange={() => toggleOccIds(taskOccIds)}
+                              style={{ accentColor: 'var(--purple-primary)', cursor: 'pointer', width: 13, height: 13, flexShrink: 0 }} />
+                            <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.4 }}>{taskLabel}</span>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>
+                              {taskOccs.length} occurrence{taskOccs.length !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                          {/* Occurrence date rows */}
+                          {sortedOccs.map(o => {
+                            const checked = checkedIds.has(o.id);
+                            return (
+                              <label key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 14px 6px 40px', borderTop: '1px solid var(--border)', cursor: 'pointer', background: checked ? 'rgba(123,63,160,0.03)' : 'transparent' }}>
+                                <input type="checkbox" checked={checked}
+                                  onChange={() => setCheckedIds(prev => { const n = new Set(prev); n.has(o.id) ? n.delete(o.id) : n.add(o.id); return n; })}
+                                  style={{ accentColor: 'var(--purple-primary)', cursor: 'pointer' }} />
+                                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fmtDate(o.due_date)}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 10px 10px' }} />
-        </div>
+                );
+              })}
+            </div>
+            </div>
+          </>
+        )}
 
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
           <button onClick={() => setStep(1)} style={btn('ghost')}>← Back</button>
-          <button onClick={() => setStep(3)} disabled={!selectedTaskIds.size}
-            style={{ ...btn('primary'), opacity: selectedTaskIds.size ? 1 : 0.4 }}>
+          <button onClick={() => setStep(3)} disabled={!someChecked}
+            style={{ ...btn('primary'), opacity: someChecked ? 1 : 0.4 }}>
             Next: Assignees →
           </button>
         </div>
@@ -3355,17 +2657,26 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   function renderStep3() {
     const members = sortByLast(profiles);
     const available = members.filter(p => !assigneeIds.includes(p.id));
+    // Check PTO only within the selected date range
+    const hasPtoInRange = (profileId) => vacations.some(v =>
+      v.requested_by === profileId &&
+      v.status !== 'denied' &&
+      v.start_date <= wizardRange.end &&
+      v.end_date >= wizardRange.start
+    );
+    const ptoLabel = wizardRange.start && wizardRange.end
+      ? `Has PTO between ${fmtDate(wizardRange.start)} – ${fmtDate(wizardRange.end)}`
+      : 'Has PTO during selected range';
     return (
       <div>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Add assignees</div>
-        {/* Selected assignees */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16, minHeight: 36 }}>
           {assigneeIds.map(id => {
             const p = profiles.find(x => x.id === id);
-            const pto = hasVacation(id);
+            const pto = hasPtoInRange(id);
             return (
               <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', background: 'rgba(123,63,160,0.1)', borderRadius: 20, border: '1.5px solid var(--purple-primary)' }}>
-                {pto && <span title="Has upcoming time away" style={{ fontSize: 11, color: '#f59e0b' }}>⚠</span>}
+                {pto && <span title={ptoLabel} style={{ fontSize: 11, color: '#f59e0b' }}>⚠</span>}
                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--purple-primary)' }}>{fmtName(p?.full_name) || id}</span>
                 <button onClick={() => setAssigneeIds(prev => prev.filter(x => x !== id))}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--purple-primary)', fontSize: 14, lineHeight: 1, padding: '0 2px' }}>×</button>
@@ -3377,11 +2688,10 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           )}
         </div>
 
-        {/* Add from list */}
         <div style={{ position: 'relative', marginBottom: 20 }}>
         <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', maxHeight: 200, overflowY: 'auto' }}>
           {available.map(p => {
-            const pto = hasVacation(p.id);
+            const pto = hasPtoInRange(p.id);
             return (
               <button key={p.id} onClick={() => setAssigneeIds(prev => [...prev, p.id])}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', background: 'none', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer', textAlign: 'left', fontSize: 13 }}>
@@ -3392,10 +2702,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           })}
           {available.length === 0 && <div style={{ padding: 12, fontSize: 13, color: 'var(--text-muted)' }}>All lab members added</div>}
         </div>
-        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 8px 8px' }} />
         </div>
 
-        {/* Rotate every N */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
           <span style={{ fontSize: 14 }}>Rotate every</span>
           <input type="number" min={1} value={rotateEvery} onChange={e => setRotateEvery(Math.max(1, Number(e.target.value)))}
@@ -3403,231 +2711,31 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>instance{rotateEvery !== 1 ? 's' : ''} between assignees</span>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <button onClick={() => setStep(2)} style={btn('ghost')}>← Back</button>
-          <button onClick={() => setStep(4)} disabled={!assigneeIds.length}
-            style={{ ...btn('primary'), opacity: assigneeIds.length ? 1 : 0.4 }}>
-            Next: Date range →
-          </button>
-        </div>
+        {(() => {
+          const allOnPto = assigneeIds.length > 0 && assigneeIds.every(id => hasPtoInRange(id));
+          const canProceed = assigneeIds.length > 0 && !allOnPto && !previewLoading;
+          return (
+            <>
+              {allOnPto && (
+                <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#DC2626' }}>
+                  All selected assignees have PTO during this date range — there is no one available to cover. Add at least one person who is not on PTO.
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <button onClick={() => setStep(2)} style={btn('ghost')}>← Back</button>
+                <button onClick={loadPreview} disabled={!canProceed}
+                  style={{ ...btn('primary'), opacity: canProceed ? 1 : 0.4 }}>
+                  {previewLoading ? 'Computing…' : 'Preview rotation →'}
+                </button>
+              </div>
+            </>
+          );
+        })()}
       </div>
     );
   }
 
   function renderStep4() {
-    if (!orderedFreqs.length) {
-      return (
-        <div>
-          <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>No tasks selected. Go back and select at least one task.</p>
-          <button onClick={() => setStep(3)} style={btn('ghost')}>← Back</button>
-        </div>
-      );
-    }
-
-    const currentFreq = orderedFreqs[freqSubStep];
-    const currentRange = dateRanges[currentFreq] || { start: null, end: null };
-    const rangeComplete = currentRange.start && currentRange.end;
-    const isFirst = freqSubStep === 0;
-    const isLast = freqSubStep >= orderedFreqs.length - 1;
-    const hasMore = orderedFreqs.length > 1 && isFirst && !applyAllAsked && rangeComplete;
-
-    function setCurrentRange(r) {
-      setDateRanges(prev => ({ ...prev, [currentFreq]: r }));
-    }
-
-    function applyToAll() {
-      const range = dateRanges[orderedFreqs[0]];
-      const allRanges = {};
-      orderedFreqs.forEach(f => { allRanges[f] = range; });
-      setDateRanges(allRanges);
-      setApplyAllAsked(true);
-      loadOccurrences(allRanges);
-    }
-
-    function advanceSubStep() {
-      if (isLast) {
-        loadOccurrences();
-      } else {
-        setFreqSubStep(f => f + 1);
-        setApplyAllAsked(true);
-      }
-    }
-
-    return (
-      <div>
-        {/* Sub-step progress */}
-        {orderedFreqs.length > 1 && (
-          <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
-            {orderedFreqs.map((f, i) => (
-              <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 12,
-                  background: i === freqSubStep ? 'var(--purple-primary)' : dateRanges[f]?.end ? 'rgba(123,63,160,0.15)' : 'var(--bg-secondary)',
-                  color: i === freqSubStep ? '#fff' : dateRanges[f]?.end ? 'var(--purple-primary)' : 'var(--text-muted)',
-                  fontWeight: i === freqSubStep ? 700 : 400 }}>
-                  {FREQ_LABEL[f]}
-                </span>
-                {i < orderedFreqs.length - 1 && <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>→</span>}
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{FREQ_LABEL[currentFreq]} date range</div>
-        {currentRange.start && currentRange.end && (
-          <div style={{ fontSize: 13, color: 'var(--purple-primary)', marginBottom: 12 }}>
-            {fmtDate(currentRange.start)} → {fmtDate(currentRange.end)}
-          </div>
-        )}
-
-        <div style={{ marginBottom: 20 }}>
-          {pickerFor(currentFreq, currentRange, setCurrentRange)}
-        </div>
-
-        {/* Apply to all prompt (after first range is set, if more frequencies) */}
-        {hasMore && (
-          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: 16, marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
-              Apply this range to {orderedFreqs.length - 1} other {orderedFreqs.length - 1 === 1 ? 'frequency' : 'frequencies'}?
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={applyToAll} style={btn('primary')}>Apply to all</button>
-              <button onClick={() => { setApplyAllAsked(true); setFreqSubStep(1); }} style={btn('outline')}>Set each individually</button>
-            </div>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <button onClick={() => { if (freqSubStep > 0) setFreqSubStep(f => f - 1); else setStep(3); }} style={btn('ghost')}>← Back</button>
-          {(!hasMore) && (
-            <button onClick={advanceSubStep} disabled={!rangeComplete || occsLoading}
-              style={{ ...btn('primary'), opacity: rangeComplete && !occsLoading ? 1 : 0.4 }}>
-              {occsLoading ? 'Loading…' : isLast ? 'Next: Occurrences →' : `Next: ${FREQ_LABEL[orderedFreqs[freqSubStep + 1]]} →`}
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  function renderStep5() {
-    const someChecked = occs.some(o => checkedIds.has(o.id));
-    const reassignCount = occs.filter(o => checkedIds.has(o.id) && o.assigned_to).length;
-
-    if (occsLoading) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Loading occurrences…</div>;
-
-    // Group by task, sorted by task name then date within each group
-    const taskGroupOrder = [];
-    const taskGroupMap = {};
-    [...occs].sort((a, b) => {
-      const ta = tasks.find(t => t.id === a.task_definition_id);
-      const tb = tasks.find(t => t.id === b.task_definition_id);
-      const ga = ta?.group_name || '';
-      const gb = tb?.group_name || '';
-      if (ga !== gb) return ga.localeCompare(gb);
-      const na = ta?.title || '';
-      const nb = tb?.title || '';
-      if (na !== nb) return na.localeCompare(nb);
-      return a.due_date.localeCompare(b.due_date);
-    }).forEach(o => {
-      const key = o.task_definition_id;
-      if (!taskGroupMap[key]) { taskGroupMap[key] = []; taskGroupOrder.push(key); }
-      taskGroupMap[key].push(o);
-    });
-
-    return (
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <span style={{ fontSize: 14, fontWeight: 600 }}>{occs.length} occurrence{occs.length !== 1 ? 's' : ''} in range</span>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button onClick={() => setCheckedIds(new Set(occs.map(o => o.id)))} style={linkBtn}>Select all</button>
-            <button onClick={() => setCheckedIds(new Set())} style={{ ...linkBtn, color: 'var(--text-muted)' }}>Clear</button>
-          </div>
-        </div>
-
-        {reassignCount > 0 && (
-          <div style={{ background: '#FFF3CD', border: '1px solid #FFC107', borderRadius: 8, padding: '8px 14px', marginBottom: 12, fontSize: 13 }}>
-            {reassignCount} selected occurrence{reassignCount !== 1 ? 's' : ''} already have an assignee. Continuing will reassign them.
-          </div>
-        )}
-
-        {occs.length === 0 && (
-          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, border: '1px solid var(--border)', borderRadius: 10 }}>
-            No occurrences found in the selected date range for these tasks.
-          </div>
-        )}
-
-        {occs.length > 0 && (
-          <div style={{ position: 'relative' }}>
-          <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', maxHeight: 420, overflowY: 'auto' }}>
-            {taskGroupOrder.map((taskId, gi) => {
-              const groupOccs = taskGroupMap[taskId];
-              const taskDef = tasks.find(t => t.id === taskId);
-              const taskLabel = taskDef?.title || taskDef?.group_name || taskId;
-              const allGroupChecked = groupOccs.every(o => checkedIds.has(o.id));
-              const someGroupChecked = groupOccs.some(o => checkedIds.has(o.id));
-
-              return (
-                <div key={taskId} style={{ borderTop: gi > 0 ? '1px solid var(--border)' : 'none' }}>
-                  {/* Task group header */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: 'var(--bg-secondary)', gap: 10 }}>
-                    <input type="checkbox" checked={allGroupChecked}
-                      ref={el => { if (el) el.indeterminate = someGroupChecked && !allGroupChecked; }}
-                      onChange={() => {
-                        const ids = groupOccs.map(o => o.id);
-                        setCheckedIds(prev => {
-                          const n = new Set(prev);
-                          allGroupChecked ? ids.forEach(id => n.delete(id)) : ids.forEach(id => n.add(id));
-                          return n;
-                        });
-                      }}
-                      style={{ accentColor: 'var(--purple-primary)', cursor: 'pointer' }} />
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', flex: 1 }}>{taskLabel}</span>
-                    {taskDef?.group_name && (
-                      <span style={{ fontSize: 11, color: 'var(--purple-primary)', background: 'rgba(123,63,160,0.1)', padding: '1px 7px', borderRadius: 10, flexShrink: 0 }}>{taskDef.group_name}</span>
-                    )}
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>
-                      {groupOccs.length} occurrence{groupOccs.length !== 1 ? 's' : ''}
-                      {taskDef?.frequency && ` · ${FREQ_LABEL[taskDef.frequency.toLowerCase()] || taskDef.frequency}`}
-                    </span>
-                  </div>
-                  {/* Occurrence rows */}
-                  {groupOccs.map((o, i) => {
-                    const checked = checkedIds.has(o.id);
-                    return (
-                      <label key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 14px 8px 36px', borderTop: '1px solid var(--border)', cursor: 'pointer', background: checked ? 'rgba(123,63,160,0.03)' : 'transparent' }}>
-                        <input type="checkbox" checked={checked}
-                          onChange={() => setCheckedIds(prev => { const n = new Set(prev); n.has(o.id) ? n.delete(o.id) : n.add(o.id); return n; })}
-                          style={{ accentColor: 'var(--purple-primary)', cursor: 'pointer' }} />
-                        <span style={{ fontSize: 13, fontWeight: 500, minWidth: 110 }}>{fmtDate(o.due_date)}</span>
-                        <span style={{ fontSize: 12, color: o.assigned_to ? 'var(--text-muted)' : '#9ca3af' }}>
-                          {o.assigned_to ? `assigned to ${o.assignee?.full_name || o.assigned_to}` : 'unassigned'}
-                        </span>
-                        {o.assigned_to && checked && (
-                          <span style={{ fontSize: 11, background: '#FEF3C7', color: '#92400E', padding: '2px 6px', borderRadius: 4 }}>will reassign</span>
-                        )}
-                      </label>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 10px 10px' }} />
-          </div>
-        )}
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
-          <button onClick={() => setStep(4)} style={btn('ghost')}>← Back</button>
-          <button onClick={loadPreview} disabled={!someChecked || previewLoading}
-            style={{ ...btn('primary'), opacity: someChecked && !previewLoading ? 1 : 0.4 }}>
-            {previewLoading ? 'Computing…' : 'Preview rotation →'}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  function renderStep6() {
     if (!preview) return null;
     const unresolvable = preview.filter(r => r.unresolvable);
     const blocked = preview.filter(r => r.blocked);
@@ -3646,11 +2754,12 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
             <button onClick={resetWizard} style={btn('primary')}>Assign more</button>
-            <button onClick={() => setTab('calendar')} style={btn('outline')}>View calendar</button>
           </div>
         </div>
       );
     }
+
+    const zeroTaskAssignees = assigneeIds.filter(id => !counts[id]);
 
     return (
       <div>
@@ -3661,11 +2770,15 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         )}
         {blocked.length > 0 && (
           <div style={{ background: '#FFF7ED', border: '1px solid #FDBA74', borderRadius: 8, padding: '10px 14px', marginBottom: 8, fontSize: 13 }}>
-            {blocked.length} occurrence{blocked.length !== 1 ? 's' : ''} could not be covered — all selected assignees are on PTO on those dates. They will remain unassigned. Add a fallback assignee or adjust the date range.
+            {blocked.length} occurrence{blocked.length !== 1 ? 's' : ''} could not be covered — all selected assignees are on PTO on those dates. They will remain unassigned.
+          </div>
+        )}
+        {zeroTaskAssignees.length > 0 && (
+          <div style={{ background: '#FFF7ED', border: '1px solid #FDBA74', borderRadius: 8, padding: '10px 14px', marginBottom: 8, fontSize: 13 }}>
+            <strong>{zeroTaskAssignees.map(id => profileName(id)).join(', ')}</strong> {zeroTaskAssignees.length === 1 ? 'was' : 'were'} not assigned any tasks — {zeroTaskAssignees.length === 1 ? 'they are' : 'they are all'} on PTO for every occurrence period in this range. Go back and remove {zeroTaskAssignees.length === 1 ? 'them' : 'them'} or add someone who is available.
           </div>
         )}
 
-        {/* Counts footer */}
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
           {Object.entries(counts).map(([id, n]) => (
             <div key={id} style={{ padding: '4px 12px', background: 'rgba(123,63,160,0.08)', borderRadius: 20, fontSize: 13, color: 'var(--purple-primary)', fontWeight: 600 }}>
@@ -3679,7 +2792,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           )}
         </div>
 
-        {/* Preview table */}
         <div style={{ position: 'relative' }}>
         <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', maxHeight: 380, overflowY: 'auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 1fr 1fr auto', gap: 0 }}>
@@ -3708,11 +2820,10 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
             })}
           </div>
         </div>
-        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 10px 10px' }} />
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
-          <button onClick={() => setStep(5)} style={btn('ghost')}>← Back</button>
+          <button onClick={() => setStep(3)} style={btn('ghost')}>← Back</button>
           <button onClick={submitAssignment} disabled={submitting} style={{ ...btn('primary'), opacity: submitting ? 0.6 : 1 }}>
             {submitting ? 'Saving…' : `Confirm & save ${preview.filter(r => r.assignedTo).length} assignments`}
           </button>
@@ -3720,6 +2831,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       </div>
     );
   }
+
+
 
   // ── Calendar tab ──────────────────────────────────────────────────────────
 
@@ -3828,7 +2941,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                 </tbody>
               </table>
             </div>
-            <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 40, background: 'linear-gradient(to right, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none' }} />
             </div>
           )}
         </div>
@@ -3879,8 +2991,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                         }}>
                         <div style={{ fontSize: 12, fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--purple-primary)' : 'var(--text-primary)', marginBottom: 4 }}>{day}</div>
                         {unassignedOccs.length > 0 && (
-                          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', background: '#FFF3CD', border: '1.5px solid #F59E0B', color: '#B45309', fontSize: 9, fontWeight: 800, marginBottom: 3 }}>
-                            !
+                          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 16, height: 16, borderRadius: 8, background: '#FFF3CD', border: '1.5px solid #F59E0B', color: '#B45309', fontSize: 9, fontWeight: 800, marginBottom: 3, padding: '0 3px', gap: 1 }}>
+                            !{unassignedOccs.length}
                           </div>
                         )}
                         <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -3995,7 +3107,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                       </div>
                     )}
                   </div>
-                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)' }} />
                 </div>
               )}
             </div>
@@ -4108,7 +3219,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     setQaSubmitting(false);
     setQaDone(true);
     loadUnassigned();
-    if (tab === 'calendar') loadCalendar();
+    if (tab === 'view-all') loadCalendar();
   }
 
   async function loadOneOffTab() {
@@ -4182,24 +3293,27 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       if (searchQ && !t.title.toLowerCase().includes(searchQ) && !(t.description || '').toLowerCase().includes(searchQ)) return false;
       return true;
     });
-    const pendingForTab = tasksForTab.filter(t => t.status !== 'done' && t.status !== 'submitted' && t.status !== 'completed');
-    const doneForTab    = tasksForTab.filter(t => t.status === 'done' || t.status === 'submitted' || t.status === 'completed');
+    const isTaskDone = t => t.status === 'done' || t.status === 'submitted' || t.status === 'completed';
+    const overdueForTab   = tasksForTab.filter(t => !isTaskDone(t) && t.due_date && t.due_date < todayStr);
+    const upcomingForTab  = tasksForTab.filter(t => !isTaskDone(t) && t.due_date && t.due_date >= todayStr);
+    const nodateForTab    = tasksForTab.filter(t => !isTaskDone(t) && !t.due_date);
+    const doneForTab      = tasksForTab.filter(t => isTaskDone(t));
 
     const TaskRow = ({ task }) => {
       const isDone = task.status === 'done' || task.status === 'submitted' || task.status === 'completed';
       const isOverdue = !isDone && task.due_date && task.due_date < todayStr;
-      const upcoming7 = !isDone && !isOverdue && task.due_date && task.due_date <= new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+      const isUpcoming = !isDone && !isOverdue && !!task.due_date;
       const daysOverdue = isOverdue ? Math.ceil((new Date(todayStr) - new Date(task.due_date)) / 86400000) : 0;
-      const daysUntil = upcoming7 ? Math.ceil((new Date(task.due_date) - new Date(todayStr)) / 86400000) : 0;
-      const rowBg = isDone ? 'var(--bg-primary)' : isOverdue ? '#FEF2F2' : upcoming7 ? '#FFFBEB' : 'var(--bg-primary)';
-      const rowBorder = isDone ? 'var(--border)' : isOverdue ? '#fca5a5' : upcoming7 ? '#FDE68A' : 'var(--border)';
+      const daysUntil = isUpcoming ? Math.ceil((new Date(task.due_date) - new Date(todayStr)) / 86400000) : 0;
+      const rowBg = isDone ? '#F7F8FA' : isOverdue ? '#FEF2F2' : isUpcoming ? '#FFFBEB' : 'var(--bg-primary)';
+      const rowBorder = isDone ? '#E3E5E8' : isOverdue ? '#fca5a5' : isUpcoming ? '#FDE68A' : 'var(--border)';
       const isConfirmDelete = confirmDeleteOneOff === task.id;
       return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: rowBg, borderRadius: 8, border: `1px solid ${rowBorder}`, opacity: isDone ? 0.55 : 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: rowBg, borderRadius: 8, border: `1px solid ${rowBorder}`, opacity: isDone ? 0.6 : 1 }}>
           <input type="checkbox" checked={isDone} onChange={() => handleOneOffToggleDone(task)}
             style={{ width: 15, height: 15, flexShrink: 0, cursor: 'pointer', accentColor: 'var(--purple-primary)' }} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, color: '#1a1a2e', textDecoration: isDone ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: (isOverdue || upcoming7) && !isDone ? 600 : 400 }}>{task.title}</div>
+            <div style={{ fontSize: 13, color: '#1a1a2e', textDecoration: isDone ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: isOverdue && !isDone ? 600 : 400 }}>{task.title}</div>
             {task.description && <div style={{ fontSize: 11, color: '#555', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.description}</div>}
           </div>
           {oneOffPersonTab === 'all' && task.assignee?.full_name && (
@@ -4208,11 +3322,11 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
           {task.show_on_public_dashboard && <Globe size={12} color="var(--purple-primary)" style={{ flexShrink: 0 }} />}
           {task.due_date ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, flexShrink: 0 }}>
-              <span style={{ fontSize: 11, color: '#1a1a2e', whiteSpace: 'nowrap', fontWeight: (isOverdue || upcoming7) ? 600 : 400 }}>
+              <span style={{ fontSize: 11, color: '#1a1a2e', whiteSpace: 'nowrap', fontWeight: isOverdue ? 600 : 400 }}>
                 {fmtDate(task.due_date)}
               </span>
               {isOverdue && <span style={{ fontSize: 10, color: '#C0392B', whiteSpace: 'nowrap' }}>{daysOverdue === 1 ? '1d overdue' : `${daysOverdue}d overdue`}</span>}
-              {upcoming7 && <span style={{ fontSize: 10, color: '#B7770D', whiteSpace: 'nowrap' }}>{daysUntil === 0 ? 'due today' : daysUntil === 1 ? 'in 1 day' : `in ${daysUntil} days`}</span>}
+              {isUpcoming && daysUntil <= 7 && <span style={{ fontSize: 10, color: '#B7770D', whiteSpace: 'nowrap' }}>{daysUntil === 0 ? 'due today' : daysUntil === 1 ? 'in 1 day' : `in ${daysUntil} days`}</span>}
             </div>
           ) : (
             <span style={{ fontSize: 11, color: '#555', flexShrink: 0, whiteSpace: 'nowrap' }}>
@@ -4321,25 +3435,42 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                 ))}
               </div>
 
-              {/* Task rows */}
-              {pendingForTab.length === 0 && doneForTab.length === 0 ? (
+              {/* Task rows — split into overdue / upcoming / no-date / completed */}
+              {overdueForTab.length === 0 && upcomingForTab.length === 0 && nodateForTab.length === 0 && doneForTab.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: 13 }}>
                   {searchQ ? 'No tasks match your search.' : 'No tasks for this person.'}
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {pendingForTab.length > 0 && (
+                  {overdueForTab.length > 0 && (
                     <>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 }}>
-                        Pending · {pendingForTab.length}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', background: '#FEF2F2', border: '1px solid #fca5a5', borderRadius: 6, marginBottom: 2 }}>
+                        <AlertTriangle size={11} color="#C0392B" />
+                        <span style={{ fontSize: 11, fontWeight: 800, color: '#C0392B', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Overdue · {overdueForTab.length}</span>
                       </div>
-                      {pendingForTab.sort((a, b) => (a.due_date || '').localeCompare(b.due_date || '')).map(t => <TaskRow key={t.id} task={t} />)}
+                      {overdueForTab.sort((a, b) => (a.due_date || '').localeCompare(b.due_date || '')).map(t => <TaskRow key={t.id} task={t} />)}
+                    </>
+                  )}
+                  {upcomingForTab.length > 0 && (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 6, margin: `${overdueForTab.length > 0 ? 10 : 0}px 0 2px` }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: '#B7770D', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Upcoming · {upcomingForTab.length}</span>
+                      </div>
+                      {upcomingForTab.sort((a, b) => (a.due_date || '').localeCompare(b.due_date || '')).map(t => <TaskRow key={t.id} task={t} />)}
+                    </>
+                  )}
+                  {nodateForTab.length > 0 && (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 6, margin: `${overdueForTab.length + upcomingForTab.length > 0 ? 10 : 0}px 0 2px` }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>No due date · {nodateForTab.length}</span>
+                      </div>
+                      {nodateForTab.map(t => <TaskRow key={t.id} task={t} />)}
                     </>
                   )}
                   {doneForTab.length > 0 && (
                     <>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '12px 0 4px' }}>
-                        Completed · {doneForTab.length}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', background: '#F7F8FA', border: '1px solid #E3E5E8', borderRadius: 6, margin: `${overdueForTab.length + upcomingForTab.length + nodateForTab.length > 0 ? 10 : 0}px 0 2px` }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Completed · {doneForTab.length}</span>
                       </div>
                       {doneForTab.sort((a, b) => (b.due_date || '').localeCompare(a.due_date || '')).map(t => <TaskRow key={t.id} task={t} />)}
                     </>
@@ -4437,7 +3568,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   // ── Step indicator ────────────────────────────────────────────────────────
 
   function renderStepIndicator() {
-    const steps = ['Scope', 'Recurrent Tasks', 'Assignees', 'Date range', 'Occurrences', 'Preview'];
+    const steps = ['Date range', 'Unassigned tasks', 'Assignees', 'Preview'];
     return (
       <div style={{ display: 'flex', gap: 0, marginBottom: 28 }}>
         {steps.map((s, i) => {
@@ -4478,9 +3609,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
   const tabs = [
     ...(canTabRecurrent    ? [{ id: 'view-all',     label: 'Recurrent Tasks' }] : []),
     ...(canTabAdhoc        ? [{ id: 'oneoff',       label: 'Ad hoc Tasks' }] : []),
-    ...(canTabCalendar     ? [{ id: 'calendar',     label: 'Calendar' }] : []),
     ...(canTabProductivity ? [{ id: 'productivity', label: 'Productivity' }] : []),
-    ...(canTabAssignments  ? [{ id: 'assigned',     label: 'Recurrent Task Assignments', badge: unassignedCount || null }] : []),
     { id: 'my-tasks', label: 'My Tasks', badge: null },
   ];
 
@@ -4512,26 +3641,21 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       <div>
       {canManage && tab === 'view-all' && (
         <>
+          <div style={{ overflowX: 'hidden', marginBottom: 28 }}>
+            {renderCalendar()}
+          </div>
           <div style={card}>
             {renderStepIndicator()}
             {step === 1 && renderStep1()}
             {step === 2 && renderStep2()}
             {step === 3 && renderStep3()}
             {step === 4 && renderStep4()}
-            {step === 5 && renderStep5()}
-            {step === 6 && renderStep6()}
           </div>
           <div style={{ borderTop: '2px solid var(--border)', margin: '28px 0' }} />
           <div style={card}>
             {renderViewAll()}
           </div>
         </>
-      )}
-
-      {canManage && tab === 'calendar' && (
-        <div style={{ overflowX: 'hidden' }}>
-          {renderCalendar()}
-        </div>
       )}
 
       {canManage && tab === 'productivity' && (
@@ -4546,11 +3670,6 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
         </div>
       )}
 
-      {canManage && tab === 'assigned' && (
-        <div style={card}>
-          {renderAssignedTab()}
-        </div>
-      )}
 
       {tab === 'my-tasks' && (
         <div style={card}>

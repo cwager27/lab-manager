@@ -45,8 +45,10 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showBell, setShowBell] = useState(false);
+  const [showAvatar, setShowAvatar] = useState(false);
   const errorTimeoutRef = useRef(null);
   const bellRef = useRef(null);
+  const avatarRef = useRef(null);
   const searchInputRef = useRef(null);
   // Track recovery mode in a ref so the onAuthStateChange closure always has the latest value
   const inRecoveryRef = useRef(isRecoveryUrl);
@@ -153,7 +155,7 @@ export default function App() {
 
   useEffect(() => {
     function handleKey(e) {
-      if (e.key === 'Escape') { setShowSearch(false); setSearchQuery(''); setShowBell(false); }
+      if (e.key === 'Escape') { setShowSearch(false); setSearchQuery(''); setShowBell(false); setShowAvatar(false); }
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setShowSearch(v => !v); setSearchQuery(''); }
     }
     window.addEventListener('keydown', handleKey);
@@ -167,6 +169,14 @@ export default function App() {
     if (showBell) document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showBell]);
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (avatarRef.current && !avatarRef.current.contains(e.target)) setShowAvatar(false);
+    }
+    if (showAvatar) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showAvatar]);
 
   if (loading) {
     return (
@@ -219,28 +229,80 @@ export default function App() {
   const avatarInitials = (profile?.full_name || '?')
     .split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
 
-  const ALL_PAGES = [
-    { id: 'dashboard',  label: 'Dashboard',          icon: LayoutDashboard },
-    { id: 'tasks2',     label: 'Tasks',               icon: ClipboardList },
-    { id: 'vacation',   label: 'Time Off',            icon: Palmtree },
-    { id: 'meetings',   label: 'Team Meetings',       icon: Calendar },
-    { id: 'inventory',  label: 'Sample Inventory',    icon: FlaskConical },
-    { id: 'compliance', label: 'Compliance',          icon: ShieldCheck },
-    { id: 'policies',   label: 'Lab Policies & SOPs', icon: BookOpen },
-    { id: 'finance',    label: 'Finance',             icon: DollarSign, requiresFinance: true },
-    { id: 'legal',      label: 'Legal Documents',     icon: Scale, managerOnly: true },
-    { id: 'tips',       label: 'Computational Tips',  icon: Terminal },
-    { id: 'contacts',   label: 'Contacts',            icon: Users, contactsOnly: true },
-  ].filter(p =>
-    (!p.managerOnly && !p.contactsOnly && !p.requiresFinance) ||
-    (p.managerOnly && canManage) ||
-    (p.requiresFinance && permissions.can_view_finance) ||
-    (p.contactsOnly && (permissions.can_view_contacts || canManage))
-  );
+  function fuzzyScore(q, entry) {
+    const query = q.toLowerCase().trim();
+    if (!query) return 0;
+    const label = entry.label.toLowerCase();
+    const keywords = (entry.keywords || '').toLowerCase();
+    const combined = label + ' ' + keywords;
+    if (label === query) return 100;
+    if (label.startsWith(query)) return 95;
+    if (label.includes(query)) return 90;
+    if (label.split(/\s+/).some(w => w.startsWith(query))) return 85;
+    if (keywords.includes(query)) return 80;
+    if (combined.split(/\s+/).some(w => w.startsWith(query))) return 75;
+    const queryWords = query.split(/\s+/);
+    if (queryWords.every(qw => combined.includes(qw))) return 60;
+    if (query.length >= 3) {
+      let qi = 0;
+      for (let i = 0; i < label.length && qi < query.length; i++) { if (label[i] === query[qi]) qi++; }
+      if (qi === query.length) return 40;
+      qi = 0;
+      for (let i = 0; i < keywords.length && qi < query.length; i++) { if (keywords[i] === query[qi]) qi++; }
+      if (qi === query.length) return 30;
+    }
+    return 0;
+  }
+
+  function navigateTo(entry) {
+    if (entry.tabKey) {
+      const [storageKey, tabValue] = entry.tabKey.split(':');
+      try { localStorage.setItem(storageKey, tabValue); } catch {}
+    }
+    setCurrentPage(entry.pageId);
+    setShowSearch(false);
+    setSearchQuery('');
+  }
+
+  const SEARCH_INDEX = [
+    { pageId: 'dashboard',  label: 'Dashboard',          icon: LayoutDashboard, keywords: 'home overview summary lab leadership personal' },
+    { pageId: 'tasks2',     label: 'Tasks',               icon: ClipboardList,   keywords: 'todo work checklist recurring' },
+    { pageId: 'vacation',   label: 'Time Off',            icon: Palmtree,        keywords: 'vacation leave holiday pto absence request approve time off' },
+    { pageId: 'meetings',   label: 'Team Meetings',       icon: Calendar,        keywords: 'meeting lab adhoc conference zoom calendar' },
+    { pageId: 'inventory',  label: 'Sample Inventory',    icon: FlaskConical,    keywords: 'sample inventory specimens cells storage biobank' },
+    { pageId: 'compliance', label: 'Compliance',          icon: ShieldCheck,     keywords: 'training certificate expire policy regulatory safety irb' },
+    { pageId: 'policies',   label: 'Lab Policies & SOPs', icon: BookOpen,        keywords: 'sop standard protocol procedure policy guidelines documentation' },
+    ...(permissions.can_view_finance ? [
+      { pageId: 'finance', label: 'Finance',               icon: DollarSign, keywords: 'money budget spending purchase cost accounting' },
+      { pageId: 'finance', label: 'Orders',                icon: DollarSign, tabKey: 'finance_tab:orders',         parent: 'Finance', keywords: 'order purchase buy procurement' },
+      { pageId: 'finance', label: 'Spending Summaries',    icon: DollarSign, tabKey: 'finance_tab:charts',         parent: 'Finance', keywords: 'chart graph spending trends analysis summary budget' },
+      { pageId: 'finance', label: 'Annual Summaries',      icon: DollarSign, tabKey: 'finance_tab:annual-summary', parent: 'Finance', keywords: 'annual yearly fiscal year fy summary' },
+      { pageId: 'finance', label: 'Smart Summary',         icon: DollarSign, tabKey: 'finance_tab:smart-summary',  parent: 'Finance', keywords: 'smart vendor catalog analysis insight' },
+      { pageId: 'finance', label: 'Vendors',               icon: DollarSign, tabKey: 'finance_tab:vendors',        parent: 'Finance', keywords: 'vendor supplier company fisher sigma' },
+      { pageId: 'finance', label: 'Grants',                icon: DollarSign, tabKey: 'finance_tab:grants',         parent: 'Finance', keywords: 'grant funding budget balance expire spenddown' },
+      { pageId: 'finance', label: 'Standardized Reagents', icon: DollarSign, tabKey: 'finance_tab:reagents',       parent: 'Finance', keywords: 'reagent standard catalog chemical stock' },
+    ] : []),
+    ...(canManage ? [{ pageId: 'legal', label: 'Legal Documents', icon: Scale, keywords: 'legal contract agreement nda mta document' }] : []),
+    { pageId: 'tips', label: 'Computational Tips', icon: Terminal, keywords: 'code script bioinformatics coding programming software cli command' },
+    ...((permissions.can_view_contacts || canManage) ? [{ pageId: 'contacts', label: 'Contacts', icon: Users, keywords: 'team members people directory email lab' }] : []),
+    { pageId: 'tasks2', label: 'My Tasks',         icon: ClipboardList, tabKey: 'tasks2_tab:my-tasks',     parent: 'Tasks', keywords: 'my task todo due history personal' },
+    ...(canManage ? [
+      { pageId: 'tasks2', label: 'All Tasks',          icon: ClipboardList, tabKey: 'tasks2_tab:view-all',     parent: 'Tasks', keywords: 'all tasks view everyone overview' },
+      { pageId: 'tasks2', label: 'Task Calendar',      icon: Calendar,      tabKey: 'tasks2_tab:calendar',     parent: 'Tasks', keywords: 'calendar schedule dates month week' },
+      { pageId: 'tasks2', label: 'Unassigned Tasks',   icon: ClipboardList, tabKey: 'tasks2_tab:unassigned',   parent: 'Tasks', keywords: 'unassigned nobody missing open' },
+      { pageId: 'tasks2', label: 'Assign Tasks',       icon: ClipboardList, tabKey: 'tasks2_tab:assigned',     parent: 'Tasks', keywords: 'assign assignment delegate distribute allocate' },
+      { pageId: 'tasks2', label: 'Task Productivity',  icon: ClipboardList, tabKey: 'tasks2_tab:productivity', parent: 'Tasks', keywords: 'productivity performance stats metrics progress score' },
+      { pageId: 'tasks2', label: 'One-off Tasks',      icon: ClipboardList, tabKey: 'tasks2_tab:oneoff',       parent: 'Tasks', keywords: 'oneoff adhoc sporadic special one time' },
+    ] : []),
+  ];
 
   const searchResults = searchQuery.trim()
-    ? ALL_PAGES.filter(p => p.label.toLowerCase().includes(searchQuery.toLowerCase()))
-    : ALL_PAGES;
+    ? SEARCH_INDEX
+        .map(entry => ({ entry, score: fuzzyScore(searchQuery, entry) }))
+        .filter(({ score }) => score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(({ entry }) => entry)
+    : SEARCH_INDEX.filter(e => !e.tabKey);
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-secondary)' }}>
@@ -279,14 +341,14 @@ export default function App() {
             </div>
             <div style={{ maxHeight: 320, overflowY: 'auto', padding: '6px 0' }}>
               {searchResults.length === 0 ? (
-                <p style={{ padding: '12px 18px', fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>No pages found.</p>
-              ) : searchResults.map(p => {
-                const Icon = p.icon;
-                const active = currentPage === p.id;
+                <p style={{ padding: '12px 18px', fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>No results found.</p>
+              ) : searchResults.map((entry, i) => {
+                const Icon = entry.icon;
+                const active = currentPage === entry.pageId && !entry.tabKey;
                 return (
                   <button
-                    key={p.id}
-                    onClick={() => { setCurrentPage(p.id); setShowSearch(false); setSearchQuery(''); }}
+                    key={`${entry.pageId}-${entry.tabKey || 'page'}-${i}`}
+                    onClick={() => navigateTo(entry)}
                     style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', border: 'none', background: active ? 'var(--purple-faint)' : 'transparent', cursor: 'pointer', textAlign: 'left' }}
                     onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--bg-secondary)'; }}
                     onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
@@ -294,7 +356,12 @@ export default function App() {
                     <div style={{ width: 30, height: 30, borderRadius: 8, background: active ? 'var(--purple-primary)' : 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <Icon size={15} color={active ? 'white' : 'var(--text-muted)'} />
                     </div>
-                    <span style={{ fontSize: 14, fontWeight: active ? 600 : 400, color: active ? 'var(--purple-primary)' : 'var(--text-primary)' }}>{p.label}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {entry.parent && (
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 1 }}>{entry.parent} →</div>
+                      )}
+                      <span style={{ fontSize: 14, fontWeight: active ? 600 : 400, color: active ? 'var(--purple-primary)' : 'var(--text-primary)' }}>{entry.label}</span>
+                    </div>
                     {active && <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--purple-primary)', fontWeight: 600 }}>Current</span>}
                   </button>
                 );
@@ -357,8 +424,31 @@ export default function App() {
             )}
           </div>
 
-          <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--purple-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, flexShrink: 0 }}>
-            <span style={{ color: 'white', fontSize: 12, fontWeight: 700, lineHeight: 1, letterSpacing: '0.02em' }}>{avatarInitials}</span>
+          {/* Avatar with logout dropdown */}
+          <div ref={avatarRef} style={{ position: 'relative', marginLeft: 8 }}>
+            <button
+              title="Account"
+              onClick={() => setShowAvatar(v => !v)}
+              style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--purple-primary)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, outline: showAvatar ? '2px solid var(--purple-primary)' : 'none', outlineOffset: 2 }}
+            >
+              <span style={{ color: 'white', fontSize: 12, fontWeight: 700, lineHeight: 1, letterSpacing: '0.02em' }}>{avatarInitials}</span>
+            </button>
+            {showAvatar && (
+              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 200, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 12, boxShadow: 'var(--shadow-lg)', zIndex: 200, overflow: 'hidden' }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{profile?.full_name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{profile?.email}</div>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--danger)', textAlign: 'left' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#FFF0F0'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>

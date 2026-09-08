@@ -244,11 +244,72 @@ router.get('/tasks2/unassigned', async (req, res) => {
 
 // ── Rotation algorithm ─────────────────────────────────────────────────────────
 
+// Returns [periodStart, periodEnd] ISO strings for the occurrence period.
+// A person is only unavailable if their PTO covers the ENTIRE period.
+function getOccurrencePeriod(dueDate, frequency) {
+  const d = new Date(dueDate + 'T12:00:00Z');
+  const pad = n => String(n).padStart(2, '0');
+  const iso = dt => `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`;
+
+  switch ((frequency || 'daily').toLowerCase()) {
+    case 'weekly': {
+      const dow = d.getUTCDay();
+      const sun = new Date(d); sun.setUTCDate(d.getUTCDate() - dow);
+      const sat = new Date(sun); sat.setUTCDate(sun.getUTCDate() + 6);
+      return [iso(sun), iso(sat)];
+    }
+    case 'biweekly': {
+      const dow = d.getUTCDay();
+      const sun = new Date(d); sun.setUTCDate(d.getUTCDate() - dow);
+      const end = new Date(sun); end.setUTCDate(sun.getUTCDate() + 13);
+      return [iso(sun), iso(end)];
+    }
+    case 'monthly': {
+      const y = d.getUTCFullYear(); const m = d.getUTCMonth();
+      const last = new Date(Date.UTC(y, m + 1, 0));
+      return [`${y}-${pad(m + 1)}-01`, iso(last)];
+    }
+    case 'quarterly': {
+      const y = d.getUTCFullYear(); const q = Math.floor(d.getUTCMonth() / 3);
+      const qStart = new Date(Date.UTC(y, q * 3, 1));
+      const qEnd   = new Date(Date.UTC(y, q * 3 + 3, 0));
+      return [iso(qStart), iso(qEnd)];
+    }
+    case 'yearly':
+      return [`${d.getUTCFullYear()}-01-01`, `${d.getUTCFullYear()}-12-31`];
+    default: // daily and anything else
+      return [dueDate, dueDate];
+  }
+}
+
+// Returns true only if the person's vacations cover EVERY day of [periodStart, periodEnd].
+function periodFullyCovered(userVacs, periodStart, periodEnd) {
+  const relevant = userVacs
+    .filter(v => v.start_date <= periodEnd && v.end_date >= periodStart)
+    .sort((a, b) => a.start_date.localeCompare(b.start_date));
+  if (!relevant.length) return false;
+  let covered = periodStart;
+  for (const v of relevant) {
+    if (v.start_date > covered) return false;
+    if (v.end_date >= covered) covered = v.end_date;
+    if (covered >= periodEnd) return true;
+  }
+  return covered >= periodEnd;
+}
+
 function runRotation(occs, assigneeIds, rotateEvery, vacations) {
-  function unavailable(userId, dateStr) {
-    return vacations.some(v =>
-      v.requested_by === userId && dateStr >= v.start_date && dateStr <= v.end_date
-    );
+  // Group vacations by user for fast lookup
+  const vacByUser = {};
+  for (const v of vacations) {
+    if (!vacByUser[v.requested_by]) vacByUser[v.requested_by] = [];
+    vacByUser[v.requested_by].push(v);
+  }
+
+  function unavailable(userId, dueDate, frequency) {
+    const userVacs = vacByUser[userId] || [];
+    if (!userVacs.length) return false;
+    const [pStart, pEnd] = getOccurrencePeriod(dueDate, frequency);
+    return periodFullyCovered(userVacs, pStart, pEnd);
   }
 
   const emptyPool = assigneeIds.length === 0;
@@ -257,12 +318,13 @@ function runRotation(occs, assigneeIds, rotateEvery, vacations) {
   const rows = [];
 
   for (const occ of occs) {
+    const frequency = occ.task?.frequency || occ.frequency || 'daily';
     let tries = 0;
     let assigned = null;
     let autoReassigned = false;
 
     while (tries < queue.length) {
-      if (!unavailable(queue[0], occ.due_date)) {
+      if (!unavailable(queue[0], occ.due_date, frequency)) {
         assigned = queue[0];
         break;
       }
@@ -310,7 +372,7 @@ router.post('/tasks2/assign', async (req, res) => {
     const [occRes, vacRes] = await Promise.all([
       supabaseAdmin
         .from('task_occurrences')
-        .select('id, task_definition_id, due_date, assigned_to, assignee:profiles(full_name)')
+        .select('id, task_definition_id, due_date, assigned_to, assignee:profiles(full_name), task:tasks_definitions(frequency)')
         .in('id', occurrenceIds)
         .order('due_date'),
       assigneeIds.length

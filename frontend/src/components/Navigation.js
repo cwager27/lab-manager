@@ -1,10 +1,10 @@
 import {
   ClipboardList, Calendar, FlaskConical,
   Users, ShieldCheck, Palmtree,
-  LayoutDashboard, LogOut, DollarSign, BookOpen, Terminal, Scale,
+  LayoutDashboard, DollarSign, BookOpen, Terminal, Scale,
 } from 'lucide-react';
 
-export default function Navigation({ currentPage, setCurrentPage, userRole, profile, onLogout, canManage, permissions, collapsed, onToggleCollapse }) {
+export default function Navigation({ currentPage, setCurrentPage, userRole, profile, canManage, permissions, collapsed, onToggleCollapse }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, always: true },
     { id: 'tasks2', label: 'Tasks', icon: ClipboardList, always: true },
@@ -107,24 +107,6 @@ export default function Navigation({ currentPage, setCurrentPage, userRole, prof
         })}
       </div>
 
-      {/* Footer — logout only; name/role shown in header avatar */}
-      <div style={{
-        padding: '12px 0',
-        borderTop: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
-      }}>
-        <button
-          onClick={onLogout}
-          title="Sign out"
-          style={{ background: 'none', border: 'none', color: 'var(--text-muted)', padding: 8, borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-          onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-        >
-          <LogOut size={16} />
-        </button>
-      </div>
     </nav>
   );
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useResizableColumns, ColResizer } from '../lib/useResizableColumns';
 import { supabase } from '../lib/supabase';
-import { AlertTriangle, Upload, Plus, Search, CheckCircle, Download, BarChart2, FileText } from 'lucide-react';
+import { AlertTriangle, Upload, Plus, Search, CheckCircle, Download, BarChart2, FileText, TrendingUp, ChartPie, Users } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Vendors from './Vendors';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
@@ -401,8 +401,6 @@ export default function Finance({ userRole }) {
   const [confirmDeleteOrder, setConfirmDeleteOrder] = useState(false);
   const [ordersYearTab, setOrdersYearTab] = useState(getCurrentFY);
   const [importError, setImportError] = useState(null);
-  const [normalizingCategories, setNormalizingCategories] = useState(false);
-  const [normalizeCatResult, setNormalizeCatResult] = useState(null);
   const [showImportFYModal, setShowImportFYModal] = useState(false);
   const [importFYInput, setImportFYInput] = useState('');
   const [importFYError, setImportFYError] = useState('');
@@ -606,24 +604,6 @@ export default function Finance({ userRole }) {
     importFileInputRef.current?.click();
   }
 
-  async function handleNormalizeCategories() {
-    if (!window.confirm('This will update all orders in the database that have old category names (e.g. "lab reagents", "TC reagents") to the current standard names. Continue?')) return;
-    setNormalizingCategories(true);
-    setNormalizeCatResult(null);
-    try {
-      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/admin/normalize-categories`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        setNormalizeCatResult(`Updated ${data.updated} orders. ${data.skipped} already correct.`);
-        fetchData();
-      } else {
-        setNormalizeCatResult(`Error: ${data.error}`);
-      }
-    } catch (e) {
-      setNormalizeCatResult(`Error: ${e.message}`);
-    }
-    setNormalizingCategories(false);
-  }
 
   async function handleConfirmImport() {
     if (!previewData) return;
@@ -1403,9 +1383,6 @@ async function commitOrderSelectEdit(id, col, value) {
                 setUploadingFile(false);
                 e.target.value = '';
               }} />
-<button onClick={handleNormalizeCategories} disabled={normalizingCategories} title="Remap old category names (lab reagents, TC reagents, etc.) to current standard names" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontWeight: 500, fontSize: '13px', cursor: normalizingCategories ? 'default' : 'pointer', opacity: normalizingCategories ? 0.6 : 1 }}>
-                  {normalizingCategories ? 'Normalizing…' : 'Fix Categories'}
-                </button>
 <button onClick={() => setShowAddOrder(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--purple-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /> Add Order</button>
             </>
           )}
@@ -1583,12 +1560,6 @@ async function commitOrderSelectEdit(id, col, value) {
 
           {activeTab === 'orders' && (
             <>
-              {normalizeCatResult && (
-                <div style={{ background: normalizeCatResult.startsWith('Error') ? '#FDEDEC' : '#EAF7EE', border: `1px solid ${normalizeCatResult.startsWith('Error') ? '#E74C3C' : '#27AE60'}`, borderRadius: 'var(--radius-md)', padding: '10px 16px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <p style={{ fontSize: '13px', fontWeight: 600, color: normalizeCatResult.startsWith('Error') ? '#E74C3C' : '#27AE60', margin: 0 }}>{normalizeCatResult}</p>
-                  <button onClick={() => setNormalizeCatResult(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'var(--text-muted)', lineHeight: 1, padding: '0 0 0 12px' }}>×</button>
-                </div>
-              )}
               {importError && (
                 <div style={{ background: '#FDEDEC', border: '1px solid #E74C3C', borderRadius: 'var(--radius-md)', padding: '14px 16px', marginBottom: '16px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -1897,7 +1868,10 @@ async function commitOrderSelectEdit(id, col, value) {
               {/* 1. Complete and Processing, totals */}
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '12px', flexWrap: 'wrap' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Complete and Processing, totals</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--purple-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><BarChart2 size={14} color="white" /></div>
+                    <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Complete and Processing, totals</h3>
+                  </div>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <button onClick={exportTotalsTable} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
                     <div style={{ position: 'relative' }}>
@@ -1970,7 +1944,10 @@ async function commitOrderSelectEdit(id, col, value) {
               {/* 2. Complete and Processing, per month */}
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '12px', flexWrap: 'wrap' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Complete and Processing, per month</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--purple-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><TrendingUp size={14} color="white" /></div>
+                    <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Complete and Processing, per month</h3>
+                  </div>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <button onClick={exportMonthTable} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
                     <div style={{ position: 'relative' }}>
@@ -2054,7 +2031,10 @@ async function commitOrderSelectEdit(id, col, value) {
               {/* 3. Complete and Processing, per expense type */}
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '12px', flexWrap: 'wrap' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Complete and Processing, per expense type</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--purple-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><ChartPie size={14} color="white" /></div>
+                    <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Complete and Processing, per expense type</h3>
+                  </div>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <button onClick={exportExpTypeTable} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
                     <div style={{ position: 'relative' }}>
@@ -2141,7 +2121,10 @@ async function commitOrderSelectEdit(id, col, value) {
               {/* 4. Monthly Spending by Category/User */}
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '12px', flexWrap: 'wrap' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Monthly Spending by Category/User</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--purple-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Users size={14} color="white" /></div>
+                    <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Monthly Spending by Category/User</h3>
+                  </div>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <button onClick={exportCatMonthTable} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer' }}><Download size={12} /> Export</button>
 
@@ -2339,7 +2322,10 @@ async function commitOrderSelectEdit(id, col, value) {
 
                 {/* Chart 1: Total spend per fiscal year */}
                 <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 20px' }}>Total spend per fiscal year</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '20px' }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--purple-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><BarChart2 size={14} color="white" /></div>
+                    <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Total spend per fiscal year</h3>
+                  </div>
                   <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
                     <div style={{ flex: '1 1 0', minWidth: 0 }}>
                       <ResponsiveContainer width="100%" height={260}>
@@ -2392,7 +2378,10 @@ async function commitOrderSelectEdit(id, col, value) {
 
                 {/* Chart 2: Monthly spend overlay — same calendar months, one line per FY */}
                 <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px' }}>Monthly spend by year</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '4px' }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--purple-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><TrendingUp size={14} color="white" /></div>
+                    <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Monthly spend by year</h3>
+                  </div>
                   <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 20px' }}>Calendar months overlaid — compare seasonal patterns across fiscal years</p>
                   <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
                     <div style={{ flex: '1 1 0', minWidth: 0 }}>
@@ -2446,7 +2435,10 @@ async function commitOrderSelectEdit(id, col, value) {
 
                 {/* Chart 3: Spend by category — year comparison */}
                 <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 20px' }}>Spend by expense type — year comparison</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '20px' }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--purple-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><ChartPie size={14} color="white" /></div>
+                    <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Spend by expense type — year comparison</h3>
+                  </div>
                   <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
                     <div style={{ flex: '1 1 0', minWidth: 0 }}>
                       <ResponsiveContainer width="100%" height={400}>

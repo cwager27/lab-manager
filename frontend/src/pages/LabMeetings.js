@@ -477,8 +477,9 @@ export default function LabMeetings({ userRole, userId, profile }) {
     const gridTemplate = isAdhoc ? '70px 1fr 120px 80px 80px 48px 1fr 22px' : '74px 1fr 28px 80px 1fr 1fr 22px';
     const awayMembers = members.filter(m => vacations.some(v => v.requested_by === m.id && v.start_date <= meeting.meeting_date && v.end_date >= meeting.meeting_date));
     const holiday = !isAdhoc ? isHoliday(meeting.meeting_date) : null;
-    const rowBg = isCompleted ? '#F7F8FA' : (!isAdhoc && meeting.is_sof) ? 'var(--purple-faint)' : 'var(--bg-card)';
-    const rowBorder = isCompleted ? '#E3E5E8' : (!isAdhoc && meeting.is_sof) ? 'var(--purple-border)' : 'var(--border)';
+    const isPastRow = isPast || isCompleted;
+    const rowBg = isPastRow ? '#F7F8FA' : (!isAdhoc && meeting.is_sof) ? 'var(--purple-faint)' : 'var(--bg-card)';
+    const rowBorder = isPastRow ? '#E3E5E8' : (!isAdhoc && meeting.is_sof) ? 'var(--purple-border)' : 'var(--border)';
 
     return (
       <div key={meeting.id} style={{
@@ -737,7 +738,7 @@ export default function LabMeetings({ userRole, userId, profile }) {
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '10px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: isLab ? 8 : 0 }}>
-              <div style={{ width: 34, height: 34, borderRadius: 9, background: isLab ? 'var(--purple-primary)' : '#3B5BDB', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 9, background: 'var(--purple-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 {isLab ? <Users size={16} color="white" /> : <Calendar size={16} color="white" />}
               </div>
               <h2 style={{ fontSize: '19px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
@@ -818,22 +819,44 @@ export default function LabMeetings({ userRole, userId, profile }) {
         {/* Presenter count summary for lab year tabs */}
         {isLab && (() => {
           const yearMeetings = getMeetings(table).filter(m => m.meeting_date?.startsWith(filter));
-          const pastCompleted = yearMeetings.filter(m => m.status === 'completed' && m.meeting_date <= today);
-          if (!pastCompleted.length) return null;
-          const counts = {};
-          pastCompleted.forEach(m => {
+          const pastMeetings = yearMeetings.filter(m => m.meeting_date < today && m.status !== 'cancelled' && m.presenter_id);
+          const upcomingMeetings = yearMeetings.filter(m => m.meeting_date >= today && m.status === 'scheduled' && m.presenter_id);
+          if (!pastMeetings.length && !upcomingMeetings.length) return null;
+          const doneCounts = {};
+          const scheduledCounts = {};
+          pastMeetings.forEach(m => {
             const name = fmtName(m.presenter?.full_name) || m.guest_name;
-            if (name) counts[name] = (counts[name] || 0) + 1;
+            if (name) doneCounts[name] = (doneCounts[name] || 0) + 1;
           });
-          const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+          upcomingMeetings.forEach(m => {
+            const name = fmtName(m.presenter?.full_name) || m.guest_name;
+            if (name) scheduledCounts[name] = (scheduledCounts[name] || 0) + 1;
+          });
+          const allNames = new Set([...Object.keys(doneCounts), ...Object.keys(scheduledCounts)]);
+          const rows = [...allNames].map(name => ({
+            name,
+            done: doneCounts[name] || 0,
+            scheduled: scheduledCounts[name] || 0,
+            total: (doneCounts[name] || 0) + (scheduledCounts[name] || 0),
+          })).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
           return (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', alignItems: 'center', marginBottom: '8px', padding: '6px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '2px' }}>Presented:</span>
-              {sorted.map(([name, count]) => (
-                <span key={name} style={{ fontSize: '13px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1px 8px', color: 'var(--text-secondary)' }}>
-                  {name} <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{count}×</span>
-                </span>
-              ))}
+            <div style={{ marginBottom: '10px', padding: '8px 10px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Presenter summary</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                {rows.map(({ name, done, scheduled, total }) => (
+                  <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '3px 10px', fontSize: '13px' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{name}</span>
+                    <span style={{ color: 'var(--text-muted)' }}>·</span>
+                    <span style={{ color: '#27AE60', fontWeight: 600 }}>{done} done</span>
+                    {scheduled > 0 && <>
+                      <span style={{ color: 'var(--text-muted)' }}>·</span>
+                      <span style={{ color: '#2980B9', fontWeight: 600 }}>{scheduled} upcoming</span>
+                    </>}
+                    <span style={{ color: 'var(--text-muted)' }}>·</span>
+                    <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{total} total</span>
+                  </div>
+                ))}
+              </div>
             </div>
           );
         })()}

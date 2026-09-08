@@ -44,14 +44,13 @@ function PeriodPicker({ value, onChange }) {
   );
 }
 
-function TaskStatusCard({ icon, title, tasks, getTitle, dateKey, upcomingLabel = 'Upcoming — next 30 days' }) {
+function TaskStatusCard({ icon, title, tasks, getTitle, dateKey }) {
   const todayStr = new Date().toISOString().split('T')[0];
-  const next14 = new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
+  const next30 = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
   const isDoneStatus = t => t.status === 'done' || t.status === 'submitted';
   const missed   = tasks.filter(t => !isDoneStatus(t) && t[dateKey] && t[dateKey] < todayStr);
-  const twoWeeks = tasks.filter(t => !isDoneStatus(t) && t[dateKey] && t[dateKey] >= todayStr && t[dateKey] <= next14);
-  const upcoming = tasks.filter(t => !isDoneStatus(t) && t[dateKey] && t[dateKey] > next14);
-  const isEmpty  = !missed.length && !twoWeeks.length && !upcoming.length;
+  const upcoming = tasks.filter(t => !isDoneStatus(t) && t[dateKey] && t[dateKey] >= todayStr && t[dateKey] <= next30);
+  const isEmpty  = !missed.length && !upcoming.length;
 
   const renderSection = (label, items, headBg, headColor, isMissed = false) => {
     if (!items.length) return null;
@@ -99,8 +98,7 @@ function TaskStatusCard({ icon, title, tasks, getTitle, dateKey, upcomingLabel =
       ) : (
         <>
           {renderSection('Missed', missed, '#FEF5F5', '#E74C3C', true)}
-          {renderSection('Upcoming — next 2 weeks', twoWeeks, '#FFFBF0', '#D68910')}
-          {renderSection(upcomingLabel, upcoming, 'var(--bg-secondary)', 'var(--text-secondary)')}
+          {renderSection('Upcoming — next 30 days', upcoming, '#FFFBF0', '#D68910')}
         </>
       )}
     </div>
@@ -368,6 +366,30 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
     return result;
   })();
 
+  const pendingOverlapMap = (() => {
+    const seen = new Set();
+    const allNonDenied = [...outToday, ...nextWeekOut, ...pendingVacations].filter(r => {
+      if (seen.has(r.id)) return false; seen.add(r.id); return true;
+    });
+    const result = {};
+    pendingVacations.forEach(r => {
+      const overlaps = allNonDenied.filter(o =>
+        o.id !== r.id &&
+        o.requested_by !== r.requested_by &&
+        o.start_date <= r.end_date && r.start_date <= o.end_date
+      );
+      if (overlaps.length > 0) {
+        result[r.id] = overlaps.map(o => ({
+          name: o.requester?.full_name || 'Unknown',
+          status: o.status,
+          start: o.start_date > r.start_date ? o.start_date : r.start_date,
+          end: o.end_date < r.end_date ? o.end_date : r.end_date,
+        }));
+      }
+    });
+    return result;
+  })();
+
 
   // 0=overdue, 1=upcoming with date, 2=no due date (assigned), 3=done
   const classifyAdhocTask = t => (t.status === 'done' || t.status === 'submitted') ? 3 : (t.due_date && t.due_date < today) ? 0 : t.due_date ? 1 : 2;
@@ -381,11 +403,6 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
     return a.due_date.localeCompare(b.due_date);
   });
 
-  const alertGrants = grants.filter(g => {
-    const pct = g.total_amount && g.remaining_balance ? (g.remaining_balance / g.total_amount) * 100 : null;
-    const daysLeft = g.end_date ? Math.ceil((new Date(g.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null;
-    return (pct !== null && pct < 25) || (daysLeft !== null && daysLeft <= 90);
-  });
 
   const next7 = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
   const next30 = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
@@ -508,7 +525,6 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                         );
                       })}
                     </div>
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none', borderRadius: '0 0 var(--radius-md) var(--radius-md)' }} />
                     </div>
                   )}
                 </div>
@@ -570,7 +586,6 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                         );
                       })}
                     </div>
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none' }} />
                     </div>
                   )}
                 </div>
@@ -629,7 +644,6 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                         );
                       })}
                     </div>
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none' }} />
                     </div>
                   )}
                 </div>
@@ -712,13 +726,12 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 80px 90px', gap: 8, padding: '6px 14px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
-                          {['Grant', 'Balance', 'Spenddown', 'Expires'].map(h => (
+                          {['Grant', 'Balance', '% Left', 'Expires'].map(h => (
                             <span key={h} style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</span>
                           ))}
                         </div>
                         {grants.map((g, i) => {
                           const pct = g.total_amount && g.remaining_balance != null ? (g.remaining_balance / g.total_amount) * 100 : null;
-                          const spendPct = pct !== null ? Math.max(0, Math.round(100 - pct)) : null;
                           const daysLeft = g.end_date ? Math.ceil((new Date(g.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null;
                           const lowBalance = pct !== null && pct < 25;
                           const urgent = daysLeft !== null && daysLeft <= 14;
@@ -730,8 +743,8 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                               <span style={{ fontSize: 12, color: lowBalance ? '#E74C3C' : 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {pct !== null ? `$${g.remaining_balance?.toLocaleString()} / $${g.total_amount?.toLocaleString()}` : '—'}
                               </span>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: spendPct === null ? 'var(--text-muted)' : spendPct > 75 ? '#E74C3C' : spendPct > 50 ? '#F39C12' : '#1A7F4B' }}>
-                                {spendPct !== null ? `${spendPct}%` : '—'}
+                              <span style={{ fontSize: 12, fontWeight: 600, color: pct === null ? 'var(--text-muted)' : pct < 10 ? '#E74C3C' : pct < 25 ? '#F39C12' : '#1A7F4B' }}>
+                                {pct !== null ? `${pct.toFixed(1)}%` : '—'}
                               </span>
                               <div>
                                 {daysLeft !== null ? (
@@ -803,7 +816,6 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                             );
                           })}
                         </div>
-                        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))', pointerEvents: 'none' }} />
                       </div>
                     )}
                     <div style={{ padding: '10px 14px', textAlign: 'center', borderTop: '1px solid var(--border)' }}>
@@ -827,14 +839,41 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                       <p style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No pending requests.</p>
                     ) : (
                       <div>
-                        {pendingVacations.map((r, i) => (
-                          <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.requester?.full_name || 'Unknown'}</span>
-                            <button onClick={() => handleVacationAction(r.id, 'approved')} disabled={vacActioning === r.id} style={{ padding: '4px 12px', fontSize: 11, fontWeight: 600, background: '#EAF7F0', color: '#1A7F4B', border: '1.5px solid #A9DFC3', borderRadius: 6, cursor: 'pointer', opacity: vacActioning === r.id ? 0.5 : 1, whiteSpace: 'nowrap', flexShrink: 0 }}>Approve</button>
-                            <button onClick={() => handleVacationAction(r.id, 'denied')} disabled={vacActioning === r.id} style={{ padding: '4px 12px', fontSize: 11, fontWeight: 600, background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', opacity: vacActioning === r.id ? 0.5 : 1, whiteSpace: 'nowrap', flexShrink: 0 }}>Deny</button>
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}</span>
-                          </div>
-                        ))}
+                        {pendingVacations.map((r, i) => {
+                          const overlaps = pendingOverlapMap[r.id];
+                          const warningOpen = overlapWarning === `pending_${r.id}`;
+                          return (
+                            <div key={r.id} style={{ position: 'relative' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.requester?.full_name || 'Unknown'}</span>
+                                {overlaps && (
+                                  <button onClick={() => setOverlapWarning(warningOpen ? null : `pending_${r.id}`)}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '1px 7px', fontSize: 11, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 6, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                                    ⚠ {overlaps.length} overlap{overlaps.length > 1 ? 's' : ''}
+                                  </button>
+                                )}
+                                <button onClick={() => handleVacationAction(r.id, 'approved')} disabled={vacActioning === r.id} style={{ padding: '4px 12px', fontSize: 11, fontWeight: 600, background: '#EAF7F0', color: '#1A7F4B', border: '1.5px solid #A9DFC3', borderRadius: 6, cursor: 'pointer', opacity: vacActioning === r.id ? 0.5 : 1, whiteSpace: 'nowrap', flexShrink: 0 }}>Approve</button>
+                                <button onClick={() => handleVacationAction(r.id, 'denied')} disabled={vacActioning === r.id} style={{ padding: '4px 12px', fontSize: 11, fontWeight: 600, background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', opacity: vacActioning === r.id ? 0.5 : 1, whiteSpace: 'nowrap', flexShrink: 0 }}>Deny</button>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{formatDate(r.start_date)}{r.start_date !== r.end_date ? ` – ${formatDate(r.end_date)}` : ''}</span>
+                              </div>
+                              {warningOpen && overlaps && (
+                                <div style={{ position: 'absolute', right: 14, top: '100%', marginTop: 4, zIndex: 50, background: 'white', border: '1px solid #F59E0B', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.12)', padding: '10px 14px', minWidth: 230 }}>
+                                  <div style={{ fontSize: 11, fontWeight: 700, color: '#92400E', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>⚠ Overlapping with {r.requester?.full_name}</div>
+                                  {overlaps.map((o, idx) => (
+                                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '4px 0', borderTop: idx > 0 ? '1px solid #FEF3C7' : 'none', alignItems: 'center' }}>
+                                      <div>
+                                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{o.name}</span>
+                                        {o.status === 'pending' && <span style={{ fontSize: 10, color: '#B7950B', marginLeft: 4 }}>(pending)</span>}
+                                      </div>
+                                      <span style={{ fontSize: 11, color: '#92400E', whiteSpace: 'nowrap' }}>{formatDate(o.start)}–{formatDate(o.end)}</span>
+                                    </div>
+                                  ))}
+                                  <button onClick={() => setOverlapWarning(null)} style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Dismiss</button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -852,32 +891,6 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
               </div>
               <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--purple-primary)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>Personal Dashboard</h2>
             </div>
-
-            {/* Grant Alerts — full width above columns */}
-            {showGrantAlert && alertGrants.length > 0 && (
-              <div style={{ background: '#FEF9E7', border: '1px solid #FAD7A0', borderRadius: 'var(--radius-md)', padding: '14px 16px', marginBottom: '14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
-                  <AlertTriangle size={14} color="#F39C12" />
-                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#F39C12', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Grant Alerts</span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {alertGrants.map(g => {
-                    const pct = g.total_amount && g.remaining_balance ? (g.remaining_balance / g.total_amount) * 100 : null;
-                    const daysLeft = g.end_date ? Math.ceil((new Date(g.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null;
-                    const urgent = daysLeft !== null && daysLeft <= 14;
-                    return (
-                      <div key={g.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{g.name}</span>
-                        <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                          {pct !== null && pct < 25 && <span style={{ padding: '2px 7px', borderRadius: '10px', fontSize: '12px', fontWeight: 600, background: '#FDEDEC', color: '#E74C3C' }}>{pct.toFixed(0)}% remaining</span>}
-                          {daysLeft !== null && daysLeft <= 90 && <span style={{ padding: '2px 7px', borderRadius: '10px', fontSize: '12px', fontWeight: 600, background: urgent ? '#FDEDEC' : '#FEF9E7', color: urgent ? '#E74C3C' : '#F39C12' }}>Expires in {daysLeft}d</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
 
             <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
 
@@ -900,12 +913,11 @@ export default function Dashboard({ profile, userRole, userId, setCurrentPage })
                   tasks={myPersonalAdhocTasks}
                   getTitle={t => t.title}
                   dateKey="due_date"
-                  upcomingLabel="Upcoming — next 30 days"
                 />
               </div>
 
               {/* Col 3 — My time off */}
-              <div style={{ flex: '1 1 0', minWidth: 0 }}>
+              <div style={{ flex: '1 1 0', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <Card icon={<Palmtree size={13} color="#F39C12" />} title="My time off">
                   {myTimeOff.length === 0 ? (
                     <p style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>No time off requests.</p>
