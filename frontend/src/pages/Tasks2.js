@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { fmtName, sortByLast } from '../lib/nameUtils';
-import { CheckCircle, XCircle, AlertTriangle, Upload, Clock, Search, ChevronDown, Trash2, Plus, Check, Globe, Pencil, X } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, Upload, Clock, Search, ChevronDown, Trash2, Plus, Check, Globe, Pencil, X, Repeat, Zap, TrendingUp, User, CalendarDays, ListChecks, UserPlus } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -2449,7 +2449,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
     const rangeSet = wizardRange.start && wizardRange.end;
     return (
       <div>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Select date range</div>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}><CalendarDays size={15} color="var(--purple-primary)" />Select date range</div>
         <div style={{ marginBottom: 8 }}>
           <DateRangeInputs value={wizardRange} onChange={r => setWizardRange(r)} />
         </div>
@@ -2518,7 +2518,8 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       <div>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ fontSize: 14, fontWeight: 600 }}>
+          <span style={{ fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <ListChecks size={15} color="var(--purple-primary)" />
             {occs.length} unassigned occurrence{occs.length !== 1 ? 's' : ''} in range
           </span>
           <div style={{ display: 'flex', gap: 4 }}>
@@ -2669,7 +2670,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
       : 'Has PTO during selected range';
     return (
       <div>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Add assignees</div>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><UserPlus size={15} color="var(--purple-primary)" />Add assignees</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16, minHeight: 36 }}>
           {assigneeIds.map(id => {
             const p = profiles.find(x => x.id === id);
@@ -3607,10 +3608,10 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
 
 
   const tabs = [
-    ...(canTabRecurrent    ? [{ id: 'view-all',     label: 'Recurrent Tasks' }] : []),
-    ...(canTabAdhoc        ? [{ id: 'oneoff',       label: 'Ad hoc Tasks' }] : []),
-    ...(canTabProductivity ? [{ id: 'productivity', label: 'Productivity' }] : []),
-    { id: 'my-tasks', label: 'My Tasks', badge: null },
+    ...(canTabRecurrent    ? [{ id: 'view-all',     label: 'Recurrent Tasks', icon: Repeat }] : []),
+    ...(canTabAdhoc        ? [{ id: 'oneoff',       label: 'Ad hoc Tasks',    icon: Zap }] : []),
+    ...(canTabProductivity ? [{ id: 'productivity', label: 'Productivity',    icon: TrendingUp }] : []),
+    { id: 'my-tasks', label: 'My Tasks', icon: User, badge: null },
   ];
 
   return (
@@ -3627,6 +3628,7 @@ export default function Tasks2({ userRole, userId, profile: myProfile }) {
                 color: tab === t.id ? 'white' : 'var(--text-secondary)',
                 display: 'flex', alignItems: 'center', gap: 6,
               }}>
+                {t.icon && <t.icon size={14} />}
                 {t.label}
                 {t.badge ? (
                   <span style={{ fontSize: 11, background: '#ef4444', color: '#fff', borderRadius: 10, padding: '1px 6px', fontWeight: 700 }}>{t.badge}</span>

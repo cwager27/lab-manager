@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useResizableColumns, ColResizer } from '../lib/useResizableColumns';
 import { supabase } from '../lib/supabase';
-import { AlertTriangle, Upload, Plus, Search, CheckCircle, Download, BarChart2, FileText, TrendingUp, ChartPie, Users } from 'lucide-react';
+import { AlertTriangle, Upload, Plus, Search, CheckCircle, Download, BarChart2, FileText, TrendingUp, ChartPie, Users, ShoppingCart, Lightbulb, Building2, Award, FlaskConical } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Vendors from './Vendors';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
@@ -1347,9 +1347,18 @@ async function commitOrderSelectEdit(id, col, value) {
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
         <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content' }}>
-          {['orders', 'charts', 'annual-summary', 'smart-summary', 'vendors', 'grants', 'reagents'].map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', background: activeTab === tab ? 'var(--purple-primary)' : 'transparent', color: activeTab === tab ? 'white' : 'var(--text-secondary)', border: 'none', fontWeight: activeTab === tab ? 600 : 400, fontSize: '13px', textTransform: 'capitalize', whiteSpace: 'nowrap' }}>
-              {tab === 'reagents' ? 'Standardized Reagents' : tab === 'charts' ? 'Spending Summaries' : tab === 'smart-summary' ? 'Smart Summary' : tab === 'annual-summary' ? 'Annual Summaries' : tab}
+          {[
+            { id: 'orders',         label: 'Orders',                Icon: ShoppingCart },
+            { id: 'charts',         label: 'Spending Summaries',    Icon: BarChart2 },
+            { id: 'annual-summary', label: 'Annual Summaries',      Icon: FileText },
+            { id: 'smart-summary',  label: 'Smart Summary',         Icon: Lightbulb },
+            { id: 'vendors',        label: 'Vendors',               Icon: Building2 },
+            { id: 'grants',         label: 'Grants',                Icon: Award },
+            { id: 'reagents',       label: 'Standardized Reagents', Icon: FlaskConical },
+          ].map(({ id, label, Icon }) => (
+            <button key={id} onClick={() => setActiveTab(id)} style={{ padding: '10px 20px', background: activeTab === id ? 'var(--purple-primary)' : 'transparent', color: activeTab === id ? 'white' : 'var(--text-secondary)', border: 'none', fontWeight: activeTab === id ? 600 : 400, fontSize: '13px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon size={14} />
+              {label}
             </button>
           ))}
         </div>

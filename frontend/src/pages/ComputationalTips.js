@@ -2,9 +2,21 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   Plus, Search, Copy, Check, Edit2, Trash2, X, ChevronDown, Terminal,
+  Code2, Dna, Server, Package, Lightbulb, Grid3x3,
 } from 'lucide-react';
 
 const CATEGORIES = ['All', 'R', 'Python', 'Shell', 'Bioinformatics', 'HPC', 'Software', 'General'];
+
+const CAT_ICONS = {
+  All:            Grid3x3,
+  R:              Code2,
+  Python:         Code2,
+  Shell:          Terminal,
+  Bioinformatics: Dna,
+  HPC:            Server,
+  Software:       Package,
+  General:        Lightbulb,
+};
 
 const CAT_COLORS = {
   R:              { bg: '#F5EEF8', text: '#7B3FA0', border: '#D7BDE2' },
@@ -322,6 +334,7 @@ export default function ComputationalTips({ userRole, userId, profile }) {
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
           {CATEGORIES.map(cat => {
             const active = activeCategory === cat;
+            const CatIcon = CAT_ICONS[cat];
             return (
               <button key={cat} onClick={() => setActiveCategory(cat)} style={{
                 padding: '7px 14px', borderRadius: 'var(--radius-md)', cursor: 'pointer',
@@ -329,7 +342,9 @@ export default function ComputationalTips({ userRole, userId, profile }) {
                 background: active ? 'var(--purple-primary)' : 'var(--bg-primary)',
                 color: active ? 'white' : 'var(--text-secondary)',
                 fontWeight: active ? 600 : 400, fontSize: 12,
+                display: 'flex', alignItems: 'center', gap: 5,
               }}>
+                {CatIcon && <CatIcon size={13} />}
                 {cat}
               </button>
             );

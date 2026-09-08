@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   Plus, CheckCircle, XCircle,
-  MessageSquare, Palmtree, Trash2, AlertTriangle
+  MessageSquare, Palmtree, Trash2, AlertTriangle,
+  Inbox, BarChart2, Clock,
 } from 'lucide-react';
 
 function fmtDate(d) {
@@ -303,14 +304,17 @@ export default function VacationLogs({ userRole, userId, profile }) {
 
       <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
         {[
-          { label: 'Out Today', value: currentlyOut.length },
-          { label: 'Pending', value: pendingRequests.length },
-          { label: 'Approved', value: approvedRequests.length },
-          { label: 'Total', value: requests.length },
+          { label: 'Out Today',  value: currentlyOut.length,      Icon: Palmtree,     iconColor: '#F39C12' },
+          { label: 'Pending',    value: pendingRequests.length,    Icon: Clock,        iconColor: '#F59E0B' },
+          { label: 'Approved',   value: approvedRequests.length,   Icon: CheckCircle,  iconColor: '#22c55e' },
+          { label: 'Total',      value: requests.length,           Icon: Inbox,        iconColor: 'var(--purple-primary)' },
         ].map(stat => (
           <div key={stat.label} style={{
             flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '16px', textAlign: 'center',
           }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 6 }}>
+              <stat.Icon size={18} color={stat.iconColor} />
+            </div>
             <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>{stat.value}</div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{stat.label}</div>
           </div>
@@ -321,8 +325,8 @@ export default function VacationLogs({ userRole, userId, profile }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
           <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content' }}>
             {[
-              { id: 'requests', label: 'All Requests' },
-              ...[...new Set(requests.filter(r => r.status === 'pending' || r.status === 'approved').map(r => parseInt(r.start_date.slice(0, 4), 10)))].sort().map(yr => ({ id: `summaries_${yr}`, label: `Summaries — ${yr}`, year: yr })),
+              { id: 'requests', label: 'All Requests', Icon: Inbox },
+              ...[...new Set(requests.filter(r => r.status === 'pending' || r.status === 'approved').map(r => parseInt(r.start_date.slice(0, 4), 10)))].sort().map(yr => ({ id: `summaries_${yr}`, label: `Summaries — ${yr}`, year: yr, Icon: BarChart2 })),
             ].map(tab => (
               <button
                 key={tab.id}
@@ -340,8 +344,10 @@ export default function VacationLogs({ userRole, userId, profile }) {
                   background: activeTab === tab.id ? 'var(--purple-primary)' : 'transparent',
                   fontSize: '13px', fontWeight: activeTab === tab.id ? 600 : 400,
                   color: activeTab === tab.id ? 'white' : 'var(--text-secondary)', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 6,
                 }}
               >
+                {tab.Icon && <tab.Icon size={14} />}
                 {tab.label}
               </button>
             ))}
